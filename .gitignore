@@ -1,0 +1,46 @@
+# Geral
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Flutter
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/build/
+**/.metadata
+
+# Android
+**/android/.gradle/
+**/android/local.properties
+**/android/**/GeneratedPluginRegistrant.java
+**/android/**/key.properties
+**/android/**/keystore*.jks
+
+# iOS
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/Flutter/App.framework
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/ephemeral/
+
+# Firebase (Flutter)
+**/google-services.json
+**/GoogleService-Info.plist
+
+# Laravel (quando criar)
+backend/vendor/
+backend/node_modules/
+backend/storage/*.key
+backend/storage/logs/
+backend/.env
+backend/public/storage
+
+# Admin (quando criar)
+admin/node_modules/
+admin/.env
+admin/dist/
