@@ -252,6 +252,66 @@ class FirestoreService {
     await batch.commit();
   }
 
+  /// Cria uma solicitação de resgate com status [PENDENTE].
+  ///
+  /// Os pontos NÃO são debitados aqui; o débito ocorre somente quando
+  /// o admin confirmar o resgate no painel administrativo.
+  ///
+  /// Regra de negócio aplicada: 1 ponto = R$0,10 de desconto.
+  /// O usuário precisa ter exatamente [custoPontos] pontos para resgatar.
+  /// Validade da solicitação: 7 dias a partir da criação.
+  Future<void> criarSolicitacaoResgate({
+    required String recompensaId,
+    required int custoPontos,
+    required String titulo,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('Usuário não logado');
+
+    final alunoDoc = await _db
+        .collection(FirestoreCollections.alunos)
+        .doc(user.uid)
+        .get();
+
+    final pontos = (alunoDoc.data()?['pontos'] as num?)?.toInt() ?? 0;
+
+    if (pontos < custoPontos) {
+      final faltam = custoPontos - pontos;
+      throw Exception('Faltam $faltam pontos para resgatar esta recompensa.');
+    }
+
+    // Impede duplicata: verifica se já existe solicitação PENDENTE para este item
+    final pendentes = await _db
+        .collection(FirestoreCollections.resgates)
+        .where('alunoUid', isEqualTo: user.uid)
+        .where('recompensaId', isEqualTo: recompensaId)
+        .where('status', isEqualTo: 'PENDENTE')
+        .get();
+
+    if (pendentes.docs.isNotEmpty) {
+      throw Exception(
+        'Você já possui uma solicitação pendente para esta recompensa.',
+      );
+    }
+
+    final validade = DateTime.now().add(const Duration(days: 7));
+    final resgateRef = _db.collection(FirestoreCollections.resgates).doc();
+
+    await resgateRef.set({
+      'id': resgateRef.id,
+      'alunoUid': user.uid,
+      'recompensaId': recompensaId,
+      'titulo': titulo,
+      'status': 'PENDENTE',
+      'data': FieldValue.serverTimestamp(),
+      // Validade: 7 dias. O admin deve confirmar antes deste prazo.
+      'validade': Timestamp.fromDate(validade),
+      'custo_pontos': custoPontos,
+      // NOTA: pontos NÃO são debitados aqui.
+      // O admin confirma → debita os pontos via painel admin.
+    });
+  }
+
   /// Retorna true se o aluno já registrou presença hoje,
   /// comparando [ultimoCheckin] com a data atual.
   /// Diferente de [qrValidadoHoje], este campo persiste após o treino.
