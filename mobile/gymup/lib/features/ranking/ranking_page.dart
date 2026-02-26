@@ -1,31 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/gymup_app_bar.dart';
 import '../../core/widgets/gymup_card.dart';
 import '../../core/widgets/gymup_loading.dart';
-import '../services/firestore_service.dart';
-import '../auth/auth_service.dart';
+import 'ranking_api_service.dart';
 import 'ranking_periodo.dart';
 
-// Modelo interno para representar um item do ranking.
-class _RankingItem {
-  final String alunoUid;
-  final String nome;
-  final int pontos;
-
-  const _RankingItem({
-    required this.alunoUid,
-    required this.nome,
-    required this.pontos,
-  });
-}
-
-/// Página de Ranking baseada no período selecionado.
-/// Busca documentos da coleção "presencas", agrupa por alunoUid,
-/// soma pontosGanhos e exibe em ordem decrescente.
+/// Página de Ranking consumindo exclusivamente GET /api/ranking.
 class RankingPage extends StatefulWidget {
   const RankingPage({super.key});
 
@@ -34,29 +17,22 @@ class RankingPage extends StatefulWidget {
 }
 
 class _RankingPageState extends State<RankingPage> {
+  final _service = RankingApiService();
+
   /// Período atualmente selecionado pelo usuário.
   RankingPeriodo _periodo = RankingPeriodo.semanal;
 
-  /// Lista ordenada do ranking calculado no client.
-  List<_RankingItem> _ranking = [];
-
+  List<RankingItem> _ranking = [];
+  int? _currentUserId;
   bool _isLoading = true;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    // Carrega o ranking assim que a página é criada.
     WidgetsBinding.instance.addPostFrameCallback((_) => _carregarRanking());
   }
 
-  /// Carrega e processa o ranking para o [_periodo] atual.
-  ///
-  /// 1. Calcula a data de início do período.
-  /// 2. Busca presenças >= início na coleção "presencas".
-  /// 3. Agrupa por alunoUid somando pontosGanhos.
-  /// 4. Busca o nome de cada aluno na coleção "alunos".
-  /// 5. Ordena decrescente e atualiza o estado.
   Future<void> _carregarRanking() async {
     setState(() {
       _isLoading = true;
@@ -64,59 +40,32 @@ class _RankingPageState extends State<RankingPage> {
     });
 
     try {
-      final firestoreService = context.read<FirestoreService>();
-      final db = FirebaseFirestore.instance;
+      final prefs = await SharedPreferences.getInstance();
+      _currentUserId = prefs.getInt('user_id');
 
-      // Passo 1 — data de início do período selecionado
-      final inicio = _periodo.inicio;
+      final items = await _service.getRanking(period: _periodo.param);
 
-      // Passo 2 — buscar presenças do período
-      final snapshot = await firestoreService.getPresencasDesdeFuture(inicio);
+      setState(() {
+        _ranking = items;
+        _isLoading = false;
+      });
+    } on Exception catch (e) {
+      final msg = e.toString().replaceFirst('Exception: ', '');
 
-      // Passo 3 — agrupar por alunoUid somando pontosGanhos
-      final Map<String, int> pontosPorAluno = {};
-      for (final doc in snapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        final uid = data['alunoUid'] as String?;
-        final pontos = (data['pontosGanhos'] as num?)?.toInt() ?? 0;
-        if (uid != null) {
-          pontosPorAluno[uid] = (pontosPorAluno[uid] ?? 0) + pontos;
-        }
-      }
-
-      if (pontosPorAluno.isEmpty) {
-        setState(() {
-          _ranking = [];
-          _isLoading = false;
-        });
+      if (msg == '401' && mounted) {
+        Navigator.pushReplacementNamed(context, '/login');
         return;
       }
 
-      // Passo 4 — buscar nomes dos alunos em paralelo
-      final futures = pontosPorAluno.keys.map((uid) async {
-        final alunoDoc = await db.collection('alunos').doc(uid).get();
-        final nome = (alunoDoc.data()?['nome'] as String?) ?? 'Aluno';
-        return _RankingItem(
-          alunoUid: uid,
-          nome: nome,
-          pontos: pontosPorAluno[uid]!,
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao carregar ranking: $msg')),
         );
-      });
-
-      final itens = await Future.wait(futures);
-
-      // Passo 5 — ordenar decrescente por pontos
-      itens.sort((a, b) => b.pontos.compareTo(a.pontos));
-
-      setState(() {
-        _ranking = itens;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
+        setState(() {
+          _error = msg;
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -136,13 +85,10 @@ class _RankingPageState extends State<RankingPage> {
 
   @override
   Widget build(BuildContext context) {
-    final currentUser = context.read<AuthService>().currentUser;
-
     return Scaffold(
       appBar: const GymUpAppBar(title: 'Ranking'),
       backgroundColor: AppColors.background,
       body: RefreshIndicator(
-        // Permite puxar para atualizar o ranking
         onRefresh: _carregarRanking,
         color: AppColors.primary,
         child: CustomScrollView(
@@ -209,7 +155,7 @@ class _RankingPageState extends State<RankingPage> {
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate((context, index) {
                     final item = _ranking[index];
-                    final isCurrentUser = item.alunoUid == currentUser?.uid;
+                    final isCurrentUser = item.userId == _currentUserId;
 
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
@@ -228,7 +174,7 @@ class _RankingPageState extends State<RankingPage> {
                               backgroundColor: _getMedalColor(index),
                               foregroundColor: Colors.white,
                               child: Text(
-                                '#${index + 1}',
+                                '#${item.position}',
                                 style: AppTypography.h3.copyWith(
                                   color: Colors.white,
                                 ),
@@ -242,7 +188,7 @@ class _RankingPageState extends State<RankingPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    item.nome,
+                                    item.name,
                                     style: AppTypography.bodyLarge.copyWith(
                                       fontWeight: isCurrentUser
                                           ? FontWeight.bold
@@ -262,7 +208,7 @@ class _RankingPageState extends State<RankingPage> {
 
                             // Pontos do período
                             Text(
-                              '${item.pontos} pts',
+                              '${item.points} pts',
                               style: AppTypography.h3.copyWith(
                                 color: AppColors.accent,
                               ),
@@ -284,7 +230,6 @@ class _RankingPageState extends State<RankingPage> {
   // Widgets auxiliares
   // ──────────────────────────────────────────────────────────────────────────
 
-  /// Card fixo "Desafio Atual" exibido no topo da página.
   Widget _buildDesafioCard() {
     return Container(
       decoration: BoxDecoration(
@@ -330,7 +275,6 @@ class _RankingPageState extends State<RankingPage> {
     );
   }
 
-  /// Linha de chips para selecionar o período do ranking.
   Widget _buildPeriodoChips() {
     return Row(
       children: RankingPeriodo.values.map((periodo) {

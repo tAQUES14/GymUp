@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/gymup_app_bar.dart';
 import '../../core/widgets/gymup_button.dart';
 import '../../core/widgets/gymup_card.dart';
 import '../../core/widgets/gymup_text_field.dart';
-import '../services/firestore_service.dart';
 import '../workouts/mocks/workouts_mock.dart';
+import '../workouts/workout_api_service.dart';
 import 'qr_service.dart';
 
 class CheckinPage extends StatefulWidget {
@@ -20,6 +19,7 @@ class CheckinPage extends StatefulWidget {
 class _CheckinPageState extends State<CheckinPage> {
   bool _isProcessing = false;
   final QrService _qrService = QrService();
+  final WorkoutApiService _workoutService = WorkoutApiService();
   final TextEditingController _manualController = TextEditingController();
 
   @override
@@ -75,89 +75,111 @@ class _CheckinPageState extends State<CheckinPage> {
     final code = _manualController.text.trim();
     if (code.isEmpty) return;
 
-    if (_qrService.isValidQr(code)) {
-      setState(() => _isProcessing = true);
+    if (!_qrService.isValidQr(code)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Código QR inválido')),
+      );
+      return;
+    }
 
-      try {
-        // Apenas valida o QR — NÃO registra presença nem concede pontos
-        await context.read<FirestoreService>().validarPresencaHoje(code);
-        if (mounted) {
-          // Usa o treino do dia (standardWorkouts[0]) para ir direto à execução
-          final dailyWorkout = WorkoutsMock.standardWorkouts[0];
+    setState(() => _isProcessing = true);
 
-          if (mounted) {
-            await showDialog(
-              context: context,
-              barrierDismissible: false,
-              builder: (ctx) => AlertDialog(
-                title: Text('QR Validado! ✅', style: AppTypography.h3),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.check_circle,
-                      color: AppColors.accent,
-                      size: 64,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Você está na academia! Bora treinar?',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.bodyLarge,
-                    ),
-                  ],
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      Navigator.pop(context); // fecha checkin
-                    },
-                    child: Text(
-                      'Agora não',
-                      style: AppTypography.button.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      Navigator.pop(context); // fecha checkin
-                      // Vai direto para a execução do treino do dia
-                      Navigator.pushNamed(
-                        context,
-                        '/workout-execution-exercise',
-                        arguments: dailyWorkout,
-                      );
-                    },
-                    child: const Text('Iniciar Treino'),
-                  ),
-                ],
+    try {
+      // QR válido → inicia sessão de treino. Pontos serão concedidos apenas
+      // após o treino ser concluído com tempo e progresso suficientes.
+      await _workoutService.startWorkout();
+
+      if (!mounted) return;
+
+      final dailyWorkout = WorkoutsMock.standardWorkouts[0];
+
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: Text('QR Code Validado! ✅', style: AppTypography.h3),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.qr_code_rounded,
+                color: AppColors.primary,
+                size: 64,
               ),
-            );
-          }
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(e.toString().replaceAll('Exception: ', '')),
-              backgroundColor: AppColors.error,
+              const SizedBox(height: 16),
+              Text(
+                'Conclua o treino para ganhar seus 10 pontos.',
+                textAlign: TextAlign.center,
+                style: AppTypography.bodyLarge,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.pop(context);
+              },
+              child: Text(
+                'Agora não',
+                style: AppTypography.button.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
             ),
-          );
-        }
-      } finally {
-        if (mounted) setState(() => _isProcessing = false);
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.pop(context);
+                Navigator.pushNamed(
+                  context,
+                  '/workout-step',
+                  arguments: dailyWorkout,
+                );
+              },
+              child: const Text('Iniciar Treino'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      final msg = e.toString().replaceAll('Exception: ', '');
+
+      if (msg == '401') {
+        Navigator.pushReplacementNamed(context, '/login');
+        return;
       }
-    } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Código QR inválido')));
+
+      // 409 = sessão já ativa → ir direto para o treino
+      if (msg == '409') {
+        final dailyWorkout = WorkoutsMock.standardWorkouts[0];
+        Navigator.pushReplacementNamed(
+          context,
+          '/workout-step',
+          arguments: dailyWorkout,
+        );
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 

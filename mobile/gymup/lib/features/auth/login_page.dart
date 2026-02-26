@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:gymup/features/auth/auth_service.dart';
+import 'package:gymup/features/auth/auth_api_service.dart';
 import 'package:gymup/core/widgets/custom_button.dart';
 
 class LoginPage extends StatefulWidget {
@@ -20,10 +19,10 @@ class _LoginPageState extends State<LoginPage> {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
       try {
-        await context.read<AuthService>().signIn(
-              _emailController.text.trim(),
-              _passwordController.text.trim(),
-            );
+        await AuthApiService().login(
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+        );
         if (mounted) {
           Navigator.pushReplacementNamed(context, '/home');
         }

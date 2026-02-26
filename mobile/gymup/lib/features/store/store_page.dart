@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/gymup_app_bar.dart';
 import '../../core/widgets/gymup_loading.dart';
-import '../services/firestore_service.dart';
+import '../auth/auth_api_service.dart';
+import 'reward_api_service.dart';
+import 'reward_model.dart';
 import 'reward_details_page.dart';
 
 // Regra: 1 ponto = R$0,10 · resgate exige custo_pontos completos
@@ -54,121 +54,117 @@ _RewardStyle _styleFor(String titulo) {
   );
 }
 
-// ── Mock data ──────────────────────────────────────────────────────────────
-const List<Map<String, dynamic>> _mockRewards = [
-  {
-    'id': 'mock_1',
-    'titulo': 'Camiseta GymUp',
-    'custo_pontos': 500,
-    'preco_original': 50.0,
-    'descricao': 'Camiseta dry-fit oficial. Disponível em P, M, G e GG.',
-    'imagem_url': '',
-  },
-  {
-    'id': 'mock_2',
-    'titulo': 'Squeeze 500 ml',
-    'custo_pontos': 300,
-    'preco_original': 30.0,
-    'descricao': 'Garrafa resistente e estilosa para seus treinos.',
-    'imagem_url': '',
-  },
-  {
-    'id': 'mock_3',
-    'titulo': '10% na Mensalidade',
-    'custo_pontos': 1000,
-    'preco_original': 100.0,
-    'descricao': '10% de desconto na próxima mensalidade.',
-    'imagem_url': '',
-  },
-  {
-    'id': 'mock_4',
-    'titulo': 'Aula com Personal (1h)',
-    'custo_pontos': 2000,
-    'preco_original': 200.0,
-    'descricao': 'Aula exclusiva com personal trainer.',
-    'imagem_url': '',
-  },
-];
-
 // ─────────────────────────────────────────────────────────────────────────────
 // STORE PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 
-class StorePage extends StatelessWidget {
+class StorePage extends StatefulWidget {
   const StorePage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final firestoreService = context.read<FirestoreService>();
+  State<StorePage> createState() => _StorePageState();
+}
 
+class _StorePageState extends State<StorePage> {
+  List<Reward>? _rewards;
+  int _userPoints = 0;
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final results = await Future.wait([
+        RewardApiService().getRewards(),
+        AuthApiService().getMe(),
+      ]);
+
+      if (mounted) {
+        setState(() {
+          _rewards = results[0] as List<Reward>;
+          final user = results[1] as Map<String, dynamic>;
+          _userPoints = (user['points_balance'] as num?)?.toInt() ?? 0;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      if (e.toString().contains('401')) {
+        Navigator.pushReplacementNamed(context, '/login');
+        return;
+      }
+      setState(() {
+        _error = 'Erro ao carregar. Verifique sua conexão.';
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: const GymUpAppBar(title: 'Loja'),
       backgroundColor: AppColors.background,
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: firestoreService.getAlunoStream(),
-        builder: (context, userSnap) {
-          final userData =
-              userSnap.data?.data() as Map<String, dynamic>? ?? {};
-          final int userPoints =
-              (userData['pontos'] as num?)?.toInt() ?? 0;
+      body: _buildBody(),
+    );
+  }
 
-          return StreamBuilder<QuerySnapshot>(
-            stream: firestoreService.getRecompensasStream(),
-            builder: (context, rewardSnap) {
-              if (rewardSnap.connectionState == ConnectionState.waiting &&
-                  userSnap.connectionState == ConnectionState.waiting) {
-                return const GymUpLoading();
-              }
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const GymUpLoading();
+    }
 
-              if (rewardSnap.hasError) {
-                return Center(
-                  child: Text(
-                    'Erro ao carregar. Verifique sua conexão.',
-                    style: AppTypography.bodyMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                );
-              }
+    if (_error != null) {
+      return Center(
+        child: Text(
+          _error!,
+          style: AppTypography.bodyMedium,
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
 
-              final docs = rewardSnap.data?.docs ?? [];
-              final List<Map<String, dynamic>> rewards = docs.isNotEmpty
-                  ? docs.map((d) {
-                      final data = d.data() as Map<String, dynamic>;
-                      data['id'] = d.id;
-                      return data;
-                    }).toList()
-                  : _mockRewards;
+    final rewards = _rewards ?? [];
 
-              return CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: _BalanceStrip(userPoints: userPoints),
-                  ),
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
-                    sliver: SliverGrid(
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                        childAspectRatio: 0.80,
-                      ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, i) => _RewardCard(
-                          data: rewards[i],
-                          userPoints: userPoints,
-                        ),
-                        childCount: rewards.length,
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-      ),
+    if (rewards.isEmpty) {
+      return Center(
+        child: Text(
+          'Nenhuma recompensa disponível no momento.',
+          style: AppTypography.bodyMedium,
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: _BalanceStrip(userPoints: _userPoints),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+          sliver: SliverGrid(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 0.80,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (context, i) => _RewardCard(
+                reward: rewards[i],
+                userPoints: _userPoints,
+              ),
+              childCount: rewards.length,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -249,16 +245,15 @@ class _BalanceStrip extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _RewardCard extends StatelessWidget {
-  final Map<String, dynamic> data;
+  final Reward reward;
   final int userPoints;
 
-  const _RewardCard({required this.data, required this.userPoints});
+  const _RewardCard({required this.reward, required this.userPoints});
 
   @override
   Widget build(BuildContext context) {
-    final String id = data['id'] ?? '';
-    final String titulo = data['titulo'] ?? 'Recompensa';
-    final int custoPontos = (data['custo_pontos'] as num?)?.toInt() ?? 0;
+    final String titulo = reward.name;
+    final int custoPontos = reward.pointsCost;
     final bool unlocked = userPoints >= custoPontos;
     final int faltam = unlocked ? 0 : custoPontos - userPoints;
     final cfg = _styleFor(titulo);
@@ -267,7 +262,10 @@ class _RewardCard extends StatelessWidget {
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => RewardDetailsPage(rewardId: id, data: data),
+          builder: (_) => RewardDetailsPage(
+            reward: reward,
+            userPoints: userPoints,
+          ),
         ),
       ),
       child: Container(

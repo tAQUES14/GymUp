@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:gymup/features/auth/auth_service.dart';
+import 'package:gymup/features/auth/auth_api_service.dart';
 import 'package:gymup/core/widgets/custom_button.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -22,19 +21,18 @@ class _RegisterPageState extends State<RegisterPage> {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
       try {
-        await context.read<AuthService>().register(
-              _emailController.text.trim(),
-              _passwordController.text.trim(),
-              _nameController.text.trim(),
-              _phoneController.text.trim(),
-            );
+        await AuthApiService().register(
+          name: _nameController.text.trim(),
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+        );
         if (mounted) {
           Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Erro ao cadastrar: ${e.toString()}')),
+            SnackBar(content: Text('Erro ao cadastrar: ${e.toString().replaceFirst('Exception: ', '')}')),
           );
         }
       } finally {

@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/gymup_button.dart';
-import '../services/firestore_service.dart';
+import 'reward_api_service.dart';
+import 'reward_model.dart';
 
 // Regra: 1 ponto = R$0,10 · pontos debitados só após confirmação do admin
 const double _kPontoValor = 0.10;
@@ -42,10 +41,16 @@ _RS _styleFor(String titulo) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class RewardDetailsPage extends StatefulWidget {
-  final String? rewardId;
-  final Map<String, dynamic>? data;
+  /// Recompensa a exibir. Nullable para manter compatibilidade com a rota
+  /// nomeada '/rewardDetails' declarada no main.dart.
+  final Reward? reward;
+  final int userPoints;
 
-  const RewardDetailsPage({super.key, this.rewardId, this.data});
+  const RewardDetailsPage({
+    super.key,
+    this.reward,
+    this.userPoints = 0,
+  });
 
   @override
   State<RewardDetailsPage> createState() => _RewardDetailsPageState();
@@ -54,16 +59,13 @@ class RewardDetailsPage extends StatefulWidget {
 class _RewardDetailsPageState extends State<RewardDetailsPage> {
   bool _isLoading = false;
 
-  Future<void> _resgatar(int userPoints, int custoPontos) async {
-    if (widget.rewardId == null || userPoints < custoPontos) return;
+  Future<void> _resgatar(int custoPontos) async {
+    final reward = widget.reward;
+    if (reward == null || widget.userPoints < custoPontos) return;
 
     setState(() => _isLoading = true);
     try {
-      await context.read<FirestoreService>().criarSolicitacaoResgate(
-            recompensaId: widget.rewardId!,
-            custoPontos: custoPontos,
-            titulo: widget.data?['titulo'] as String? ?? 'Recompensa',
-          );
+      await RewardApiService().redeemReward(reward.id);
 
       if (mounted) {
         await showDialog<void>(
@@ -78,18 +80,24 @@ class _RewardDetailsPageState extends State<RewardDetailsPage> {
         );
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          ),
-        );
+      if (!mounted) return;
+
+      final msg = e.toString().replaceAll('Exception: ', '');
+
+      if (msg == '401') {
+        Navigator.pushReplacementNamed(context, '/login');
+        return;
       }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -97,24 +105,26 @@ class _RewardDetailsPageState extends State<RewardDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.data == null) {
+    final reward = widget.reward;
+
+    if (reward == null) {
       return const Scaffold(body: Center(child: Text('Não encontrado')));
     }
 
-    final String titulo = widget.data!['titulo'] ?? 'Recompensa';
-    final String descricao = widget.data!['descricao'] ?? '';
-    final int custoPontos =
-        (widget.data!['custo_pontos'] as num?)?.toInt() ?? 0;
-    final double precoOriginal =
-        (widget.data!['preco_original'] as num?)?.toDouble() ??
-            custoPontos * _kPontoValor;
+    final String titulo = reward.name;
+    final String descricao = reward.description;
+    final int custoPontos = reward.pointsCost;
+    final double precoOriginal = custoPontos * _kPontoValor;
     final double precoFinal =
         (precoOriginal - custoPontos * _kPontoValor).clamp(0.0, double.infinity);
+
+    final int userPoints = widget.userPoints;
+    final bool temPontos = userPoints >= custoPontos;
+    final int faltam = temPontos ? 0 : custoPontos - userPoints;
 
     final cfg = _styleFor(titulo);
 
     return Scaffold(
-      // AppBar com cor que casa com o gradiente do hero
       appBar: AppBar(
         backgroundColor: cfg.gradient.first,
         foregroundColor: Colors.white,
@@ -131,94 +141,81 @@ class _RewardDetailsPageState extends State<RewardDetailsPage> {
         ),
       ),
       backgroundColor: AppColors.background,
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: context.read<FirestoreService>().getAlunoStream(),
-        builder: (context, userSnap) {
-          final userData =
-              userSnap.data?.data() as Map<String, dynamic>? ?? {};
-          final int userPoints =
-              (userData['pontos'] as num?)?.toInt() ?? 0;
-          final bool temPontos = userPoints >= custoPontos;
-          final int faltam = temPontos ? 0 : custoPontos - userPoints;
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Hero (continua o gradiente do AppBar) ────────────
+          Container(
+            height: 160,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: cfg.gradient,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Center(
+              child: Icon(cfg.icon, size: 76, color: Colors.white),
+            ),
+          ),
 
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // ── Hero (continua o gradiente do AppBar) ────────────
-              Container(
-                height: 160,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: cfg.gradient,
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+          // ── Conteúdo rolável ─────────────────────────────────
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(titulo, style: AppTypography.h2),
+                  if (descricao.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      descricao,
+                      style: AppTypography.bodyMedium.copyWith(height: 1.55),
+                    ),
+                  ],
+                  const SizedBox(height: 28),
+
+                  // ── Resumo de preço ──────────────────────────
+                  _PriceRow(
+                    precoOriginal: precoOriginal,
+                    precoFinal: precoFinal,
+                    custoPontos: custoPontos,
                   ),
-                ),
-                child: Center(
-                  child: Icon(cfg.icon, size: 76, color: Colors.white),
-                ),
-              ),
+                  const SizedBox(height: 24),
 
-              // ── Conteúdo rolável ─────────────────────────────────
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(titulo, style: AppTypography.h2),
-                      if (descricao.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          descricao,
-                          style: AppTypography.bodyMedium
-                              .copyWith(height: 1.55),
-                        ),
-                      ],
-                      const SizedBox(height: 28),
-
-                      // ── Resumo de preço ──────────────────────────
-                      _PriceRow(
-                        precoOriginal: precoOriginal,
-                        precoFinal: precoFinal,
-                        custoPontos: custoPontos,
-                      ),
-                      const SizedBox(height: 24),
-
-                      // ── Progresso de pontos ──────────────────────
-                      _PointsProgress(
-                        userPoints: userPoints,
-                        custoPontos: custoPontos,
-                        temPontos: temPontos,
-                        faltam: faltam,
-                      ),
-                      const SizedBox(height: 32),
-                    ],
+                  // ── Progresso de pontos ──────────────────────
+                  _PointsProgress(
+                    userPoints: userPoints,
+                    custoPontos: custoPontos,
+                    temPontos: temPontos,
+                    faltam: faltam,
                   ),
-                ),
+                  const SizedBox(height: 32),
+                ],
               ),
+            ),
+          ),
 
-              // ── CTA ──────────────────────────────────────────────
-              Container(
-                color: AppColors.surface,
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-                child: temPontos
-                    ? GymUpButton(
-                        label: 'Resgatar  ·  $custoPontos pts',
-                        icon: Icons.card_giftcard_outlined,
-                        isLoading: _isLoading,
-                        onPressed: () => _resgatar(userPoints, custoPontos),
-                      )
-                    : GymUpButton(
-                        label: 'Faltam $faltam pontos',
-                        onPressed: null,
-                        color: Colors.grey[200],
-                        textColor: AppColors.textSecondary,
-                      ),
-              ),
-            ],
-          );
-        },
+          // ── CTA ──────────────────────────────────────────────
+          Container(
+            color: AppColors.surface,
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+            child: temPontos
+                ? GymUpButton(
+                    label: 'Resgatar  ·  $custoPontos pts',
+                    icon: Icons.card_giftcard_outlined,
+                    isLoading: _isLoading,
+                    onPressed: () => _resgatar(custoPontos),
+                  )
+                : GymUpButton(
+                    label: 'Faltam $faltam pontos',
+                    onPressed: null,
+                    color: Colors.grey[200],
+                    textColor: AppColors.textSecondary,
+                  ),
+          ),
+        ],
       ),
     );
   }
@@ -283,8 +280,9 @@ class _PriceRow extends StatelessWidget {
               Text(
                 finalLabel,
                 style: AppTypography.h3.copyWith(
-                  color:
-                      precoFinal <= 0 ? AppColors.accent : AppColors.textPrimary,
+                  color: precoFinal <= 0
+                      ? AppColors.accent
+                      : AppColors.textPrimary,
                 ),
               ),
             ],
