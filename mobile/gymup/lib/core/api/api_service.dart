@@ -35,4 +35,18 @@ static const String baseUrl = 'http://localhost:8000/api';
       body: jsonEncode(body),
     );
   }
+
+  Future<http.Response> put(String endpoint, Map<String, dynamic> body) async {
+    final token = await _getToken();
+
+    return http.put(
+      Uri.parse('$baseUrl$endpoint'),
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(body),
+    );
+  }
 }

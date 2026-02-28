@@ -16,6 +16,7 @@ return [
     */
 
     'min_minutes'  => (int) env('WORKOUT_MIN_MINUTES', 10),
-    'min_progress' => (int) env('WORKOUT_MIN_PROGRESS', 70),
+    'min_progress'       => (int) env('WORKOUT_MIN_PROGRESS', 70),
+    'daily_points_limit' => (int) env('WORKOUT_DAILY_POINTS', 10),
 
 ];

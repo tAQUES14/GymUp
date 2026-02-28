@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/gymup_loading.dart';
-import '../dashboard/dashboard_api_service.dart';
 import '../workouts/mocks/workouts_mock.dart';
 import '../workouts/workout_api_service.dart';
 import 'widgets/home_header.dart';
@@ -20,37 +19,48 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  Map<String, dynamic>? _dashboard;
+  DashboardData? _dashboardData;
   bool _isLoading = true;
   bool _hasError = false;
-  WorkoutSessionData? _activeSession;
+  bool _isStarting = false;
+
+  // Contador de sequência: garante que apenas a resposta da chamada MAIS
+  // RECENTE seja aplicada ao estado, descartando respostas de chamadas antigas
+  // que chegarem depois (race condition em chamadas concorrentes).
+  int _loadSeq = 0;
 
   @override
   void initState() {
     super.initState();
     _loadDashboard();
-    _checkActiveSession();
   }
 
   Future<void> _loadDashboard() async {
+    final seq = ++_loadSeq;
+
     setState(() {
       _isLoading = true;
       _hasError = false;
     });
+
     try {
-      final data = await DashboardApiService().getDashboard();
-      if (mounted) {
-        setState(() {
-          _dashboard = data;
-          _isLoading = false;
-        });
-      }
+      final data = await WorkoutApiService().getDashboard();
+
+      // Só aplica se ainda for a chamada mais recente e o widget estiver montado.
+      if (!mounted || seq != _loadSeq) return;
+
+      setState(() {
+        _dashboardData = data;
+        _isLoading = false;
+      });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _loadSeq) return;
+
       if (e.toString().contains('401')) {
         Navigator.pushReplacementNamed(context, '/login');
         return;
       }
+
       setState(() {
         _hasError = true;
         _isLoading = false;
@@ -67,7 +77,7 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
-    if (_hasError || _dashboard == null) {
+    if (_hasError || _dashboardData == null) {
       return Scaffold(
         backgroundColor: AppColors.background,
         body: Center(
@@ -86,16 +96,7 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
-    final int pontos =
-        (_dashboard!['points_balance'] as num?)?.toInt() ?? 0;
-    final bool checkinFeito =
-        _dashboard!['has_checked_in_today'] as bool? ?? false;
-    final int streak = (_dashboard!['streak'] as num?)?.toInt() ?? 0;
-
-    const String nome = 'Aluno';
-    const String? photoUrl = null;
-    const int workoutsDone = 0;
-    const List<int> diasList = [];
+    final data = _dashboardData!;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -105,45 +106,40 @@ class _HomePageState extends State<HomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              HomeHeader(nome: nome, photoUrl: photoUrl),
+              const HomeHeader(nome: 'Aluno', photoUrl: null),
               const SizedBox(height: 24),
 
-              PointsCard(pontos: pontos),
+              PointsCard(pontos: data.pointsBalance),
               const SizedBox(height: 24),
 
               WeeklyGoalSection(
-                streak: streak,
-                workoutsDone: workoutsDone,
+                streak: data.streak,
+                workoutsDone: data.weeklyProgress.where((d) => d).length,
                 weeklyGoal: 3,
               ),
               const SizedBox(height: 24),
 
-              // ── Botão de Check-in ─────────────────────────────────
-              // Banner verde: apenas informativo (não clicável).
-              // Banner padrão: navega para QR Code → inicia sessão de treino.
               _CheckInButton(
-                done: checkinFeito,
-                isLoading: false,
-                onTap: checkinFeito
+                hasCheckedInToday: data.hasCheckedInToday,
+                hasCompletedToday: data.hasCompletedToday,
+                onTap: (data.hasCheckedInToday || data.hasCompletedToday)
                     ? null
-                    : () => Navigator.pushNamed(context, '/checkin'),
+                    : _handleStartWorkout,
               ),
               const SizedBox(height: 16),
 
-              if (_activeSession != null) ...[
+              if (data.hasActiveSession) ...[
                 _buildResumeBanner(),
                 const SizedBox(height: 16),
               ],
 
-              DailyWorkoutCard(
-                onTap: _onIniciarTreino,
-              ),
+              DailyWorkoutCard(onTap: _isStarting ? null : _handleStartWorkout),
               const SizedBox(height: 24),
 
-              WeeklyProgressBar(diasTreinados: diasList),
+              WeeklyProgressBar(weeklyProgress: data.weeklyProgress),
               const SizedBox(height: 24),
 
-              const RecentActivitiesList(),
+              RecentActivitiesList(activities: data.recentActivities),
               const SizedBox(height: 24),
 
               _buildQuickActions(context),
@@ -155,47 +151,97 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ── Session restore ───────────────────────────────────────────────────────
+  Future<void> _handleStartWorkout() async {
+    if (_isStarting) return;
+    final data = _dashboardData!;
 
-  Future<void> _checkActiveSession() async {
+    if (data.hasActiveSession) {
+      Navigator.of(context)
+          .pushNamed(
+            '/workout-step',
+            arguments: WorkoutsMock.standardWorkouts[0],
+          )
+          .then((_) => _loadDashboard());
+      return;
+    }
+
+    final bool alreadyHasSessionToday =
+        data.hasActiveSession || data.hasCompletedToday;
+
+    if (!alreadyHasSessionToday && !data.hasCheckedInToday) {
+      Navigator.of(context)
+          .pushNamed('/checkin')
+          .then((_) => _loadDashboard());
+      return;
+    }
+
+    if (data.hasCompletedToday) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Treino extra', style: AppTypography.h3),
+          content: Text(
+            'Você já ganhou seus pontos hoje. Este treino não contará pontos.',
+            style: AppTypography.bodyLarge,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(
+                'Cancelar',
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Iniciar treino'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+
+    setState(() => _isStarting = true);
     try {
-      final session = await WorkoutApiService().getStatus();
-      if (mounted && session != null && session.isActive) {
-        setState(() => _activeSession = session);
-      }
-    } catch (_) {}
-  }
+      await WorkoutApiService().startWorkout();
 
-  // ── Lógica de navegação ───────────────────────────────────────────────────
-
-  /// Verifica se há sessão ativa no backend:
-  /// - Sessão ativa  → vai direto para a tela de treino.
-  /// - Sem sessão    → vai para o QR Code para iniciar uma nova sessão.
-  Future<void> _onIniciarTreino() async {
-    try {
-      final session = await WorkoutApiService().getStatus();
       if (!mounted) return;
 
-      if (session != null && session.isActive) {
-        Navigator.of(context).pushNamed(
-          '/workout-step',
-          arguments: WorkoutsMock.standardWorkouts[0],
-        );
-      } else {
-        Navigator.of(context).pushNamed('/checkin');
-      }
+      Navigator.of(context)
+          .pushNamed(
+            '/workout-step',
+            arguments: WorkoutsMock.standardWorkouts[0],
+          )
+          .then((_) => _loadDashboard());
     } catch (e) {
       if (!mounted) return;
-      if (e.toString().contains('401')) {
-        Navigator.of(context).pushReplacementNamed('/login');
+      final msg = e.toString().replaceAll('Exception: ', '');
+      if (msg == '401') {
+        Navigator.pushReplacementNamed(context, '/login');
         return;
       }
-      // Em caso de erro, encaminha para o QR para tentar iniciar
-      Navigator.of(context).pushNamed('/checkin');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isStarting = false);
     }
   }
-
-  // ── Widgets ───────────────────────────────────────────────────────────────
 
   Widget _buildResumeBanner() {
     return GestureDetector(
@@ -203,15 +249,13 @@ class _HomePageState extends State<HomePage> {
         context,
         '/workout-step',
         arguments: WorkoutsMock.standardWorkouts[0],
-      ),
+      ).then((_) => _loadDashboard()),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: AppColors.warning.withValues(alpha: 0.10),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: AppColors.warning.withValues(alpha: 0.35),
-          ),
+          border: Border.all(color: AppColors.warning.withValues(alpha: 0.35)),
         ),
         child: Row(
           children: [
@@ -332,18 +376,40 @@ class _HomePageState extends State<HomePage> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _CheckInButton extends StatelessWidget {
-  final bool done;
-  final bool isLoading;
+  final bool hasCheckedInToday;
+  final bool hasCompletedToday;
   final VoidCallback? onTap;
 
   const _CheckInButton({
-    required this.done,
-    required this.isLoading,
+    required this.hasCheckedInToday,
+    required this.hasCompletedToday,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final bool done = hasCheckedInToday || hasCompletedToday;
+
+    final String title = hasCompletedToday
+        ? 'Treino concluído hoje!'
+        : hasCheckedInToday
+        ? 'Check-in feito hoje!'
+        : 'Fazer Check-in';
+
+    final String subtitle = hasCompletedToday
+        ? 'Parabéns! Você completou o treino de hoje.'
+        : hasCheckedInToday
+        ? 'Presença de hoje confirmada'
+        : 'Escaneie o QR para iniciar o treino';
+
+    final Color color = done ? AppColors.accent : AppColors.primary;
+
+    final IconData icon = hasCompletedToday
+        ? Icons.emoji_events_rounded
+        : hasCheckedInToday
+        ? Icons.check_circle_rounded
+        : Icons.fitness_center_rounded;
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       decoration: BoxDecoration(
@@ -371,24 +437,10 @@ class _CheckInButton extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: done ? AppColors.accent : AppColors.primary,
+                    color: color,
                     shape: BoxShape.circle,
                   ),
-                  child: isLoading
-                      ? const Padding(
-                          padding: EdgeInsets.all(10),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : Icon(
-                          done
-                              ? Icons.check_circle_rounded
-                              : Icons.fitness_center_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        ),
+                  child: Icon(icon, color: Colors.white, size: 20),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -396,16 +448,14 @@ class _CheckInButton extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        done ? 'Check-in feito hoje!' : 'Fazer Check-in',
+                        title,
                         style: AppTypography.bodyMedium.copyWith(
                           fontWeight: FontWeight.w700,
-                          color: done ? AppColors.accent : AppColors.primary,
+                          color: color,
                         ),
                       ),
                       Text(
-                        done
-                            ? 'Presença de hoje confirmada'
-                            : 'Escaneie o QR para iniciar o treino',
+                        subtitle,
                         style: AppTypography.caption.copyWith(
                           color: AppColors.textSecondary,
                         ),

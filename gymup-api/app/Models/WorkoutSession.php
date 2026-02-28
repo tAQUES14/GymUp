@@ -67,4 +67,19 @@ class WorkoutSession extends Model
         return $this->elapsedMinutes() >= config('workout.min_minutes')
             && $this->progress >= config('workout.min_progress');
     }
+
+    /**
+     * Returns true when the user has already earned points today.
+     * Uses started_at date so Carbon::setTestNow() works in tests.
+     * Accepts an optional date string (Y-m-d) to override "today".
+     */
+    public static function hasGrantedPointsToday($userId, $date = null): bool
+    {
+        $date = $date ?? now()->toDateString();
+
+        return static::where('user_id', $userId)
+            ->where('points_granted', true)
+            ->whereDate('started_at', $date)
+            ->exists();
+    }
 }

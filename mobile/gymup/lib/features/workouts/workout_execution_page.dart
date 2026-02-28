@@ -33,9 +33,9 @@ class _WorkoutExecutionPageState extends State<WorkoutExecutionPage> {
     int totalSets = 0;
     int completedSets = 0;
 
-    for (var exercise in _workout!.exercicios) {
-      totalSets += exercise.sets.length;
-      completedSets += exercise.sets.where((s) => s.isCompleted).length;
+    for (var exercise in _workout!.exercises) {
+      totalSets += exercise.sets;
+      completedSets += exercise.workoutSets.where((s) => s.isCompleted).length;
     }
 
     if (totalSets == 0) return 0.0;
@@ -44,11 +44,11 @@ class _WorkoutExecutionPageState extends State<WorkoutExecutionPage> {
 
   void _onSetCompleted(ExerciseModel exercise, int setIndex, bool isCompleted) {
     setState(() {
-      exercise.sets[setIndex].isCompleted = isCompleted;
+      exercise.workoutSets[setIndex].isCompleted = isCompleted;
     });
 
     if (isCompleted) {
-      _showRestTimer(exercise.tempoDescanso);
+      _showRestTimer(exercise.rest);
     }
   }
 
@@ -89,7 +89,7 @@ class _WorkoutExecutionPageState extends State<WorkoutExecutionPage> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: GymUpAppBar(title: _workout!.nome),
+      appBar: GymUpAppBar(title: _workout!.name),
       body: Column(
         children: [
           // Progress Bar
@@ -103,9 +103,9 @@ class _WorkoutExecutionPageState extends State<WorkoutExecutionPage> {
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
-              itemCount: _workout!.exercicios.length,
+              itemCount: _workout!.exercises.length,
               itemBuilder: (context, index) {
-                final exercise = _workout!.exercicios[index];
+                final exercise = _workout!.exercises[index];
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 16),
                   child: ExecutionExerciseCard(

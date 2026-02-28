@@ -1,52 +1,95 @@
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final String baseUrl = "http://127.0.0.1:8000/api";
 
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
+  Future<Map<String, dynamic>> signIn(String email, String password) async {
+    final response = await http.post(
+      Uri.parse("$baseUrl/login"),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: jsonEncode({
+        "email": email,
+        "password": password,
+      }),
+    );
 
-  User? get currentUser => _auth.currentUser;
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
 
-  Future<User?> signIn(String email, String password) async {
-    try {
-      final UserCredential result = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      return result.user;
-    } catch (e) {
-      rethrow;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString("token", data["token"]);
+      await prefs.setString("user", jsonEncode(data["user"]));
+
+      return data["user"];
+    } else {
+      throw Exception("Login failed");
     }
   }
 
-  Future<User?> register(String email, String password, String name, String? phone) async {
-    try {
-      final UserCredential result = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      
-      final User? user = result.user;
-      if (user != null) {
-        // Create user document in Firestore
-        await _firestore.collection('alunos').doc(user.uid).set({
-          'uid': user.uid,
-          'nome': name,
-          'email': email,
-          'telefone': phone,
-          'pontos': 0,
-          'criadoEm': FieldValue.serverTimestamp(),
-        });
-      }
-      return user;
-    } catch (e) {
-      rethrow;
+  Future<Map<String, dynamic>> register(
+    String email,
+    String password,
+    String name,
+    String? phone,
+  ) async {
+    final response = await http.post(
+      Uri.parse("$baseUrl/register"),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: jsonEncode({
+        "name": name,
+        "email": email,
+        "password": password,
+        "password_confirmation": password,
+        "phone": phone,
+      }),
+    );
+
+    if (response.statusCode == 201 || response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString("token", data["token"]);
+      await prefs.setString("user", jsonEncode(data["user"]));
+
+      return data["user"];
+    } else {
+      throw Exception("Register failed");
     }
   }
 
   Future<void> signOut() async {
-    await _auth.signOut();
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString("token");
+
+    if (token != null) {
+      await http.post(
+        Uri.parse("$baseUrl/logout"),
+        headers: {
+          "Authorization": "Bearer $token",
+        },
+      );
+    }
+
+    await prefs.clear();
+  }
+
+  Future<String?> getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString("token");
+  }
+
+  Future<Map<String, dynamic>?> getUser() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userString = prefs.getString("user");
+    if (userString != null) {
+      return jsonDecode(userString);
+    }
+    return null;
   }
 }

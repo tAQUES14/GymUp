@@ -62,6 +62,7 @@ class WorkoutTest extends TestCase
         $response = $this->postJson('/api/workout/start');
 
         $response->assertStatus(201)
+            ->assertJsonPath('is_existing', false)
             ->assertJsonStructure([
                 'message',
                 'session' => ['id', 'started_at', 'is_active', 'progress', 'points_granted'],
@@ -76,19 +77,28 @@ class WorkoutTest extends TestCase
     }
 
     /** @test */
-    public function cannot_start_two_simultaneous_sessions()
+    public function start_returns_existing_session_instead_of_creating_duplicate()
     {
         [$gym, $user] = $this->createAuthUser();
 
         // Session already active
-        WorkoutSession::factory()->create([
+        $existing = WorkoutSession::factory()->create([
             'user_id' => $user->id,
             'gym_id'  => $gym->id,
         ]);
 
         $response = $this->postJson('/api/workout/start');
 
-        $response->assertStatus(409);
+        $response->assertStatus(200)
+            ->assertJsonPath('is_existing', true)
+            ->assertJsonPath('session.id', $existing->id);
+
+        // Only 1 active session in the database
+        $this->assertEquals(1,
+            WorkoutSession::where('user_id', $user->id)
+                ->whereNull('finished_at')
+                ->count()
+        );
     }
 
     /** @test */
@@ -360,5 +370,149 @@ class WorkoutTest extends TestCase
         $this->postJson('/api/workout/progress', ['progress' => 101])->assertStatus(422);
         $this->postJson('/api/workout/progress', ['progress' => -1])->assertStatus(422);
         $this->postJson('/api/workout/progress', [])->assertStatus(422);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Daily points limit
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /** @test */
+    public function first_workout_of_day_grants_points_and_daily_fields_are_correct()
+    {
+        [$gym, $user] = $this->createAuthUser();
+
+        $minMinutes = (int) config('workout.min_minutes', 10);
+        Carbon::setTestNow(Carbon::now());
+
+        WorkoutSession::factory()->create([
+            'user_id'    => $user->id,
+            'gym_id'     => $gym->id,
+            'started_at' => now(),
+        ]);
+
+        Carbon::setTestNow(Carbon::now()->addMinutes($minMinutes + 1));
+
+        $response = $this->postJson('/api/workout/progress', ['progress' => 80]);
+
+        $response->assertStatus(200);
+        $this->assertTrue($response->json('points_just_granted'));
+        $this->assertEquals(10, $user->fresh()->points_balance);
+
+        // The session that earned points: is_bonus_session must be false
+        $this->assertFalse($response->json('session.is_bonus_session'));
+        // daily_points_already_granted is true because this session itself granted them
+        $this->assertTrue($response->json('session.daily_points_already_granted'));
+    }
+
+    /** @test */
+    public function second_workout_same_day_does_not_grant_points_and_balance_unchanged()
+    {
+        [$gym, $user] = $this->createAuthUser();
+
+        $minMinutes = (int) config('workout.min_minutes', 10);
+        Carbon::setTestNow(Carbon::now());
+
+        // First session — already finished and points already granted today
+        WorkoutSession::factory()->finished()->withPointsGranted()->create([
+            'user_id'    => $user->id,
+            'gym_id'     => $gym->id,
+            'started_at' => now(),
+        ]);
+        $user->update(['points_balance' => 10]);
+
+        // Second session — active, started same day
+        WorkoutSession::factory()->create([
+            'user_id'    => $user->id,
+            'gym_id'     => $gym->id,
+            'started_at' => now()->addSecond(),
+        ]);
+
+        Carbon::setTestNow(Carbon::now()->addMinutes($minMinutes + 1));
+
+        // Meets both conditions but must NOT grant points again
+        $response = $this->postJson('/api/workout/progress', ['progress' => 80]);
+
+        $response->assertStatus(200);
+        $this->assertFalse($response->json('points_just_granted'));
+        $this->assertEquals(10, $user->fresh()->points_balance);
+        $this->assertTrue($response->json('session.is_bonus_session'));
+        $this->assertTrue($response->json('session.daily_points_already_granted'));
+    }
+
+    /** @test */
+    public function second_workout_same_day_still_updates_progress_and_finishes_correctly()
+    {
+        [$gym, $user] = $this->createAuthUser();
+
+        $minMinutes = (int) config('workout.min_minutes', 10);
+        Carbon::setTestNow(Carbon::now());
+
+        // First session granted points
+        WorkoutSession::factory()->finished()->withPointsGranted()->create([
+            'user_id'    => $user->id,
+            'gym_id'     => $gym->id,
+            'started_at' => now(),
+        ]);
+        $user->update(['points_balance' => 10]);
+
+        // Second session active
+        $secondSession = WorkoutSession::factory()->create([
+            'user_id'    => $user->id,
+            'gym_id'     => $gym->id,
+            'started_at' => now()->addSecond(),
+        ]);
+
+        Carbon::setTestNow(Carbon::now()->addMinutes($minMinutes + 1));
+
+        // Progress update still works
+        $progressResponse = $this->postJson('/api/workout/progress', ['progress' => 90]);
+        $progressResponse->assertStatus(200);
+        $this->assertDatabaseHas('workout_sessions', [
+            'id'             => $secondSession->id,
+            'progress'       => 90,
+            'points_granted' => false,
+        ]);
+
+        // Finish still works
+        $finishResponse = $this->postJson('/api/workout/finish');
+        $finishResponse->assertStatus(200);
+        $this->assertFalse($finishResponse->json('points_just_granted'));
+        $this->assertEquals(10, $user->fresh()->points_balance);
+        $this->assertDatabaseHas('workout_sessions', [
+            'id'             => $secondSession->id,
+            'points_granted' => false,
+        ]);
+        $this->assertNotNull(
+            WorkoutSession::find($secondSession->id)->finished_at
+        );
+    }
+
+    /** @test */
+    public function status_shows_is_bonus_session_true_when_another_session_earned_points_today()
+    {
+        [$gym, $user] = $this->createAuthUser();
+
+        Carbon::setTestNow(Carbon::now());
+
+        // First session: finished, points already granted
+        WorkoutSession::factory()->finished()->withPointsGranted()->create([
+            'user_id'    => $user->id,
+            'gym_id'     => $gym->id,
+            'started_at' => now()->subMinutes(30),
+        ]);
+
+        // Second session: currently active, started later so latest() returns it
+        WorkoutSession::factory()->create([
+            'user_id'    => $user->id,
+            'gym_id'     => $gym->id,
+            'started_at' => now(),
+        ]);
+
+        $response = $this->getJson('/api/workout/status');
+
+        $response->assertStatus(200);
+        $this->assertTrue($response->json('session.is_bonus_session'));
+        $this->assertTrue($response->json('session.daily_points_already_granted'));
+        $this->assertFalse($response->json('session.points_granted'));
     }
 }

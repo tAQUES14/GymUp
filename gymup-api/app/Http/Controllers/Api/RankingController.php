@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 class RankingController extends Controller
 {
@@ -18,37 +18,42 @@ class RankingController extends Controller
         $period = $request->query('period', 'all');
 
         $startDate = match ($period) {
-            'weekly'    => now()->startOfWeek()->toDateString(),
-            'monthly'   => now()->startOfMonth()->toDateString(),
-            'quarterly' => now()->subDays(90)->toDateString(),
+            'weekly'    => now()->startOfWeek(),
+            'monthly'   => now()->startOfMonth(),
+            'quarterly' => now()->subDays(90),
             default     => null,
         };
 
-        $query = User::where('gym_id', $user->gym_id)
-            ->where('role', 'student')
-            ->select('id', 'name', 'points_balance');
+        $query = DB::table('users')
+            ->where('users.gym_id', $user->gym_id)
+            ->where('users.role', 'student')
+            ->leftJoin('point_transactions', function ($join) use ($startDate) {
+                $join->on('point_transactions.user_id', '=', 'users.id')
+                     ->where('point_transactions.type', '=', 'earn');
 
-        if ($startDate) {
-            $query->withCount(['checkins as period_checkins_count' => function ($q) use ($startDate) {
-                $q->where('checkin_date', '>=', $startDate);
-            }])->orderByDesc('period_checkins_count');
-        } else {
-            $query->orderByDesc('points_balance');
-        }
+                if ($startDate) {
+                    $join->where('point_transactions.created_at', '>=', $startDate);
+                }
+            })
+            ->select(
+                'users.id',
+                'users.name',
+                DB::raw('COALESCE(SUM(point_transactions.points), 0) as points')
+            )
+            ->groupBy('users.id', 'users.name')
+            ->orderByDesc('points')
+            ->orderBy('users.name')
+            ->limit($limit);
 
-        $users = $query->limit($limit)->get();
+        $users = $query->get();
 
-        $ranking = $users->values()->map(function ($u, $index) use ($startDate) {
-            $points = $startDate
-                ? ($u->period_checkins_count ?? 0) * 10
-                : $u->points_balance;
-
+        $ranking = $users->values()->map(function ($u, $index) {
             return [
                 'position' => $index + 1,
                 'user_id'  => $u->id,
                 'name'     => $u->name,
-                'points'   => $points,
-                'streak'   => 0,
+                'points'   => (int) $u->points,
+                'streak'   => 0, // pode implementar depois
             ];
         });
 

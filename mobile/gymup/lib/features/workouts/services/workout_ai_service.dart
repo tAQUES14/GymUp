@@ -1,12 +1,15 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
 import '../models/workout_model.dart';
+import '../../auth/auth_service.dart';
 
 class WorkoutAiService {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final String baseUrl = "http://127.0.0.1:8000/api";
 
-  // Simulates AI generation for now
+  // 🔹 Geração continua local (mock IA)
   Future<WorkoutModel> gerarTreinoIA({
     required String objetivo,
     required String nivel,
@@ -15,165 +18,73 @@ class WorkoutAiService {
     double? pesoAtual,
     double? pesoPretendido,
   }) async {
-    // Simulate network delay
-    await Future.delayed(const Duration(seconds: 3));
-
-    // Mock response based on input (simple logic for demo)
-    final isHipertrofia = objetivo.toLowerCase().contains('hipertrofia');
-
-    final exercicios = <ExerciseModel>[];
-
-    if (isHipertrofia) {
-      exercicios.add(
-        ExerciseModel(
-          nome: 'Supino Reto',
-          descricao:
-              'Foco na contração do peitoral. Mantenha os cotovelos levemente fechados.',
-          linkVideoYoutube: 'https://www.youtube.com/watch?v=rT7DgCr-3pg',
-          tempoExecucao: 45,
-          tempoDescanso: 60,
-          carga: 0,
-          sets: [
-            WorkoutSet(number: 1, weight: 20, reps: 12),
-            WorkoutSet(number: 2, weight: 20, reps: 12),
-            WorkoutSet(number: 3, weight: 20, reps: 12),
-          ],
-        ),
-      );
-      exercicios.add(
-        ExerciseModel(
-          nome: 'Agachamento Livre',
-          descricao: 'Mantenha a postura correta e desça até 90 graus.',
-          linkVideoYoutube: 'https://www.youtube.com/watch?v=U3HlEF_E9fo',
-          tempoExecucao: 60,
-          tempoDescanso: 90,
-          carga: 0,
-          sets: [
-            WorkoutSet(number: 1, weight: 40, reps: 10),
-            WorkoutSet(number: 2, weight: 40, reps: 10),
-            WorkoutSet(number: 3, weight: 40, reps: 10),
-          ],
-        ),
-      );
-    } else {
-      // Emagrecimento / Condicionamento
-      exercicios.add(
-        ExerciseModel(
-          nome: 'Polichinelos',
-          descricao: 'Aqueça bem o corpo. Mantenha o ritmo constante.',
-          linkVideoYoutube: 'https://www.youtube.com/watch?v=c4DAnQ6DtF8',
-          tempoExecucao: 60,
-          tempoDescanso: 30,
-          carga: 0,
-          sets: [
-            WorkoutSet(number: 1, weight: 0, reps: 50),
-            WorkoutSet(number: 2, weight: 0, reps: 50),
-            WorkoutSet(number: 3, weight: 0, reps: 50),
-          ],
-        ),
-      );
-      exercicios.add(
-        ExerciseModel(
-          nome: 'Burpees',
-          descricao: 'Explosão na subida. Cuidado com a lombar.',
-          linkVideoYoutube: 'https://www.youtube.com/watch?v=TU8QYXL8gEQ',
-          tempoExecucao: 45,
-          tempoDescanso: 45,
-          carga: 0,
-          sets: [
-            WorkoutSet(number: 1, weight: 0, reps: 15),
-            WorkoutSet(number: 2, weight: 0, reps: 15),
-            WorkoutSet(number: 3, weight: 0, reps: 15),
-          ],
-        ),
-      );
-    }
-
-    // Add common exercises
-    exercicios.add(
-      ExerciseModel(
-        nome: 'Prancha Abdominal',
-        descricao: 'Fortalecimento do core. Mantenha o corpo alinhado.',
-        linkVideoYoutube: 'https://www.youtube.com/watch?v=pSHjTRCQxIw',
-        tempoExecucao: 60,
-        tempoDescanso: 30,
-        carga: 0,
-        sets: [
-          WorkoutSet(
-            number: 1,
-            weight: 0,
-            reps: 60,
-          ), // seconds usually, but using reps field for simplicity or 1 rep
-          WorkoutSet(number: 2, weight: 0, reps: 60),
-          WorkoutSet(number: 3, weight: 0, reps: 60),
-        ],
-      ),
-    );
+    await Future.delayed(const Duration(seconds: 2));
 
     return WorkoutModel(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      nome: 'Treino Personalizado IA',
-      descricao:
-          'Objetivo: $objetivo | Nível: $nivel | Peso: ${pesoAtual ?? "N/A"}kg -> ${pesoPretendido ?? "N/A"}kg',
-      duracao: '$tempo',
-      nivel: nivel,
-      exercicios: exercicios,
+      id: DateTime.now().millisecondsSinceEpoch,
+      name: 'Treino Personalizado IA',
+      description:
+          'Objetivo: $objetivo | Nível: $nivel | Peso: ${pesoAtual ?? "N/A"}kg → ${pesoPretendido ?? "N/A"}kg',
+      duration: tempo,
+      level: nivel,
+      exercises: [],
       isGenerated: true,
     );
   }
 
-  Future<void> saveWorkout(WorkoutModel workout) async {
-    final user = _auth.currentUser;
-    if (user == null) throw Exception('Usuário não logado');
+  // 🔹 Salvar no Laravel
+  Future<void> saveWorkout(BuildContext context, WorkoutModel workout) async {
+    final authService = context.read<AuthService>();
+    final token = await authService.getToken();
 
-    await _db
-        .collection('alunos')
-        .doc(user.uid)
-        .collection('treinosPersonalizados')
-        .doc(workout.id)
-        .set(workout.toMap());
+    final response = await http.post(
+      Uri.parse("$baseUrl/custom-workouts"),
+      headers: {
+        "Authorization": "Bearer $token",
+        "Content-Type": "application/json",
+      },
+      body: jsonEncode(workout.toMap()),
+    );
+
+    if (response.statusCode != 201 && response.statusCode != 200) {
+      throw Exception("Erro ao salvar treino");
+    }
   }
 
-  Stream<List<WorkoutModel>> getCustomWorkouts() {
-    final user = _auth.currentUser;
-    if (user == null) return const Stream.empty();
+  // 🔹 Buscar treinos personalizados
+  Future<List<WorkoutModel>> getCustomWorkouts(BuildContext context) async {
+    final authService = context.read<AuthService>();
+    final token = await authService.getToken();
 
-    return _db
-        .collection('alunos')
-        .doc(user.uid)
-        .collection('treinosPersonalizados')
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            return WorkoutModel.fromMap(doc.data());
-          }).toList();
-        });
+    final response = await http.get(
+      Uri.parse("$baseUrl/custom-workouts"),
+      headers: {
+        "Authorization": "Bearer $token",
+        "Content-Type": "application/json",
+      },
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception("Erro ao buscar treinos");
+    }
+
+    final List data = jsonDecode(response.body);
+
+    return data.map((item) => WorkoutModel.fromMap(item)).toList();
   }
 
-  Future<void> deleteExercise(String workoutId, ExerciseModel exercise) async {
-    final user = _auth.currentUser;
-    if (user == null) return;
+  // 🔹 Deletar treino inteiro
+  Future<void> deleteWorkout(BuildContext context, int workoutId) async {
+    final authService = context.read<AuthService>();
+    final token = await authService.getToken();
 
-    final docRef = _db
-        .collection('alunos')
-        .doc(user.uid)
-        .collection('treinosPersonalizados')
-        .doc(workoutId);
+    final response = await http.delete(
+      Uri.parse("$baseUrl/custom-workouts/$workoutId"),
+      headers: {"Authorization": "Bearer $token"},
+    );
 
-    final snapshot = await docRef.get();
-    if (!snapshot.exists) return;
-
-    final workoutData = snapshot.data()!;
-    final workout = WorkoutModel.fromMap(workoutData);
-
-    // Remove the exercise
-    final updatedExercises = workout.exercicios
-        .where((e) => e.nome != exercise.nome)
-        .toList();
-
-    // Update Firestore
-    await docRef.update({
-      'exercicios': updatedExercises.map((e) => e.toMap()).toList(),
-    });
+    if (response.statusCode != 200) {
+      throw Exception("Erro ao deletar treino");
+    }
   }
 }

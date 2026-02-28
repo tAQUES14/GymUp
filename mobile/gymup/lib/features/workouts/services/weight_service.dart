@@ -1,48 +1,70 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
+import 'package:flutter/material.dart';
+
+import '../../auth/auth_service.dart';
 
 class WeightService {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final String baseUrl = "http://127.0.0.1:8000/api";
 
-  Future<void> saveWeight(String exerciseId, double weight, int reps, String note) async {
-    final user = _auth.currentUser;
-    if (user == null) return;
+  Future<void> saveWeight(
+    BuildContext context,
+    String exerciseId,
+    double weight,
+    int reps,
+    String note,
+  ) async {
+    final authService = context.read<AuthService>();
+    final token = await authService.getToken();
 
-    final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+    final response = await http.post(
+      Uri.parse("$baseUrl/exercises/$exerciseId/weight"),
+      headers: {
+        "Authorization": "Bearer $token",
+        "Content-Type": "application/json",
+      },
+      body: jsonEncode({
+        "weight": weight,
+        "reps": reps,
+        "note": note,
+      }),
+    );
 
-    await _db
-        .collection('alunos')
-        .doc(user.uid)
-        .collection('cargas')
-        .doc(exerciseId)
-        .collection('historico')
-        .doc(timestamp)
-        .set({
-      'peso': weight,
-      'reps': reps,
-      'observacao': note,
-      'data': FieldValue.serverTimestamp(),
-    });
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception("Erro ao salvar carga");
+    }
   }
 
-  Future<Map<String, dynamic>?> getLastWeight(String exerciseId) async {
-    final user = _auth.currentUser;
-    if (user == null) return null;
+  Future<Map<String, dynamic>?> getLastWeight(
+    BuildContext context,
+    String exerciseId,
+  ) async {
+    final authService = context.read<AuthService>();
+    final token = await authService.getToken();
 
-    final snapshot = await _db
-        .collection('alunos')
-        .doc(user.uid)
-        .collection('cargas')
-        .doc(exerciseId)
-        .collection('historico')
-        .orderBy('data', descending: true)
-        .limit(1)
-        .get();
+    final response = await http.get(
+      Uri.parse("$baseUrl/exercises/$exerciseId/weight/last"),
+      headers: {
+        "Authorization": "Bearer $token",
+        "Content-Type": "application/json",
+      },
+    );
 
-    if (snapshot.docs.isNotEmpty) {
-      return snapshot.docs.first.data();
+    if (response.statusCode != 200) {
+      return null;
     }
-    return null;
+
+    final data = jsonDecode(response.body);
+
+    // Esperado retorno:
+    // {
+    //   "weight": 40,
+    //   "reps": 12,
+    //   "note": "Fácil",
+    //   "created_at": "..."
+    // }
+
+    return data;
   }
 }

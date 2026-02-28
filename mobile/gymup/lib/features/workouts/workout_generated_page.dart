@@ -11,19 +11,25 @@ class WorkoutGeneratedPage extends StatefulWidget {
   const WorkoutGeneratedPage({super.key});
 
   @override
-  State<WorkoutGeneratedPage> createState() => _WorkoutGeneratedPageState();
+  State<WorkoutGeneratedPage> createState() =>
+      _WorkoutGeneratedPageState();
 }
 
-class _WorkoutGeneratedPageState extends State<WorkoutGeneratedPage> {
+class _WorkoutGeneratedPageState
+    extends State<WorkoutGeneratedPage> {
   final _formKey = GlobalKey<FormState>();
   final _objetivoController = TextEditingController();
   final _tempoController = TextEditingController();
   final _pesoAtualController = TextEditingController();
   final _pesoPretendidoController = TextEditingController();
-  
+
   String _nivelSelecionado = 'Iniciante';
-  final List<String> _niveis = ['Iniciante', 'Intermediário', 'Avançado'];
-  
+  final List<String> _niveis = [
+    'Iniciante',
+    'Intermediário',
+    'Avançado'
+  ];
+
   bool _isLoading = false;
 
   @override
@@ -38,42 +44,47 @@ class _WorkoutGeneratedPageState extends State<WorkoutGeneratedPage> {
   Future<void> _gerarTreino() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      final aiService = Provider.of<WorkoutAiService>(context, listen: false);
-      
+      final aiService =
+          Provider.of<WorkoutAiService>(context, listen: false);
+
       final workout = await aiService.gerarTreinoIA(
-        objetivo: _objetivoController.text,
+        objetivo: _objetivoController.text.trim(),
         nivel: _nivelSelecionado,
         tempo: int.tryParse(_tempoController.text) ?? 45,
         equipamentos: [],
-        pesoAtual: double.tryParse(_pesoAtualController.text),
-        pesoPretendido: double.tryParse(_pesoPretendidoController.text),
+        pesoAtual:
+            double.tryParse(_pesoAtualController.text.replaceAll(',', '.')),
+        pesoPretendido:
+            double.tryParse(_pesoPretendidoController.text.replaceAll(',', '.')),
       );
 
-      await aiService.saveWorkout(workout);
+      // 🔥 AGORA SALVA NO LARAVEL
+      if (!mounted) return;
+      await aiService.saveWorkout(context, workout);
 
-      if (mounted) {
-        Navigator.pushReplacementNamed(
-          context,
-          '/workout-detail',
-          arguments: workout,
-        );
-      }
+      if (!mounted) return;
+
+      Navigator.pushReplacementNamed(
+        context,
+        '/workout-detail',
+        arguments: workout,
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao gerar treino: $e')),
-        );
-      }
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Erro ao gerar treino: ${e.toString().replaceAll("Exception: ", "")}',
+          ),
+        ),
+      );
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -100,15 +111,20 @@ class _WorkoutGeneratedPageState extends State<WorkoutGeneratedPage> {
                 style: AppTypography.bodyMedium,
               ),
               const SizedBox(height: 32),
-              
+
               GymUpTextField(
                 label: 'Qual seu objetivo?',
                 controller: _objetivoController,
-                hintText: 'Ex: Hipertrofia, Emagrecimento, Resistência',
-                validator: (value) => value == null || value.isEmpty ? 'Campo obrigatório' : null,
+                hintText:
+                    'Ex: Hipertrofia, Emagrecimento, Resistência',
+                validator: (value) =>
+                    value == null || value.isEmpty
+                        ? 'Campo obrigatório'
+                        : null,
               ),
+
               const SizedBox(height: 16),
-              
+
               Row(
                 children: [
                   Expanded(
@@ -130,6 +146,7 @@ class _WorkoutGeneratedPageState extends State<WorkoutGeneratedPage> {
                   ),
                 ],
               ),
+
               const SizedBox(height: 16),
 
               GymUpTextField(
@@ -137,10 +154,14 @@ class _WorkoutGeneratedPageState extends State<WorkoutGeneratedPage> {
                 controller: _tempoController,
                 keyboardType: TextInputType.number,
                 hintText: 'Ex: 45',
-                validator: (value) => value == null || value.isEmpty ? 'Campo obrigatório' : null,
+                validator: (value) =>
+                    value == null || value.isEmpty
+                        ? 'Campo obrigatório'
+                        : null,
               ),
+
               const SizedBox(height: 16),
-              
+
               DropdownButtonFormField<String>(
                 initialValue: _nivelSelecionado,
                 decoration: InputDecoration(
@@ -152,21 +173,21 @@ class _WorkoutGeneratedPageState extends State<WorkoutGeneratedPage> {
                     borderSide: BorderSide.none,
                   ),
                 ),
-                items: _niveis.map((nivel) {
-                  return DropdownMenuItem(
-                    value: nivel,
-                    child: Text(nivel),
-                  );
-                }).toList(),
+                items: _niveis
+                    .map((nivel) => DropdownMenuItem(
+                          value: nivel,
+                          child: Text(nivel),
+                        ))
+                    .toList(),
                 onChanged: (value) {
                   setState(() {
                     _nivelSelecionado = value!;
                   });
                 },
               ),
-              
+
               const SizedBox(height: 48),
-              
+
               GymUpButton(
                 label: 'GERAR TREINO',
                 isLoading: _isLoading,

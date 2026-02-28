@@ -3,8 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
+use App\Models\Gym;
 use App\Models\User;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
@@ -19,11 +20,18 @@ class AuthController extends Controller
             'gym_id'   => 'nullable|exists:gyms,id',
         ]);
 
+        // Usa a gym informada ou garante que a gym padrão existe.
+        // Torna o sistema resiliente mesmo sem executar seeders.
+        $gymId = $request->gym_id ?? Gym::firstOrCreate(
+            ['name' => 'GymUp Default'],
+            ['active' => true]
+        )->id;
+
         $user = User::create([
             'name'     => $request->name,
             'email'    => $request->email,
             'password' => Hash::make($request->password),
-            'gym_id'   => $request->gym_id ?? 1,
+            'gym_id'   => $gymId,
             'role'     => 'student',
         ]);
 

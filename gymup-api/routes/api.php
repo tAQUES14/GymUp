@@ -10,31 +10,90 @@ use App\Http\Controllers\Api\AdminDashboardController;
 use App\Http\Controllers\Api\RewardController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\WorkoutController;
+use App\Http\Controllers\Api\WeightController;
+use App\Http\Controllers\Api\CustomWorkoutController;
+use App\Http\Controllers\Api\WorkoutHistoryController;
+use App\Http\Controllers\Api\ProfileController;
 
-
-
+/*
+|--------------------------------------------------------------------------
+| Rotas Públicas
+|--------------------------------------------------------------------------
+*/
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
-Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/me', [AuthController::class, 'me']);
-    Route::get('/dashboard', [DashboardController::class, 'index']);
-    Route::get('/rewards', [RewardController::class, 'index']);
-    Route::post('/checkin', [CheckinController::class, 'store']);
-    Route::post('/redeem', [RedemptionController::class, 'store']);
-    Route::post('/logout', [AuthController::class, 'logout']);
-    Route::post('/redemptions/{id}/approve',[RedemptionController::class, 'approve'])->middleware('role:admin');
-    Route::get('/admin/redemptions', [RedemptionController::class, 'index'])->middleware('role:admin');
-    Route::get('/ranking', [RankingController::class, 'index']);
-    Route::get('/points/history', [PointController::class, 'history']);
-    Route::get('/admin/dashboard', [AdminDashboardController::class, 'index'])
-        ->middleware('role:admin');
+/*
+|--------------------------------------------------------------------------
+| Rotas Protegidas (AUTH SANCTUM)
+|--------------------------------------------------------------------------
+*/
 
+Route::middleware('auth:sanctum')->group(function () {
+
+    // 🔹 Usuário
+    Route::get('/me', [AuthController::class, 'me']);
+    Route::post('/logout', [AuthController::class, 'logout']);
+
+    // 🔹 Perfil
+    Route::get('/profile', [ProfileController::class, 'show']);
+
+    // 🔹 Dashboard
+    Route::get('/dashboard', [DashboardController::class, 'index']);
+
+    // 🔹 Pontos
+    Route::get('/points/history', [PointController::class, 'history']);
+
+    // 🔹 Ranking
+    Route::get('/ranking', [RankingController::class, 'index']);
+
+    // 🔹 Recompensas
+    Route::get('/rewards', [RewardController::class, 'index']);
+    Route::post('/redeem', [RedemptionController::class, 'store']);
+
+    // 🔹 Check-in
+    Route::post('/checkin', [CheckinController::class, 'store']);
+
+    // 🔹 Workouts (sessão ativa)
     Route::prefix('workout')->group(function () {
-        Route::post('/start',    [WorkoutController::class, 'start']);
+        Route::post('/start', [WorkoutController::class, 'start']);
         Route::post('/progress', [WorkoutController::class, 'updateProgress']);
-        Route::post('/finish',   [WorkoutController::class, 'finish']);
-        Route::get('/status',    [WorkoutController::class, 'status']);
+        Route::post('/finish', [WorkoutController::class, 'finish']);
+        Route::get('/status', [WorkoutController::class, 'status']);
     });
+
+    // 🔹 Histórico de Cargas (Weight)
+    Route::prefix('exercises')->group(function () {
+        Route::post('{exercise}/weight', [WeightController::class, 'store']);
+        Route::get('{exercise}/weight/last', [WeightController::class, 'last']);
+    });
+
+    // 🔹 Treinos Personalizados (IA)
+    Route::prefix('custom-workouts')->group(function () {
+        Route::get('/', [CustomWorkoutController::class, 'index']);
+        Route::post('/', [CustomWorkoutController::class, 'store']);
+        Route::get('{id}', [CustomWorkoutController::class, 'show']);
+        Route::delete('{id}', [CustomWorkoutController::class, 'destroy']);
+    });
+
+    Route::prefix('workout-history')->group(function () {
+        Route::post('/', [WorkoutHistoryController::class, 'store']);
+        Route::get('/', [WorkoutHistoryController::class, 'index']);
+    });
+
+    Route::get('/checkin/status', [CheckinController::class, 'status']);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Rotas Admin
+    |--------------------------------------------------------------------------
+    */
+
+    Route::middleware('role:admin')->group(function () {
+        Route::get('/admin/dashboard', [AdminDashboardController::class, 'index']);
+        Route::get('/admin/redemptions', [RedemptionController::class, 'index']);
+        Route::post('/redemptions/{id}/approve', [RedemptionController::class, 'approve']);
+    });
+
 });

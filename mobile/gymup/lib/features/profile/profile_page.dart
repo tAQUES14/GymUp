@@ -1,6 +1,9 @@
+import 'dart:convert';
+import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../../core/api/api_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/gymup_app_bar.dart';
@@ -8,7 +11,6 @@ import '../../core/widgets/gymup_button.dart';
 import '../../core/widgets/gymup_card.dart';
 import '../../core/widgets/gymup_text_field.dart';
 import '../../core/widgets/gymup_loading.dart';
-import '../services/firestore_service.dart';
 import '../auth/auth_service.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -30,6 +32,11 @@ class _ProfilePageState extends State<ProfilePage> {
   late TextEditingController _alturaController;
   late TextEditingController _academiaController;
 
+  Map<String, dynamic>? _userData;
+  late Future<void> _profileFuture;
+
+  final _api = ApiService();
+
   @override
   void initState() {
     super.initState();
@@ -39,6 +46,7 @@ class _ProfilePageState extends State<ProfilePage> {
     _pesoController = TextEditingController();
     _alturaController = TextEditingController();
     _academiaController = TextEditingController();
+    _profileFuture = _loadProfile();
   }
 
   @override
@@ -52,15 +60,32 @@ class _ProfilePageState extends State<ProfilePage> {
     super.dispose();
   }
 
-  void _populateControllers(Map<String, dynamic> data) {
-    if (!_isEditing) { // Only populate if not editing to avoid overwriting user input while typing if stream updates
-      _nomeController.text = data['nome'] ?? '';
-      _telefoneController.text = data['telefone'] ?? '';
-      _idadeController.text = data['idade']?.toString() ?? '';
-      _pesoController.text = data['peso']?.toString() ?? '';
-      _alturaController.text = data['altura']?.toString() ?? '';
-      _academiaController.text = data['academia'] ?? '';
+  Future<void> _loadProfile() async {
+    developer.log('GET ${ApiService.baseUrl}/profile', name: 'ProfilePage');
+
+    final response = await _api.get('/profile');
+
+    developer.log(
+      'ProfilePage response: status=${response.statusCode} body=${response.body}',
+      name: 'ProfilePage',
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('HTTP ${response.statusCode}: ${response.body}');
     }
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final gym = data['gym'] as Map<String, dynamic>?;
+
+    setState(() {
+      _userData = data;
+      _nomeController.text = data['name'] ?? '';
+      _telefoneController.text = data['phone'] ?? '';
+      _idadeController.text = '';
+      _pesoController.text = (data['weight'] ?? '').toString();
+      _alturaController.text = (data['height'] ?? '').toString();
+      _academiaController.text = gym?['name'] ?? '';
+    });
   }
 
   Future<void> _saveProfile() async {
@@ -69,20 +94,22 @@ class _ProfilePageState extends State<ProfilePage> {
     setState(() => _isLoading = true);
 
     try {
-      final data = {
-        'nome': _nomeController.text.trim(),
-        'telefone': _telefoneController.text.trim(),
-        'idade': int.tryParse(_idadeController.text.trim()),
-        'peso': double.tryParse(_pesoController.text.trim().replaceAll(',', '.')),
-        'altura': double.tryParse(_alturaController.text.trim().replaceAll(',', '.')),
-        'academia': _academiaController.text.trim(),
-      };
-
-      await context.read<FirestoreService>().updateAluno(data);
-
-      setState(() {
-        _isEditing = false;
+      final response = await _api.put('/me', {
+        'name': _nomeController.text.trim(),
+        'weight': double.tryParse(_pesoController.text.trim()),
+        'height': double.tryParse(_alturaController.text.trim()),
       });
+
+      developer.log(
+        'SaveProfile response: status=${response.statusCode} body=${response.body}',
+        name: 'ProfilePage',
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+
+      setState(() => _isEditing = false);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -90,9 +117,10 @@ class _ProfilePageState extends State<ProfilePage> {
         );
       }
     } catch (e) {
+      developer.log('SaveProfile error: $e', name: 'ProfilePage');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao atualizar: $e')),
+          SnackBar(content: Text('Erro ao salvar: $e')),
         );
       }
     } finally {
@@ -102,53 +130,68 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    final firestoreService = context.read<FirestoreService>();
-    final user = context.read<AuthService>().currentUser;
-
-    if (user == null) {
-      return const Scaffold(
-        body: Center(child: Text('Usuário não logado')),
-      );
-    }
-
     return Scaffold(
       appBar: GymUpAppBar(
         title: 'Meu Perfil',
         actions: [
           IconButton(
             icon: Icon(_isEditing ? Icons.close : Icons.edit),
-            onPressed: () {
-              setState(() {
-                _isEditing = !_isEditing;
-              });
-            },
+            onPressed: () => setState(() => _isEditing = !_isEditing),
           ),
         ],
       ),
       backgroundColor: AppColors.background,
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: firestoreService.getAlunoStream(),
+      body: FutureBuilder<void>(
+        future: _profileFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const GymUpLoading();
           }
 
           if (snapshot.hasError) {
-            return Center(child: Text('Erro: ${snapshot.error}'));
+            final err = snapshot.error.toString();
+            developer.log('ProfilePage FutureBuilder error: $err', name: 'ProfilePage');
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Erro ao carregar perfil',
+                      style: AppTypography.h3,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      err,
+                      style: AppTypography.bodyMedium
+                          .copyWith(color: Colors.red.shade300),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    GymUpButton(
+                      label: 'Tentar novamente',
+                      onPressed: () => setState(() {
+                        _profileFuture = _loadProfile();
+                      }),
+                    ),
+                  ],
+                ),
+              ),
+            );
           }
 
-          final data = snapshot.data?.data() as Map<String, dynamic>? ?? {};
-          
-          // Populate controllers only once or when not editing
-          // To handle stream updates properly without resetting user input during edit, 
-          // we might need a more complex state management, but for now this is fine.
-          // We'll populate only if the controller is empty (first load) or we are not editing.
-          if (_nomeController.text.isEmpty && !_isEditing) {
-             _populateControllers(data);
+          if (_userData == null) {
+            return const Center(child: Text("Dados não disponíveis"));
           }
 
-          final pontos = data['pontos'] ?? 0;
-          final email = data['email'] ?? user.email;
+          final pontos = (_userData!['points_balance'] as num?)?.toInt() ?? 0;
+          final totalCheckins = (_userData!['total_checkins'] as num?)?.toInt() ?? 0;
+          final streak = (_userData!['current_streak'] as num?)?.toInt() ?? 0;
+          final email = _userData!['email'] as String? ?? '';
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
@@ -162,20 +205,15 @@ class _ProfilePageState extends State<ProfilePage> {
                     child: Icon(Icons.person, size: 60, color: Colors.white),
                   ),
                   const SizedBox(height: 24),
+
                   if (!_isEditing) ...[
-                    Text(
-                      data['nome'] ?? 'Usuário',
-                      style: AppTypography.h2,
-                    ),
-                    Text(
-                      email ?? '',
-                      style: AppTypography.bodyMedium,
-                    ),
+                    Text(_nomeController.text, style: AppTypography.h2),
+                    Text(email, style: AppTypography.bodyMedium),
                     const SizedBox(height: 24),
-                    _buildStatsCard(pontos),
+                    _buildStatsCard(pontos, totalCheckins, streak),
                     const SizedBox(height: 24),
                   ],
-                  
+
                   GymUpCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -186,56 +224,31 @@ class _ProfilePageState extends State<ProfilePage> {
                           label: 'Nome Completo',
                           controller: _nomeController,
                           readOnly: !_isEditing,
-                          validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null,
+                          validator: (v) =>
+                              v!.isEmpty ? 'Campo obrigatório' : null,
                         ),
                         const SizedBox(height: 16),
                         GymUpTextField(
-                          label: 'Telefone',
-                          controller: _telefoneController,
+                          label: 'Peso (kg)',
+                          controller: _pesoController,
                           readOnly: !_isEditing,
-                          keyboardType: TextInputType.phone,
                         ),
                         const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: GymUpTextField(
-                                label: 'Idade',
-                                controller: _idadeController,
-                                readOnly: !_isEditing,
-                                keyboardType: TextInputType.number,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: GymUpTextField(
-                                label: 'Peso (kg)',
-                                controller: _pesoController,
-                                readOnly: !_isEditing,
-                                keyboardType: TextInputType.number,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: GymUpTextField(
-                                label: 'Altura (m)',
-                                controller: _alturaController,
-                                readOnly: !_isEditing,
-                                keyboardType: TextInputType.number,
-                              ),
-                            ),
-                          ],
+                        GymUpTextField(
+                          label: 'Altura (m)',
+                          controller: _alturaController,
+                          readOnly: !_isEditing,
                         ),
                         const SizedBox(height: 16),
                         GymUpTextField(
                           label: 'Academia',
                           controller: _academiaController,
-                          readOnly: !_isEditing,
+                          readOnly: true,
                         ),
                       ],
                     ),
                   ),
-                  
+
                   if (_isEditing) ...[
                     const SizedBox(height: 24),
                     GymUpButton(
@@ -248,7 +261,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   const SizedBox(height: 48),
                   GymUpButton(
                     label: 'SAIR',
-                    isSecondary: true, // Or make it red/error style
+                    isSecondary: true,
                     onPressed: () async {
                       await context.read<AuthService>().signOut();
                       if (context.mounted) {
@@ -266,7 +279,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildStatsCard(int pontos) {
+  Widget _buildStatsCard(int pontos, int totalCheckins, int streak) {
     return Row(
       children: [
         Expanded(
@@ -286,19 +299,24 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           ),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 12),
         Expanded(
           child: GymUpCard(
             child: Column(
               children: [
-                Text(
-                  '12', // Mock data
-                  style: AppTypography.h1.copyWith(color: AppColors.primary),
-                ),
-                Text(
-                  'Treinos',
-                  style: AppTypography.caption,
-                ),
+                Text('$totalCheckins', style: AppTypography.h1),
+                Text('Check-ins', style: AppTypography.caption),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: GymUpCard(
+            child: Column(
+              children: [
+                Text('$streak', style: AppTypography.h1),
+                Text('Sequência', style: AppTypography.caption),
               ],
             ),
           ),

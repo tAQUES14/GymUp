@@ -14,6 +14,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => \App\Http\Middleware\RoleMiddleware::class,
         ]);
+
+        // Log HTTP method de cada request (para diagnosticar preflight OPTIONS).
+        // Remova após confirmar que o double-request é preflight CORS.
+        $middleware->api(append: [
+            \App\Http\Middleware\LogRequestMethod::class,
+        ]);
     })
     ->withProviders([
         \App\Providers\AuthServiceProvider::class,

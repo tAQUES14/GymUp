@@ -7,6 +7,7 @@ use App\Models\WorkoutSession;
 use App\Services\PointService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class WorkoutController extends Controller
 {
@@ -14,35 +15,45 @@ class WorkoutController extends Controller
      * POST /api/workout/start
      *
      * Starts a new workout session for the authenticated user.
-     * Returns 409 if an active session already exists.
+     * Idempotent: if an active session already exists, returns it
+     * with is_existing = true (200) instead of creating a duplicate.
+     *
+     * Uses DB::transaction + lockForUpdate to prevent race conditions
+     * (two simultaneous requests creating two sessions).
      */
     public function start(Request $request)
     {
         $user = $request->user();
 
-        $activeSession = WorkoutSession::where('user_id', $user->id)
-            ->whereNull('finished_at')
-            ->first();
+        $session = DB::transaction(function () use ($user) {
+            // Pessimistic lock: blocks concurrent inserts for this user
+            $active = WorkoutSession::where('user_id', $user->id)
+                ->whereNull('finished_at')
+                ->lockForUpdate()
+                ->first();
 
-        if ($activeSession) {
-            return response()->json([
-                'message' => 'Você já tem uma sessão de treino ativa.',
-                'session' => $this->formatSession($activeSession),
-            ], 409);
-        }
+            if ($active) {
+                return $active;
+            }
 
-        $session = WorkoutSession::create([
-            'user_id'        => $user->id,
-            'gym_id'         => $user->gym_id,
-            'started_at'     => now(),
-            'progress'       => 0,
-            'points_granted' => false,
-        ]);
+            return WorkoutSession::create([
+                'user_id'        => $user->id,
+                'gym_id'         => $user->gym_id,
+                'started_at'     => now(),
+                'progress'       => 0,
+                'points_granted' => false,
+            ]);
+        });
+
+        $isExisting = !$session->wasRecentlyCreated;
 
         return response()->json([
-            'message' => 'Sessão de treino iniciada.',
-            'session' => $this->formatSession($session),
-        ], 201);
+            'message'     => $isExisting
+                ? 'Sessão de treino já ativa.'
+                : 'Sessão de treino iniciada.',
+            'session'     => $this->formatSession($session),
+            'is_existing' => $isExisting,
+        ], $isExisting ? 200 : 201);
     }
 
     /**
@@ -70,12 +81,21 @@ class WorkoutController extends Controller
             ], 404);
         }
 
+        Log::info('workout.progress', [
+            'user_id'    => $user->id,
+            'session_id' => $session->id,
+            'progress'   => $request->progress,
+            'elapsed_s'  => (int) $session->started_at->diffInSeconds(now()),
+        ]);
+
         $session->update(['progress' => $request->progress]);
 
         $pointsJustGranted = false;
 
         if (!$session->points_granted && $session->meetsPointsConditions()) {
-            $pointsJustGranted = $this->grantPoints($session, $user, $pointService);
+            if (!WorkoutSession::hasGrantedPointsToday($user->id)) {
+                $pointsJustGranted = $this->grantPoints($session, $user, $pointService);
+            }
         }
 
         return response()->json([
@@ -111,8 +131,10 @@ class WorkoutController extends Controller
         $pointsJustGranted = false;
 
         if (!$session->points_granted && $session->meetsPointsConditions()) {
-            $pointsJustGranted = $this->grantPoints($session, $user, $pointService);
-            $session->refresh();
+            if (!WorkoutSession::hasGrantedPointsToday($user->id)) {
+                $pointsJustGranted = $this->grantPoints($session, $user, $pointService);
+                $session->refresh();
+            }
         }
 
         $session->update(['finished_at' => now()]);
@@ -179,19 +201,26 @@ class WorkoutController extends Controller
      */
     private function formatSession(WorkoutSession $session): array
     {
-        $endpoint = $session->finished_at ?? now();
+        $endpoint     = $session->finished_at ?? now();
+        $dailyGranted = WorkoutSession::hasGrantedPointsToday($session->user_id);
 
         return [
-            'id'                => $session->id,
-            'started_at'        => $session->started_at->toIso8601String(),
-            'finished_at'       => $session->finished_at?->toIso8601String(),
-            'is_active'         => $session->isActive(),
-            'progress'          => $session->progress,
-            'elapsed_seconds'   => (int) $session->started_at->diffInSeconds($endpoint),
-            'points_granted'    => $session->points_granted,
-            'points_granted_at' => $session->points_granted_at?->toIso8601String(),
-            'can_earn_points'   => !$session->points_granted && $session->meetsPointsConditions(),
-            'requirements'      => [
+            'id'                           => $session->id,
+            'started_at'                   => $session->started_at->toIso8601String(),
+            'finished_at'                  => $session->finished_at?->toIso8601String(),
+            'is_active'                    => $session->isActive(),
+            'progress'                     => $session->progress,
+            'elapsed_seconds'              => (int) $session->started_at->diffInSeconds($endpoint),
+            'points_granted'               => $session->points_granted,
+            'points_granted_at'            => $session->points_granted_at?->toIso8601String(),
+            'meets_conditions'             => $session->meetsPointsConditions(),
+            'can_earn_points'              => !$session->points_granted && $session->meetsPointsConditions(),
+            'min_minutes'                  => (int) config('workout.min_minutes', 10),
+            'min_progress'                 => (int) config('workout.min_progress', 70),
+            'is_bonus_session'             => $dailyGranted && !$session->points_granted,
+            'daily_points_already_granted' => $dailyGranted,
+            'daily_points_limit'           => (int) config('workout.daily_points_limit', 10),
+            'requirements'                 => [
                 'min_minutes'  => config('workout.min_minutes'),
                 'min_progress' => config('workout.min_progress'),
             ],

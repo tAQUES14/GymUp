@@ -4,9 +4,13 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/gymup_card.dart';
 
 class WeeklyProgressBar extends StatelessWidget {
-  final List<int> diasTreinados;
+  /// 7 booleans (index 0 = Monday … index 6 = Sunday).
+  final List<bool> weeklyProgress;
 
-  const WeeklyProgressBar({super.key, this.diasTreinados = const []});
+  const WeeklyProgressBar({
+    super.key,
+    this.weeklyProgress = const [false, false, false, false, false, false, false],
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -22,8 +26,7 @@ class WeeklyProgressBar extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: List.generate(7, (index) {
-              final dayNumber = index + 1; // 1 = Seconda ... 7 = Domingo
-              final isChecked = diasTreinados.contains(dayNumber);
+              final isChecked = index < weeklyProgress.length && weeklyProgress[index];
 
               return Column(
                 children: [

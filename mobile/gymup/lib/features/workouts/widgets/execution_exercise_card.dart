@@ -55,19 +55,11 @@ class _ExecutionExerciseCardState extends State<ExecutionExerciseCard> {
                     decoration: BoxDecoration(
                       color: Colors.grey[800],
                       borderRadius: BorderRadius.circular(8),
-                      image: widget.exercise.icone != null
-                          ? DecorationImage(
-                              image: NetworkImage(widget.exercise.icone!),
-                              fit: BoxFit.cover,
-                            )
-                          : null,
                     ),
-                    child: widget.exercise.icone == null
-                        ? const Icon(
-                            Icons.fitness_center,
-                            color: Colors.white54,
-                          )
-                        : null,
+                    child: const Icon(
+                      Icons.fitness_center,
+                      color: Colors.white54,
+                    ),
                   ),
                   const SizedBox(width: 16),
 
@@ -76,12 +68,10 @@ class _ExecutionExerciseCardState extends State<ExecutionExerciseCard> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(widget.exercise.nome, style: AppTypography.h3),
+                        Text(widget.exercise.name, style: AppTypography.h3),
                         const SizedBox(height: 4),
                         Text(
-                          widget.exercise.descricao.length > 50
-                              ? '${widget.exercise.descricao.substring(0, 50)}...'
-                              : widget.exercise.descricao,
+                          widget.exercise.muscleGroup,
                           style: AppTypography.caption,
                         ),
                       ],
@@ -107,7 +97,7 @@ class _ExecutionExerciseCardState extends State<ExecutionExerciseCard> {
               children: [
                 const Divider(height: 1, color: Colors.white12),
                 SetsTable(
-                  sets: widget.exercise.sets,
+                  sets: widget.exercise.workoutSets,
                   onSetCompleted: widget.onSetCompleted,
                 ),
                 const SizedBox(height: 16),

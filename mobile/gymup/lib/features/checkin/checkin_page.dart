@@ -6,6 +6,7 @@ import '../../core/widgets/gymup_button.dart';
 import '../../core/widgets/gymup_card.dart';
 import '../../core/widgets/gymup_text_field.dart';
 import '../workouts/mocks/workouts_mock.dart';
+import '../workouts/models/workout_model.dart';
 import '../workouts/workout_api_service.dart';
 import 'qr_service.dart';
 
@@ -84,20 +85,23 @@ class _CheckinPageState extends State<CheckinPage> {
 
     setState(() => _isProcessing = true);
 
+    // Treino selecionado pelo usuário antes do check-in, ou fallback para o padrão
+    final workout =
+        ModalRoute.of(context)?.settings.arguments as WorkoutModel? ??
+            WorkoutsMock.standardWorkouts[0];
+
     try {
       // QR válido → inicia sessão de treino. Pontos serão concedidos apenas
       // após o treino ser concluído com tempo e progresso suficientes.
-      await _workoutService.startWorkout();
+      final session = await _workoutService.startWorkout();
 
       if (!mounted) return;
-
-      final dailyWorkout = WorkoutsMock.standardWorkouts[0];
 
       await showDialog<void>(
         context: context,
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
-          title: Text('QR Code Validado! ✅', style: AppTypography.h3),
+          title: Text('QR Validado ✅', style: AppTypography.h3),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -108,7 +112,9 @@ class _CheckinPageState extends State<CheckinPage> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Conclua o treino para ganhar seus 10 pontos.',
+                session.dailyPointsAlreadyGranted
+                    ? 'Você já ganhou seus pontos hoje. Este treino extra não gera pontos, mas você pode treinar normalmente.'
+                    : 'Conclua o treino para ganhar 10 pontos.',
                 textAlign: TextAlign.center,
                 style: AppTypography.bodyLarge,
               ),
@@ -116,10 +122,7 @@ class _CheckinPageState extends State<CheckinPage> {
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                Navigator.pop(context);
-              },
+              onPressed: () => Navigator.pop(ctx),
               child: Text(
                 'Agora não',
                 style: AppTypography.button.copyWith(
@@ -134,11 +137,12 @@ class _CheckinPageState extends State<CheckinPage> {
               ),
               onPressed: () {
                 Navigator.pop(ctx);
-                Navigator.pop(context);
-                Navigator.pushNamed(
+                // Substitui a página de checkin pelo treino,
+                // mantendo WorkoutDetailPage na pilha para o usuário voltar
+                Navigator.pushReplacementNamed(
                   context,
                   '/workout-step',
-                  arguments: dailyWorkout,
+                  arguments: workout,
                 );
               },
               child: const Text('Iniciar Treino'),
@@ -158,11 +162,10 @@ class _CheckinPageState extends State<CheckinPage> {
 
       // 409 = sessão já ativa → ir direto para o treino
       if (msg == '409') {
-        final dailyWorkout = WorkoutsMock.standardWorkouts[0];
         Navigator.pushReplacementNamed(
           context,
           '/workout-step',
-          arguments: dailyWorkout,
+          arguments: workout,
         );
         return;
       }

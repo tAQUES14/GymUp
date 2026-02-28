@@ -1,14 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
-// Assuming these exist in your project based on previous context.
-// If not, standard Colors can be used as fallback.
 import '../../core/theme/app_colors.dart';
+import 'models/workout_model.dart';
 
 class WorkoutExecutionSimplePage extends StatefulWidget {
-  final Object? workout; // recebe o argumento, mesmo que você não use por enquanto
+  final WorkoutModel workout;
 
-  const WorkoutExecutionSimplePage({super.key, this.workout});
+  const WorkoutExecutionSimplePage({super.key, required this.workout});
 
   @override
   State<WorkoutExecutionSimplePage> createState() =>

@@ -8,7 +8,6 @@ import '../../core/widgets/gymup_loading.dart';
 import 'ranking_api_service.dart';
 import 'ranking_periodo.dart';
 
-/// Página de Ranking consumindo exclusivamente GET /api/ranking.
 class RankingPage extends StatefulWidget {
   const RankingPage({super.key});
 
@@ -19,36 +18,67 @@ class RankingPage extends StatefulWidget {
 class _RankingPageState extends State<RankingPage> {
   final _service = RankingApiService();
 
-  /// Período atualmente selecionado pelo usuário.
   RankingPeriodo _periodo = RankingPeriodo.semanal;
 
   List<RankingItem> _ranking = [];
   int? _currentUserId;
-  bool _isLoading = true;
+  bool _isLoading = false;
   String? _error;
+
+  /// Referência ao fetch em andamento. Mais robusto que flag booleana:
+  /// garante que NENHUM code-path (initState, pull-to-refresh, chip)
+  /// consiga disparar um segundo request enquanto outro está em voo.
+  Future<void>? _activeFetch;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _carregarRanking());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _carregarRanking();
+    });
   }
 
+  // ── Carrega o ranking do período atual ─────────────────────────────────────
   Future<void> _carregarRanking() async {
+    if (_activeFetch != null) return;
     setState(() {
       _isLoading = true;
       _error = null;
     });
+    try {
+      _activeFetch = _executarFetch();
+      await _activeFetch;
+    } finally {
+      _activeFetch = null;
+    }
+  }
 
+  // ── Troca o período e inicia EXATAMENTE 1 request ─────────────────────────
+  void _trocarPeriodo(RankingPeriodo novo) {
+    if (_periodo == novo || _activeFetch != null) return;
+    setState(() {
+      _periodo = novo;
+      _isLoading = true;
+      _error = null;
+    });
+    _activeFetch = _executarFetch();
+    _activeFetch!.whenComplete(() => _activeFetch = null);
+  }
+
+  // ── Parte assíncrona pura: não chama setState no início ───────────────────
+  Future<void> _executarFetch() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       _currentUserId = prefs.getInt('user_id');
 
       final items = await _service.getRanking(period: _periodo.param);
 
-      setState(() {
-        _ranking = items;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _ranking = items;
+          _isLoading = false;
+        });
+      }
     } on Exception catch (e) {
       final msg = e.toString().replaceFirst('Exception: ', '');
 
@@ -69,15 +99,14 @@ class _RankingPageState extends State<RankingPage> {
     }
   }
 
-  /// Retorna a cor da medalha para as 3 primeiras posições.
   Color _getMedalColor(int index) {
     switch (index) {
       case 0:
-        return const Color(0xFFFFD700); // Ouro
+        return const Color(0xFFFFD700);
       case 1:
-        return const Color(0xFFC0C0C0); // Prata
+        return const Color(0xFFC0C0C0);
       case 2:
-        return const Color(0xFFCD7F32); // Bronze
+        return const Color(0xFFCD7F32);
       default:
         return AppColors.primaryLight;
     }
@@ -99,11 +128,8 @@ class _RankingPageState extends State<RankingPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // ── Card "Desafio Atual" ──────────────────────────
                     _buildDesafioCard(),
                     const SizedBox(height: 16),
-
-                    // ── Chips de filtro de período ────────────────────
                     _buildPeriodoChips(),
                     const SizedBox(height: 16),
                   ],
@@ -111,7 +137,6 @@ class _RankingPageState extends State<RankingPage> {
               ),
             ),
 
-            // ── Conteúdo do ranking ───────────────────────────────────
             if (_isLoading)
               const SliverFillRemaining(child: GymUpLoading())
             else if (_error != null)
@@ -169,7 +194,6 @@ class _RankingPageState extends State<RankingPage> {
                         ),
                         child: Row(
                           children: [
-                            // Medalha / posição
                             CircleAvatar(
                               backgroundColor: _getMedalColor(index),
                               foregroundColor: Colors.white,
@@ -181,8 +205,6 @@ class _RankingPageState extends State<RankingPage> {
                               ),
                             ),
                             const SizedBox(width: 16),
-
-                            // Nome do aluno
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -205,8 +227,6 @@ class _RankingPageState extends State<RankingPage> {
                                 ],
                               ),
                             ),
-
-                            // Pontos do período
                             Text(
                               '${item.points} pts',
                               style: AppTypography.h3.copyWith(
@@ -225,10 +245,6 @@ class _RankingPageState extends State<RankingPage> {
       ),
     );
   }
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // Widgets auxiliares
-  // ──────────────────────────────────────────────────────────────────────────
 
   Widget _buildDesafioCard() {
     return Container(
@@ -282,42 +298,31 @@ class _RankingPageState extends State<RankingPage> {
         return Expanded(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              child: ChoiceChip(
-                label: Center(
-                  child: Text(
-                    periodo.label,
-                    style: AppTypography.caption.copyWith(
-                      color: isSelected
-                          ? Colors.white
-                          : AppColors.textSecondary,
-                      fontWeight: isSelected
-                          ? FontWeight.bold
-                          : FontWeight.normal,
-                    ),
+            child: ChoiceChip(
+              label: Center(
+                child: Text(
+                  periodo.label,
+                  style: AppTypography.caption.copyWith(
+                    color: isSelected ? Colors.white : AppColors.textSecondary,
+                    fontWeight: isSelected
+                        ? FontWeight.bold
+                        : FontWeight.normal,
                   ),
                 ),
-                selected: isSelected,
-                onSelected: (_) {
-                  if (_periodo != periodo) {
-                    setState(() => _periodo = periodo);
-                    _carregarRanking();
-                  }
-                },
-                selectedColor: AppColors.primary,
-                backgroundColor: AppColors.surface,
-                side: BorderSide(
-                  color: isSelected
-                      ? AppColors.primary
-                      : AppColors.textSecondary.withValues(alpha: 0.3),
-                ),
-                showCheckmark: false,
-                padding: const EdgeInsets.symmetric(
-                  vertical: 10,
-                  horizontal: 4,
-                ),
               ),
+              selected: isSelected,
+              // _trocarPeriodo ignora o bool do ChoiceChip e usa o enum diretamente,
+              // garantindo exatamente 1 setState + 1 request por interação.
+              onSelected: (_) => _trocarPeriodo(periodo),
+              selectedColor: AppColors.primary,
+              backgroundColor: AppColors.surface,
+              side: BorderSide(
+                color: isSelected
+                    ? AppColors.primary
+                    : AppColors.textSecondary.withValues(alpha: 0.3),
+              ),
+              showCheckmark: false,
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
             ),
           ),
         );

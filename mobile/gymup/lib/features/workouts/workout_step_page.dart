@@ -8,7 +8,9 @@ import 'services/weight_service.dart';
 import 'workout_api_service.dart';
 
 class WorkoutStepPage extends StatefulWidget {
-  const WorkoutStepPage({super.key});
+  final WorkoutModel workout;
+
+  const WorkoutStepPage({super.key, required this.workout});
 
   @override
   State<WorkoutStepPage> createState() => _WorkoutStepPageState();
@@ -38,12 +40,10 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_workout == null) {
-      _workout = ModalRoute.of(context)!.settings.arguments as WorkoutModel;
-      _loadSession();
-    }
+  void initState() {
+    super.initState();
+    _workout = widget.workout;
+    _loadSession();
   }
 
   @override
@@ -83,23 +83,38 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
   // ── Progress reporting ────────────────────────────────────────────────────
 
   Future<void> _sendProgress(int totalExercises) async {
-    final progress = ((_completedExercises / totalExercises) * 100)
-        .round()
-        .clamp(0, 100);
+    // Use the furthest point reached: either exercises explicitly marked done
+    // or the current index (when user skipped forward via the arrow).
+    final best = _completedExercises > _currentExerciseIndex
+        ? _completedExercises
+        : _currentExerciseIndex;
+    final progress = ((best / totalExercises) * 100).round().clamp(0, 100);
     try {
       final session = await _workoutService.updateProgress(progress);
       if (!mounted) return;
-      if (!_pointsGranted && session.pointsGranted) {
-        setState(() {
-          _pointsGranted = true;
-          _session = session;
-        });
-      }
+      // Always sync session so meetsConditions / progress stay current.
+      setState(() {
+        _session = session;
+        if (session.pointsGranted) _pointsGranted = true;
+      });
     } catch (e) {
       if (!mounted) return;
       if (e.toString().contains('401')) {
         Navigator.of(context).pushReplacementNamed('/login');
+        return;
       }
+      // Surface the error — silently swallowing it leaves the user without points.
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            (_session?.isBonusSession ?? false)
+                ? 'Erro ao atualizar progresso.'
+                : 'Erro ao atualizar progresso. Sem isso você não ganha pontos.',
+          ),
+          duration: const Duration(seconds: 4),
+        ),
+      );
     }
   }
 
@@ -107,34 +122,52 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
 
   Future<void> _loadLastWeightForCurrent() async {
     if (_workout == null) return;
-    final exercise = _workout!.exercicios[_currentExerciseIndex];
-    final exerciseId = exercise.nome.toLowerCase().replaceAll(' ', '_');
+
+    final exercise = _workout!.exercises[_currentExerciseIndex];
+    final exerciseId = exercise.id.toString();
+
     final weightService = Provider.of<WeightService>(context, listen: false);
-    final lastData = await weightService.getLastWeight(exerciseId);
+
+    final lastData = await weightService.getLastWeight(context, exerciseId);
+
     if (!mounted) return;
-    if (lastData != null) {
-      setState(() => _weightController.text = lastData['peso'].toString());
+
+    if (lastData != null && lastData['weight'] != null) {
+      setState(() {
+        _weightController.text = lastData['weight'].toString();
+      });
     } else {
-      setState(() => _weightController.clear());
+      setState(() {
+        _weightController.clear();
+      });
     }
   }
 
   Future<void> _saveWeight() async {
     if (_workout == null) return;
-    final exercise = _workout!.exercicios[_currentExerciseIndex];
-    final exerciseId = exercise.nome.toLowerCase().replaceAll(' ', '_');
-    final weight = double.tryParse(_weightController.text) ?? 0;
+
+    final exercise = _workout!.exercises[_currentExerciseIndex];
+    final exerciseId = exercise.id.toString();
+
+    final double weight = double.tryParse(_weightController.text) ?? 0;
+
     final weightService = Provider.of<WeightService>(context, listen: false);
-    await weightService.saveWeight(exerciseId, weight, 0, '');
+
+    await weightService.saveWeight(
+      context,
+      exerciseId,
+      weight,
+      0, // reps (se quiser melhorar depois, aqui é o lugar)
+      '',
+    );
   }
 
   // ── Series / Exercise navigation ──────────────────────────────────────────
 
-  int _seriesCount(ExerciseModel exercise) =>
-      exercise.sets.isNotEmpty ? exercise.sets.length : 4;
+  int _seriesCount(ExerciseModel exercise) => exercise.sets;
 
   void _markSeriesDone() {
-    final exercise = _workout!.exercicios[_currentExerciseIndex];
+    final exercise = _workout!.exercises[_currentExerciseIndex];
     final totalSeries = _seriesCount(exercise);
     if (_currentSeriesIndex < totalSeries - 1) {
       setState(() => _currentSeriesIndex++);
@@ -144,7 +177,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
   }
 
   Future<void> _completeExercise() async {
-    final exercises = _workout!.exercicios;
+    final exercises = _workout!.exercises;
     _completedExercises++;
     _saveWeight();
     if (_currentExerciseIndex < exercises.length - 1) {
@@ -162,13 +195,15 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
   }
 
   void _nextExercise() {
-    final exercises = _workout!.exercicios;
+    final exercises = _workout!.exercises;
     if (_currentExerciseIndex < exercises.length - 1) {
       setState(() {
         _currentExerciseIndex++;
         _currentSeriesIndex = 0;
       });
       _loadLastWeightForCurrent();
+      // Report progress even when skipping — keeps backend in sync.
+      _sendProgress(exercises.length);
     }
   }
 
@@ -184,60 +219,190 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
 
   // ── Finish workout ────────────────────────────────────────────────────────
 
-  void _onFimPressed() {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Finalizar treino?', style: AppTypography.h3),
-        content: Text(
-          'Deseja encerrar o treino agora?',
-          style: AppTypography.bodyMedium,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(
-              'Continuar treino',
-              style: AppTypography.bodyMedium
-                  .copyWith(color: AppColors.primary),
+  Future<void> _onFimPressed() async {
+    final bool isBonusSession = _session?.isBonusSession ?? false;
+
+    // Bonus session: no points at stake — always a simple confirmation.
+    if (isBonusSession) {
+      final confirm =
+          await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: Text('Finalizar treino?', style: AppTypography.h3),
+              content: Text(
+                'Deseja encerrar o treino agora?',
+                style: AppTypography.bodyMedium,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(
+                    'Continuar treino',
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Finalizar'),
+                ),
+              ],
             ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
+          ) ??
+          false;
+      if (!confirm || !mounted) return;
+      _finishWorkout();
+      return;
+    }
+
+    // Conditions are met if the backend confirmed it (meetsConditions) OR
+    // points were already granted in a previous progress sync.
+    final bool conditionsMet =
+        _pointsGranted || (_session?.meetsConditions ?? false);
+
+    if (!conditionsMet) {
+      final shouldLeave =
+          await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: Text('Sair do treino?', style: AppTypography.h3),
+              content: Text(
+                'Se você sair agora, não receberá pontos.',
+                style: AppTypography.bodyLarge,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(
+                    'Continuar',
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Sair mesmo assim'),
+                ),
+              ],
             ),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _finishWorkout();
-            },
-            child: const Text('Finalizar'),
-          ),
-        ],
-      ),
-    );
+          ) ??
+          false;
+      if (!shouldLeave || !mounted) return;
+    } else {
+      final confirm =
+          await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: Text('Finalizar treino?', style: AppTypography.h3),
+              content: Text(
+                'Deseja encerrar o treino agora?',
+                style: AppTypography.bodyMedium,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(
+                    'Continuar treino',
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Finalizar'),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+      if (!confirm || !mounted) return;
+    }
+    _finishWorkout();
   }
 
   Future<void> _finishWorkout() async {
     setState(() => _isFinishing = true);
     _elapsedTimer?.cancel();
     try {
-      final session = await _workoutService.finishWorkout();
-      if (mounted) {
-        setState(() {
-          _session = session;
-          _pointsGranted = session.pointsGranted;
-        });
-      }
+      // 1. Mandatory progress sync — backend must have the latest value before
+      //    evaluating point eligibility on finish.
+      final total = _workout!.exercises.length;
+      final best = _completedExercises > _currentExerciseIndex
+          ? _completedExercises
+          : _currentExerciseIndex;
+      final syncProgress = ((best / total) * 100).round().clamp(0, 100);
+      await _workoutService.updateProgress(syncProgress);
+
+      // 2. Finish the session.
+      final finishSession = await _workoutService.finishWorkout();
+
+      // 3. Refetch for authoritative state (meets_conditions, points_granted).
+      WorkoutSessionData status = finishSession;
+      try {
+        final refreshed = await _workoutService.getStatus();
+        if (refreshed != null) status = refreshed;
+      } catch (_) {}
+
+      if (!mounted) return;
+      setState(() {
+        _session = status;
+        _pointsGranted = status.pointsGranted;
+      });
     } catch (e) {
       if (!mounted) return;
       if (e.toString().contains('401')) {
         Navigator.of(context).pushReplacementNamed('/login');
         return;
       }
-      // Other errors: still navigate home
+      // Network / server error — restore state, stay on screen, offer retry.
+      setState(() => _isFinishing = false);
+      _startElapsedTimer();
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Sem conexão. Não foi possível finalizar o treino. Tente novamente.',
+          ),
+          duration: const Duration(seconds: 6),
+          action: SnackBarAction(
+            label: 'Tentar novamente',
+            onPressed: _finishWorkout,
+          ),
+        ),
+      );
+      return;
     }
     if (mounted) {
+      final bool isBonusSession = _session?.isBonusSession ?? false;
+      final bool pointsGranted = _session?.pointsGranted ?? false;
+      final String message = (!isBonusSession && pointsGranted)
+          ? 'Parabéns! Você ganhou 10 pontos.'
+          : 'Treino finalizado ✅';
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          duration: const Duration(seconds: 4),
+          backgroundColor: (!isBonusSession && pointsGranted)
+              ? AppColors.accent
+              : null,
+        ),
+      );
       Navigator.of(context).pushReplacementNamed('/home');
     }
   }
@@ -269,8 +434,9 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
                   onPressed: () => Navigator.pop(ctx, false),
                   child: Text(
                     'Continuar treino',
-                    style: AppTypography.bodyMedium
-                        .copyWith(color: AppColors.primary),
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.primary,
+                    ),
                   ),
                 ),
                 ElevatedButton(
@@ -280,6 +446,38 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
                   ),
                   onPressed: () => Navigator.pop(ctx, true),
                   child: const Text('Sair mesmo assim'),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+    } else if (_session?.isBonusSession ?? false) {
+      // Bonus session: no points at stake, simple exit.
+      return await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: Text('Sair do treino?', style: AppTypography.h3),
+              content: Text(
+                'Deseja sair do treino?',
+                style: AppTypography.bodyLarge,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(
+                    'Continuar treino',
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Sair'),
                 ),
               ],
             ),
@@ -299,8 +497,9 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
                   onPressed: () => Navigator.pop(ctx, false),
                   child: Text(
                     'Continuar treino',
-                    style: AppTypography.bodyMedium
-                        .copyWith(color: AppColors.primary),
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.primary,
+                    ),
                   ),
                 ),
                 ElevatedButton(
@@ -338,7 +537,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
       );
     }
 
-    final exercises = _workout!.exercicios;
+    final exercises = _workout!.exercises;
     final currentExercise = exercises[_currentExerciseIndex];
     final totalSeries = _seriesCount(currentExercise);
 
@@ -353,7 +552,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
         body: Column(
           children: [
             _buildTopBar(),
-            if (_pointsGranted) _buildPointsBanner(),
+            _buildRequirementsBlock(),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -385,10 +584,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(
-              Icons.arrow_back_ios_rounded,
-              color: Colors.white,
-            ),
+            icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white),
             onPressed: _handlePopAttempt,
           ),
           Text(
@@ -421,8 +617,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.verified_rounded,
-              color: AppColors.accent, size: 16),
+          const Icon(Icons.verified_rounded, color: AppColors.accent, size: 16),
           const SizedBox(width: 8),
           Text(
             'Seus 10 pontos já estão garantidos.',
@@ -436,6 +631,137 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
     );
   }
 
+  // ── Status strip (compact) ────────────────────────────────────────────────
+
+  Widget _buildRequirementsBlock() {
+    if (_session == null) return const SizedBox.shrink();
+    if (_pointsGranted) return _buildPointsBanner();
+
+    // Bonus session: another session already granted points today.
+    if (_session!.isBonusSession) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+        color: Colors.orange.withValues(alpha: 0.08),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: Colors.orange.shade600,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Treino extra · sem pontos hoje',
+              style: AppTypography.caption.copyWith(
+                color: Colors.orange.shade700,
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Normal session: compact dual progress bars.
+    final int minSecs = _session!.minMinutes * 60;
+    final int elapsedSecs = _elapsed.inSeconds;
+    final int total = _workout?.exercises.length ?? 1;
+    final int localProgress =
+        (((_completedExercises > _currentExerciseIndex
+                        ? _completedExercises
+                        : _currentExerciseIndex) /
+                    total) *
+                100)
+            .round()
+            .clamp(0, 100);
+    final int displayProgress = localProgress > _session!.progress
+        ? localProgress
+        : _session!.progress;
+    final int minProgress = _session!.minProgress;
+    final bool timeOk = elapsedSecs >= minSecs;
+    final bool progressOk = displayProgress >= minProgress;
+    final Color timeColor = timeOk ? AppColors.accent : AppColors.textSecondary;
+    final Color progColor = progressOk
+        ? AppColors.accent
+        : AppColors.textSecondary;
+
+    String fmt(int s) =>
+        '${(s ~/ 60).toString().padLeft(2, '0')}:${(s % 60).toString().padLeft(2, '0')}';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+      color: AppColors.background,
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(
+                timeOk ? Icons.check_circle_rounded : Icons.timer_outlined,
+                size: 13,
+                color: timeColor,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '${fmt(elapsedSecs)}/${fmt(minSecs)}',
+                style: AppTypography.caption.copyWith(
+                  color: timeColor,
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: LinearProgressIndicator(
+                  value: (elapsedSecs / minSecs).clamp(0.0, 1.0),
+                  backgroundColor: timeColor.withValues(alpha: 0.15),
+                  valueColor: AlwaysStoppedAnimation<Color>(timeColor),
+                  minHeight: 4,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Icon(
+                progressOk
+                    ? Icons.check_circle_rounded
+                    : Icons.fitness_center_rounded,
+                size: 13,
+                color: progColor,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '$displayProgress%/$minProgress%',
+                style: AppTypography.caption.copyWith(
+                  color: progColor,
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: LinearProgressIndicator(
+                  value: (displayProgress / minProgress).clamp(0.0, 1.0),
+                  backgroundColor: progColor.withValues(alpha: 0.15),
+                  valueColor: AlwaysStoppedAnimation<Color>(progColor),
+                  minHeight: 4,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Exercise card ─────────────────────────────────────────────────────────
 
   Widget _buildExerciseCard(
@@ -443,9 +769,8 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
     int totalSeries,
     int totalExercises,
   ) {
-    final restTime = exercise.tempoDescanso > 0 ? exercise.tempoDescanso : 60;
-    final repsLabel =
-        exercise.sets.isNotEmpty ? exercise.sets[0].reps.toString() : '12';
+    final restTime = exercise.rest;
+    final repsLabel = exercise.reps.toString();
     final cargaLabel = _weightController.text.isNotEmpty
         ? '${_weightController.text} kg'
         : '–';
@@ -471,7 +796,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
             child: Column(
               children: [
                 Text(
-                  exercise.nome,
+                  exercise.name,
                   style: AppTypography.h2.copyWith(fontWeight: FontWeight.w800),
                   textAlign: TextAlign.center,
                 ),
@@ -496,13 +821,11 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
                         ),
                       ),
                       Padding(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 10),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
                         child: Container(
                           width: 1,
                           height: 14,
-                          color: AppColors.textSecondary
-                              .withValues(alpha: 0.3),
+                          color: AppColors.textSecondary.withValues(alpha: 0.3),
                         ),
                       ),
                       Text(
@@ -560,8 +883,9 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
                     children: [
                       Text(
                         repsLabel,
-                        style: AppTypography.h2
-                            .copyWith(fontWeight: FontWeight.w800),
+                        style: AppTypography.h2.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                       Text(
                         'Repetições ou tempo',
@@ -581,8 +905,9 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
                     children: [
                       Text(
                         cargaLabel,
-                        style: AppTypography.h2
-                            .copyWith(fontWeight: FontWeight.w800),
+                        style: AppTypography.h2.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                       Text(
                         'Carga ou Velocidade',
@@ -603,8 +928,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                _buildInfoChip(
-                    Icons.play_circle_outline_rounded, 'Execução'),
+                _buildInfoChip(Icons.play_circle_outline_rounded, 'Execução'),
                 const SizedBox(width: 8),
                 _buildInfoChip(Icons.sports_rounded, 'Músculos'),
                 const SizedBox(width: 8),
@@ -654,28 +978,25 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
             color: isCurrent
                 ? AppColors.primary
                 : isDone
-                    ? AppColors.accent
-                    : AppColors.background,
+                ? AppColors.accent
+                : AppColors.background,
             shape: BoxShape.circle,
             border: Border.all(
               color: isCurrent
                   ? AppColors.primary
                   : isDone
-                      ? AppColors.accent
-                      : AppColors.textSecondary.withValues(alpha: 0.25),
+                  ? AppColors.accent
+                  : AppColors.textSecondary.withValues(alpha: 0.25),
               width: 2,
             ),
           ),
           child: Center(
             child: isDone
-                ? const Icon(Icons.check_rounded,
-                    color: Colors.white, size: 18)
+                ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
                 : Text(
                     '${index + 1}',
                     style: AppTypography.bodyMedium.copyWith(
-                      color: isCurrent
-                          ? Colors.white
-                          : AppColors.textSecondary,
+                      color: isCurrent ? Colors.white : AppColors.textSecondary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -702,10 +1023,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
           foregroundColor: AppColors.textSecondary,
         ),
         icon: Icon(icon, size: 15),
-        label: Text(
-          label,
-          style: AppTypography.caption.copyWith(fontSize: 11),
-        ),
+        label: Text(label, style: AppTypography.caption.copyWith(fontSize: 11)),
       ),
     );
   }
@@ -750,10 +1068,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
 
   // ── Bottom dock ───────────────────────────────────────────────────────────
 
-  Widget _buildBottomDock(
-    List<ExerciseModel> exercises,
-    int totalSeries,
-  ) {
+  Widget _buildBottomDock(List<ExerciseModel> exercises, int totalSeries) {
     final canGoPrev = _currentExerciseIndex > 0;
     final canGoNext = _currentExerciseIndex < exercises.length - 1;
 
@@ -986,13 +1301,16 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
                     color: isDone
                         ? AppColors.accent.withValues(alpha: 0.1)
                         : isCurrent
-                            ? AppColors.primary.withValues(alpha: 0.1)
-                            : AppColors.background,
+                        ? AppColors.primary.withValues(alpha: 0.1)
+                        : AppColors.background,
                   ),
                   child: Center(
                     child: isDone
-                        ? const Icon(Icons.check_rounded,
-                            color: AppColors.accent, size: 16)
+                        ? const Icon(
+                            Icons.check_rounded,
+                            color: AppColors.accent,
+                            size: 16,
+                          )
                         : Text(
                             '${index + 1}',
                             style: AppTypography.caption.copyWith(
@@ -1005,13 +1323,12 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
                   ),
                 ),
                 title: Text(
-                  ex.nome,
+                  ex.name,
                   style: AppTypography.bodyMedium.copyWith(
                     color: isCurrent
                         ? AppColors.primary
                         : AppColors.textPrimary,
-                    fontWeight:
-                        isCurrent ? FontWeight.w700 : FontWeight.normal,
+                    fontWeight: isCurrent ? FontWeight.w700 : FontWeight.normal,
                   ),
                 ),
                 subtitle: Text(
