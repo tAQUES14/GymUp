@@ -6,10 +6,11 @@ import '../../workouts/workout_api_service.dart';
 String _formatarTempoRelativo(DateTime date) {
   final agora = DateTime.now();
   final hoje = DateTime(agora.year, agora.month, agora.day);
-  final diaEvento = DateTime(date.year, date.month, date.day);
+  final local = date.toLocal();
+  final diaEvento = DateTime(local.year, local.month, local.day);
   final diferenca = hoje.difference(diaEvento).inDays;
 
-  if (diferenca == 0) return 'Hoje';
+  if (diferenca <= 0) return 'Hoje';
   if (diferenca == 1) return 'Ontem';
   return 'Há $diferenca dias';
 }

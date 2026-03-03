@@ -2,19 +2,22 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/gymup_card.dart';
+import '../exercise_history_page.dart';
 import '../models/workout_model.dart';
 import 'sets_table.dart';
 
 class ExecutionExerciseCard extends StatefulWidget {
   final ExerciseModel exercise;
   final bool isInitiallyExpanded;
-  final Function(int setIndex, bool isCompleted) onSetCompleted;
+
+  /// Called when any set is marked complete — use this to trigger a rest timer.
+  final VoidCallback? onSetRestTimerRequested;
 
   const ExecutionExerciseCard({
     super.key,
     required this.exercise,
     this.isInitiallyExpanded = false,
-    required this.onSetCompleted,
+    this.onSetRestTimerRequested,
   });
 
   @override
@@ -36,19 +39,14 @@ class _ExecutionExerciseCardState extends State<ExecutionExerciseCard> {
       padding: EdgeInsets.zero,
       child: Column(
         children: [
-          // Header (Always Visible)
+          // Header (always visible)
           InkWell(
-            onTap: () {
-              setState(() {
-                _isExpanded = !_isExpanded;
-              });
-            },
+            onTap: () => setState(() => _isExpanded = !_isExpanded),
             borderRadius: BorderRadius.circular(16),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  // Exercise Image/Icon placeholder
                   Container(
                     width: 60,
                     height: 60,
@@ -62,8 +60,6 @@ class _ExecutionExerciseCardState extends State<ExecutionExerciseCard> {
                     ),
                   ),
                   const SizedBox(width: 16),
-
-                  // Info
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -77,8 +73,6 @@ class _ExecutionExerciseCardState extends State<ExecutionExerciseCard> {
                       ],
                     ),
                   ),
-
-                  // Expand Icon
                   Icon(
                     _isExpanded
                         ? Icons.keyboard_arrow_up
@@ -90,17 +84,41 @@ class _ExecutionExerciseCardState extends State<ExecutionExerciseCard> {
             ),
           ),
 
-          // Expanded Content
+          // Expanded content
           AnimatedCrossFade(
             firstChild: Container(),
             secondChild: Column(
               children: [
                 const Divider(height: 1, color: Colors.white12),
                 SetsTable(
+                  exerciseId: widget.exercise.id,
                   sets: widget.exercise.workoutSets,
-                  onSetCompleted: widget.onSetCompleted,
+                  onSetCompleted: widget.onSetRestTimerRequested,
                 ),
-                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: TextButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ExerciseHistoryPage(
+                              exercise: widget.exercise,
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.bar_chart, size: 18),
+                      label: const Text('Histórico & Evolução'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
               ],
             ),
             crossFadeState: _isExpanded
