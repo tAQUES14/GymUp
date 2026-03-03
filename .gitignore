@@ -44,3 +44,8 @@ backend/public/storage
 admin/node_modules/
 admin/.env
 admin/dist/
+
+.claude/
+GYMUP_DOMAIN.md
+GYMUP_TESTS_REQUIRED.md
+Docs
