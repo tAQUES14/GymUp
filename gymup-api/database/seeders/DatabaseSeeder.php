@@ -11,20 +11,23 @@ class DatabaseSeeder extends Seeder
 {
     use WithoutModelEvents;
 
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        $this->call([
-            GymSeeder::class,
-            ExerciseSeeder::class,
-        ]);
+        // ── 1. Academia ────────────────────────────────────────────────────────
+        $this->call(GymSeeder::class);
 
+        // ── 2. Catálogo de exercícios ──────────────────────────────────────────
+        $this->call(ExerciseSeeder::class);
+
+        // ── 3. Usuário de teste ────────────────────────────────────────────────
         User::factory()->create([
             'name'   => 'Test User',
             'email'  => 'test@example.com',
             'gym_id' => Gym::first()->id,
         ]);
+
+        // ── 4. Treino padrão vinculado ao usuário de teste ─────────────────────
+        // Deve rodar APÓS a criação do usuário — WorkoutSeeder busca por e-mail.
+        $this->call(WorkoutSeeder::class);
     }
 }
