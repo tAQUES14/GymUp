@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:gymup/app.dart';
 import 'package:gymup/features/auth/auth_service.dart';
 import 'package:gymup/features/workouts/services/workout_ai_service.dart';
-import 'package:gymup/features/workouts/services/weight_service.dart';
 import 'package:gymup/features/services/points_service.dart';
 
 void main() async {
@@ -15,8 +14,7 @@ void main() async {
       providers: [
         Provider<AuthService>(create: (_) => AuthService()),
         Provider<WorkoutAiService>(create: (_) => WorkoutAiService()),
-        Provider<WeightService>(create: (_) => WeightService()),
-        Provider<PointsService>(create: (_) => PointsService()),
+Provider<PointsService>(create: (_) => PointsService()),
       ],
       child: const GymUpApp(),
     ),

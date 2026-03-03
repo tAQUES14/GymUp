@@ -1,5 +1,12 @@
 import '../models/workout_model.dart';
 
+/// Dados de treino offline para uso em telas de preview/demo (ex: WorkoutsPage).
+///
+/// IMPORTANTE: IDs negativos são INTENCIONAIS — sinalizam que estes objetos
+/// não têm correspondente real no banco de dados.
+/// NUNCA passe WorkoutsMock para o fluxo de execução real (WorkoutStepPage,
+/// WorkoutExecutionPage) pois isso gera chamadas inválidas como
+/// /api/exercises/-1/weight/last. Use sempre um WorkoutModel obtido do backend.
 class WorkoutsMock {
   static final List<WorkoutModel> standardWorkouts = [
     WorkoutModel(

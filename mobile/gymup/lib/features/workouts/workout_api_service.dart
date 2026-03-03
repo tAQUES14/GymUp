@@ -1,5 +1,6 @@
 import 'dart:convert';
 import '../../../core/api/api_service.dart';
+import 'models/workout_model.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Dashboard DTOs
@@ -19,7 +20,7 @@ class RecentActivity {
   factory RecentActivity.fromJson(Map<String, dynamic> json) {
     return RecentActivity(
       type: json['type'] as String,
-      date: DateTime.parse(json['date'] as String),
+      date: DateTime.parse(json['date'] as String).toLocal(),
       points: (json['points'] as num).toInt(),
     );
   }
@@ -118,6 +119,26 @@ class WorkoutSessionData {
 
 class WorkoutApiService {
   final _api = ApiService();
+
+  /// GET /api/custom-workouts
+  ///
+  /// Retorna a lista de treinos do usuário autenticado com seus exercícios.
+  /// Lança [Exception('401')] se não autenticado.
+  Future<List<WorkoutModel>> getWorkouts() async {
+    final response = await _api.get('/custom-workouts');
+
+    if (response.statusCode == 401) throw Exception('401');
+
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(data['message'] ?? 'Erro ao carregar treinos.');
+    }
+
+    final list = jsonDecode(response.body) as List<dynamic>;
+    return list
+        .map((e) => WorkoutModel.fromMap(e as Map<String, dynamic>))
+        .toList();
+  }
 
   /// GET /api/dashboard
   ///

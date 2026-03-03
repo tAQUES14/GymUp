@@ -5,8 +5,6 @@ import '../../core/widgets/gymup_app_bar.dart';
 import '../../core/widgets/gymup_button.dart';
 import '../../core/widgets/gymup_card.dart';
 import '../../core/widgets/gymup_text_field.dart';
-import '../workouts/mocks/workouts_mock.dart';
-import '../workouts/models/workout_model.dart';
 import '../workouts/workout_api_service.dart';
 import 'qr_service.dart';
 
@@ -85,12 +83,33 @@ class _CheckinPageState extends State<CheckinPage> {
 
     setState(() => _isProcessing = true);
 
-    // Treino selecionado pelo usuário antes do check-in, ou fallback para o padrão
-    final workout =
-        ModalRoute.of(context)?.settings.arguments as WorkoutModel? ??
-            WorkoutsMock.standardWorkouts[0];
-
     try {
+      // Busca o primeiro treino real do usuário no backend.
+      // Nunca usa WorkoutsMock — IDs negativos causariam chamadas inválidas
+      // como /api/exercises/-1/weight/last durante a execução.
+      final workouts = await _workoutService.getWorkouts();
+
+      if (!mounted) return;
+
+      if (workouts.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Nenhum treino cadastrado. Cadastre um treino antes de fazer check-in.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final workout = workouts.first;
+
+      // Garantia extra: IDs negativos não chegam à execução.
+      assert(
+        workout.id > 0,
+        'BUG: workout com ID inválido (${workout.id}) retornado pelo backend.',
+      );
+
       // QR válido → inicia sessão de treino. Pontos serão concedidos apenas
       // após o treino ser concluído com tempo e progresso suficientes.
       final session = await _workoutService.startWorkout();
@@ -138,7 +157,7 @@ class _CheckinPageState extends State<CheckinPage> {
               onPressed: () {
                 Navigator.pop(ctx);
                 // Substitui a página de checkin pelo treino,
-                // mantendo WorkoutDetailPage na pilha para o usuário voltar
+                // mantendo WorkoutDetailPage na pilha para o usuário voltar.
                 Navigator.pushReplacementNamed(
                   context,
                   '/workout-step',
@@ -160,13 +179,24 @@ class _CheckinPageState extends State<CheckinPage> {
         return;
       }
 
-      // 409 = sessão já ativa → ir direto para o treino
+      // 409 = sessão já ativa → tenta carregar treino e ir direto para execução.
       if (msg == '409') {
-        Navigator.pushReplacementNamed(
-          context,
-          '/workout-step',
-          arguments: workout,
-        );
+        // Mesmo no caso de sessão ativa, precisamos de um treino real.
+        try {
+          final workouts = await _workoutService.getWorkouts();
+          if (!mounted) return;
+          if (workouts.isNotEmpty) {
+            Navigator.pushReplacementNamed(
+              context,
+              '/workout-step',
+              arguments: workouts.first,
+            );
+            return;
+          }
+        } catch (_) {}
+
+        // Se não conseguiu carregar o treino, volta para a home.
+        if (mounted) Navigator.pop(context);
         return;
       }
 

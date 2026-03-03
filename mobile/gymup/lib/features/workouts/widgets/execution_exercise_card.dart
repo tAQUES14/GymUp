@@ -8,16 +8,18 @@ import 'sets_table.dart';
 
 class ExecutionExerciseCard extends StatefulWidget {
   final ExerciseModel exercise;
+  final int exerciseId;
   final bool isInitiallyExpanded;
 
-  /// Called when any set is marked complete — use this to trigger a rest timer.
-  final VoidCallback? onSetRestTimerRequested;
+  /// Chamado quando uma série é concluída (ex.: para exibir rest timer).
+  final VoidCallback? onSetCompleted;
 
   const ExecutionExerciseCard({
     super.key,
     required this.exercise,
+    required this.exerciseId,
     this.isInitiallyExpanded = false,
-    this.onSetRestTimerRequested,
+    this.onSetCompleted,
   });
 
   @override
@@ -91,9 +93,9 @@ class _ExecutionExerciseCardState extends State<ExecutionExerciseCard> {
               children: [
                 const Divider(height: 1, color: Colors.white12),
                 SetsTable(
-                  exerciseId: widget.exercise.id,
+                  exerciseId: widget.exerciseId,
                   sets: widget.exercise.workoutSets,
-                  onSetCompleted: widget.onSetRestTimerRequested,
+                  onSetCompleted: widget.onSetCompleted,
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),

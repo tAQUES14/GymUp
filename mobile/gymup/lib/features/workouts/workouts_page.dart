@@ -5,7 +5,6 @@ import '../../core/widgets/gymup_app_bar.dart';
 import '../../core/widgets/gymup_card.dart';
 import '../../core/widgets/gymup_loading.dart';
 import '../home/widgets/daily_workout_card.dart';
-import 'mocks/workouts_mock.dart';
 import 'models/workout_model.dart';
 import 'workout_api_service.dart';
 
@@ -17,28 +16,28 @@ class WorkoutsPage extends StatefulWidget {
 }
 
 class _WorkoutsPageState extends State<WorkoutsPage> {
-  DashboardData? _dashboardData;
+  List<WorkoutModel> _workouts = [];
   bool _isLoading = true;
   bool _hasError = false;
 
   @override
   void initState() {
     super.initState();
-    _loadDashboard();
+    _loadWorkouts();
   }
 
-  Future<void> _loadDashboard() async {
+  Future<void> _loadWorkouts() async {
     setState(() {
       _isLoading = true;
       _hasError = false;
     });
 
     try {
-      final data = await WorkoutApiService().getDashboard();
+      final workouts = await WorkoutApiService().getWorkouts();
       if (!mounted) return;
 
       setState(() {
-        _dashboardData = data;
+        _workouts = workouts;
         _isLoading = false;
       });
     } catch (e) {
@@ -56,9 +55,9 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   // BUILD
-  // ─────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -67,7 +66,7 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
       backgroundColor: AppColors.background,
       body: _isLoading
           ? const GymUpLoading()
-          : _hasError || _dashboardData == null
+          : _hasError
               ? _buildError()
               : _buildContent(),
     );
@@ -79,12 +78,12 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Erro ao carregar dados.',
+            'Erro ao carregar treinos.',
             style: AppTypography.bodyMedium,
           ),
           const SizedBox(height: 16),
           ElevatedButton(
-            onPressed: _loadDashboard,
+            onPressed: _loadWorkouts,
             child: const Text('Tentar novamente'),
           ),
         ],
@@ -93,36 +92,73 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
   }
 
   Widget _buildContent() {
+    final firstWorkout = _workouts.isNotEmpty ? _workouts.first : null;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Treino do Dia
+          // Treino do Dia: usa o primeiro treino real do usuário.
           DailyWorkoutCard(
-            workoutName: WorkoutsMock.standardWorkouts[0].name,
-            duration: '${WorkoutsMock.standardWorkouts[0].duration ?? 0} min',
-            level: WorkoutsMock.standardWorkouts[0].level ?? '',
-            onTap: () {
-              Navigator.pushNamed(
-                context,
-                '/workout-detail',
-                arguments: WorkoutsMock.standardWorkouts[0],
-              );
-            },
+            workoutName: firstWorkout?.name ?? 'Nenhum treino cadastrado',
+            duration: firstWorkout != null
+                ? '${firstWorkout.duration ?? 0} min'
+                : '--',
+            level: firstWorkout?.level ?? '--',
+            onTap: firstWorkout != null
+                ? () => Navigator.pushNamed(
+                      context,
+                      '/workout-detail',
+                      arguments: firstWorkout,
+                    )
+                : null,
           ),
           const SizedBox(height: 24),
 
-          Text('Treinos Padrão', style: AppTypography.h3),
+          Text('Meus Treinos', style: AppTypography.h3),
           const SizedBox(height: 12),
 
-          ...WorkoutsMock.standardWorkouts.map((workout) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _buildWorkoutCard(workout),
-            );
-          }),
+          if (_workouts.isEmpty)
+            _buildEmptyState()
+          else
+            ..._workouts.map((workout) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _buildWorkoutCard(workout),
+              );
+            }),
         ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32),
+        child: Column(
+          children: [
+            const Icon(
+              Icons.fitness_center_outlined,
+              size: 48,
+              color: AppColors.textSecondary,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Nenhum treino encontrado.',
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Crie um treino personalizado para começar.',
+              style: AppTypography.caption,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
