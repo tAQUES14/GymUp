@@ -79,10 +79,11 @@ class DashboardTest extends TestCase
             'role' => 'student',
         ]);
 
-        Checkin::factory()->create([
-            'gym_id' => $gym->id,
-            'user_id' => $user->id,
-            'checkin_date' => Carbon::today()
+        // has_checked_in_today verifica WorkoutSession (não Checkin)
+        WorkoutSession::factory()->create([
+            'user_id'    => $user->id,
+            'gym_id'     => $gym->id,
+            'started_at' => Carbon::today(),
         ]);
 
         Sanctum::actingAs($user);
@@ -162,6 +163,39 @@ class DashboardTest extends TestCase
 
         // streak deve ser 1 (apenas hoje)
         $this->assertEquals(1, $response->json('streak'));
+    }
+
+    /** @test */
+    public function streak_starts_from_yesterday_when_today_has_no_workout()
+    {
+        $gym = Gym::factory()->create();
+
+        $user = User::factory()->create([
+            'gym_id' => $gym->id,
+            'role' => 'student',
+        ]);
+
+        // Ontem e anteontem — sem checkin hoje
+        Checkin::factory()->create([
+            'gym_id' => $gym->id,
+            'user_id' => $user->id,
+            'checkin_date' => Carbon::yesterday(),
+        ]);
+
+        Checkin::factory()->create([
+            'gym_id' => $gym->id,
+            'user_id' => $user->id,
+            'checkin_date' => Carbon::today()->subDays(2),
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/dashboard');
+
+        $response->assertStatus(200);
+
+        // Tolerância: sem treino hoje, streak começa em ontem → 2 dias consecutivos
+        $this->assertEquals(2, $response->json('streak'));
     }
 
     // ──────────────────────────────────────────────────────────────────────────

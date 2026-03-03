@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use Tests\TestCase;
 use App\Models\Gym;
 use App\Models\User;
+use App\Models\PointTransaction;
 use Laravel\Sanctum\Sanctum;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -19,13 +20,26 @@ class RankingTest extends TestCase
         $user1 = User::factory()->create([
             'gym_id' => $gym->id,
             'role' => 'student',
-            'points_balance' => 50,
         ]);
 
         $user2 = User::factory()->create([
             'gym_id' => $gym->id,
             'role' => 'student',
-            'points_balance' => 100,
+        ]);
+
+        // Ranking é calculado por SUM(point_transactions), não por points_balance
+        PointTransaction::factory()->create([
+            'user_id' => $user1->id,
+            'gym_id'  => $gym->id,
+            'type'    => 'earn',
+            'points'  => 50,
+        ]);
+
+        PointTransaction::factory()->create([
+            'user_id' => $user2->id,
+            'gym_id'  => $gym->id,
+            'type'    => 'earn',
+            'points'  => 100,
         ]);
 
         Sanctum::actingAs($user1);
@@ -36,8 +50,9 @@ class RankingTest extends TestCase
 
         $data = $response->json();
 
-        $this->assertEquals($user2->id, $data[0]['id']);
-        $this->assertEquals($user1->id, $data[1]['id']);
+        // Resposta usa 'user_id', não 'id'
+        $this->assertEquals($user2->id, $data[0]['user_id']);
+        $this->assertEquals($user1->id, $data[1]['user_id']);
     }
 
     public function test_ranking_is_isolated_by_gym()
