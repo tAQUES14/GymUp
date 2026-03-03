@@ -41,6 +41,14 @@ class ExerciseModel {
   double carga;
   List<WorkoutSet> workoutSets;
 
+  /// True once the user has completed all sets of this exercise.
+  /// Marked one-way: once true it stays true regardless of later unchecks,
+  /// so revisiting an exercise does not inflate the progress counter.
+  bool isCompleted;
+
+  /// Convenience: checks whether every set in workoutSets is marked done.
+  bool get allSetsCompleted => workoutSets.every((s) => s.isCompleted);
+
   ExerciseModel({
     required this.id,
     required this.name,
@@ -50,6 +58,7 @@ class ExerciseModel {
     required this.reps,
     required this.rest,
     this.carga = 0.0,
+    this.isCompleted = false,
     List<WorkoutSet>? workoutSets,
   }) : workoutSets = workoutSets ??
             List.generate(
@@ -67,6 +76,7 @@ class ExerciseModel {
       'reps': reps,
       'rest': rest,
       'carga': carga,
+      'isCompleted': isCompleted,
       'workoutSets': workoutSets.map((x) => x.toMap()).toList(),
     };
   }
@@ -100,6 +110,7 @@ class ExerciseModel {
       reps: repsCount,
       rest: restSeconds,
       carga: (map['carga'] ?? 0).toDouble(),
+      isCompleted: map['isCompleted'] as bool? ?? false,
       workoutSets: workoutSets,
     );
   }

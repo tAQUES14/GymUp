@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/gymup_loading.dart';
-import '../workouts/mocks/workouts_mock.dart';
+import '../workouts/models/workout_model.dart';
 import '../workouts/workout_api_service.dart';
 import 'widgets/home_header.dart';
 import 'widgets/points_card.dart';
@@ -20,6 +20,11 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   DashboardData? _dashboardData;
+
+  /// Primeiro treino real do usuário. Nunca conterá IDs negativos.
+  /// Null enquanto carrega ou se o usuário não tiver treinos cadastrados.
+  WorkoutModel? _todayWorkout;
+
   bool _isLoading = true;
   bool _hasError = false;
   bool _isStarting = false;
@@ -35,6 +40,8 @@ class _HomePageState extends State<HomePage> {
     _loadDashboard();
   }
 
+  /// Carrega dashboard e lista de treinos em paralelo.
+  /// Garante que [_todayWorkout] sempre venha do backend (IDs positivos).
   Future<void> _loadDashboard() async {
     final seq = ++_loadSeq;
 
@@ -44,13 +51,21 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
-      final data = await WorkoutApiService().getDashboard();
+      final api = WorkoutApiService();
+      final results = await Future.wait<dynamic>([
+        api.getDashboard(),
+        api.getWorkouts(),
+      ]);
 
       // Só aplica se ainda for a chamada mais recente e o widget estiver montado.
       if (!mounted || seq != _loadSeq) return;
 
+      final data = results[0] as DashboardData;
+      final workouts = results[1] as List<WorkoutModel>;
+
       setState(() {
         _dashboardData = data;
+        _todayWorkout = workouts.isNotEmpty ? workouts.first : null;
         _isLoading = false;
       });
     } catch (e) {
@@ -67,6 +82,37 @@ class _HomePageState extends State<HomePage> {
       });
     }
   }
+
+  // ── Navegação segura para execução ────────────────────────────────────────
+
+  /// Navega para [/workout-step] com o treino real.
+  /// Se o usuário não tiver treinos cadastrados, exibe aviso em vez de navegar.
+  void _pushWorkoutStep() {
+    if (_todayWorkout == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Nenhum treino cadastrado. Crie um treino na aba Treinos.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Garantia extra: IDs negativos jamais devem chegar à execução.
+    assert(
+      _todayWorkout!.id > 0,
+      'BUG: workout com ID inválido (${_todayWorkout!.id}) chegou à navegação.',
+    );
+
+    Navigator.of(context)
+        .pushNamed('/workout-step', arguments: _todayWorkout)
+        .then((_) => _loadDashboard());
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // BUILD
+  // ─────────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -133,7 +179,14 @@ class _HomePageState extends State<HomePage> {
                 const SizedBox(height: 16),
               ],
 
-              DailyWorkoutCard(onTap: _isStarting ? null : _handleStartWorkout),
+              DailyWorkoutCard(
+                workoutName: _todayWorkout?.name ?? 'Nenhum treino cadastrado',
+                duration: _todayWorkout != null
+                    ? '${_todayWorkout!.duration ?? 0} min'
+                    : '--',
+                level: _todayWorkout?.level ?? '--',
+                onTap: _isStarting ? null : _handleStartWorkout,
+              ),
               const SizedBox(height: 24),
 
               WeeklyProgressBar(weeklyProgress: data.weeklyProgress),
@@ -155,19 +208,16 @@ class _HomePageState extends State<HomePage> {
     if (_isStarting) return;
     final data = _dashboardData!;
 
+    // Retoma sessão ativa existente.
     if (data.hasActiveSession) {
-      Navigator.of(context)
-          .pushNamed(
-            '/workout-step',
-            arguments: WorkoutsMock.standardWorkouts[0],
-          )
-          .then((_) => _loadDashboard());
+      _pushWorkoutStep();
       return;
     }
 
     final bool alreadyHasSessionToday =
         data.hasActiveSession || data.hasCompletedToday;
 
+    // Exige check-in antes de iniciar o treino.
     if (!alreadyHasSessionToday && !data.hasCheckedInToday) {
       Navigator.of(context)
           .pushNamed('/checkin')
@@ -175,6 +225,7 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
+    // Treino extra: já completou hoje, não ganha pontos.
     if (data.hasCompletedToday) {
       final confirmed = await showDialog<bool>(
         context: context,
@@ -214,12 +265,7 @@ class _HomePageState extends State<HomePage> {
 
       if (!mounted) return;
 
-      Navigator.of(context)
-          .pushNamed(
-            '/workout-step',
-            arguments: WorkoutsMock.standardWorkouts[0],
-          )
-          .then((_) => _loadDashboard());
+      _pushWorkoutStep();
     } catch (e) {
       if (!mounted) return;
       final msg = e.toString().replaceAll('Exception: ', '');
@@ -245,11 +291,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildResumeBanner() {
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(
-        context,
-        '/workout-step',
-        arguments: WorkoutsMock.standardWorkouts[0],
-      ).then((_) => _loadDashboard()),
+      onTap: _pushWorkoutStep,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(

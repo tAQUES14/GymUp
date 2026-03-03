@@ -1,10 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import 'controllers/workout_execution_controller.dart';
 import 'models/workout_model.dart';
-import 'services/weight_service.dart';
 import 'workout_api_service.dart';
 
 class WorkoutStepPage extends StatefulWidget {
@@ -25,6 +24,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
 
   // ── Session ───────────────────────────────────────────────────────────────
   final WorkoutApiService _workoutService = WorkoutApiService();
+  late final WorkoutExecutionController _ctrl;
   WorkoutSessionData? _session;
   DateTime? _sessionStart;
   bool _pointsGranted = false;
@@ -43,14 +43,25 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
   void initState() {
     super.initState();
     _workout = widget.workout;
+    _ctrl = WorkoutExecutionController(workout: widget.workout);
+    _ctrl.addListener(_onCtrlUpdate);
+    _ctrl.loadAllWeights().then((_) {
+      if (mounted) _syncWeightField();
+    });
     _loadSession();
   }
 
   @override
   void dispose() {
+    _ctrl.removeListener(_onCtrlUpdate);
+    _ctrl.dispose();
     _elapsedTimer?.cancel();
     _weightController.dispose();
     super.dispose();
+  }
+
+  void _onCtrlUpdate() {
+    if (mounted) _syncWeightField();
   }
 
   // ── Session loading ───────────────────────────────────────────────────────
@@ -67,7 +78,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
         _elapsed = DateTime.now().difference(start);
       });
       _startElapsedTimer();
-      _loadLastWeightForCurrent();
+      _syncWeightField();
     } catch (_) {}
   }
 
@@ -120,46 +131,59 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
 
   // ── Weight ────────────────────────────────────────────────────────────────
 
-  Future<void> _loadLastWeightForCurrent() async {
-    if (_workout == null) return;
+  /// Sincroniza o campo de texto com o valor armazenado no controller
+  /// para o exercício/série atuais. Não sobrescreve se o usuário está digitando.
+  void _syncWeightField() {
+    if (_workout == null || !mounted) return;
 
     final exercise = _workout!.exercises[_currentExerciseIndex];
-    final exerciseId = exercise.id.toString();
+    final setNum = _currentSeriesIndex + 1;
+    final w = _ctrl.getWeight(exercise.id, setNum);
+    final text = w > 0 ? w.toStringAsFixed(1) : '';
 
-    final weightService = Provider.of<WeightService>(context, listen: false);
-
-    final lastData = await weightService.getLastWeight(context, exerciseId);
-
-    if (!mounted) return;
-
-    if (lastData != null && lastData['weight'] != null) {
-      setState(() {
-        _weightController.text = lastData['weight'].toString();
-      });
-    } else {
-      setState(() {
-        _weightController.clear();
-      });
+    if (_weightController.text != text) {
+      _weightController.text = text;
+      _weightController.selection = TextSelection.collapsed(
+        offset: _weightController.text.length,
+      );
     }
   }
 
-  Future<void> _saveWeight() async {
+  /// Salva o peso para a série indicada.
+  ///
+  /// Primeiro tenta o valor digitado no campo de texto; se estiver vazio,
+  /// usa o valor já armazenado no controller (fonte autoritativa).
+  /// Isso evita que um _syncWeightField() assíncrono limpe o campo e
+  /// faça o save ser silenciosamente descartado.
+  void _saveWeight([int? seriesNumber]) {
     if (_workout == null) return;
 
     final exercise = _workout!.exercises[_currentExerciseIndex];
-    final exerciseId = exercise.id.toString();
+    if (exercise.id <= 0) return;
 
-    final double weight = double.tryParse(_weightController.text) ?? 0;
+    final setNum = seriesNumber ?? _currentSeriesIndex + 1;
 
-    final weightService = Provider.of<WeightService>(context, listen: false);
+    // Tenta o campo de texto primeiro (pode ter sido editado pelo usuário).
+    double weight = double.tryParse(_weightController.text) ?? 0;
 
-    await weightService.saveWeight(
-      context,
-      exerciseId,
-      weight,
-      0, // reps (se quiser melhorar depois, aqui é o lugar)
-      '',
+    // Fallback: usa o valor já salvo no controller (ex: carregado do backend).
+    if (weight <= 0) {
+      weight = _ctrl.getWeight(exercise.id, setNum);
+    }
+
+    if (weight <= 0) {
+      debugPrint(
+        '[StepPage] _saveWeight SKIP: exerciseId=${exercise.id} '
+        'setNum=$setNum weight=$weight (campo vazio e sem valor no controller)',
+      );
+      return;
+    }
+
+    debugPrint(
+      '[StepPage] _saveWeight: exerciseId=${exercise.id} '
+      'setNum=$setNum weight=$weight',
     );
+    _ctrl.setWeight(exercise.id, setNum, weight);
   }
 
   // ── Series / Exercise navigation ──────────────────────────────────────────
@@ -169,8 +193,11 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
   void _markSeriesDone() {
     final exercise = _workout!.exercises[_currentExerciseIndex];
     final totalSeries = _seriesCount(exercise);
+    // Salva o peso da série atual antes de avançar (fire-and-forget)
+    _saveWeight(_currentSeriesIndex + 1);
     if (_currentSeriesIndex < totalSeries - 1) {
       setState(() => _currentSeriesIndex++);
+      _syncWeightField();
     } else {
       _completeExercise();
     }
@@ -179,13 +206,13 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
   Future<void> _completeExercise() async {
     final exercises = _workout!.exercises;
     _completedExercises++;
-    _saveWeight();
+    // peso já salvo por série em _markSeriesDone
     if (_currentExerciseIndex < exercises.length - 1) {
       setState(() {
         _currentExerciseIndex++;
         _currentSeriesIndex = 0;
       });
-      _loadLastWeightForCurrent();
+      _syncWeightField();
       _sendProgress(exercises.length); // fire-and-forget
     } else {
       // All exercises done — send final progress but do NOT navigate
@@ -201,7 +228,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
         _currentExerciseIndex++;
         _currentSeriesIndex = 0;
       });
-      _loadLastWeightForCurrent();
+      _syncWeightField();
       // Report progress even when skipping — keeps backend in sync.
       _sendProgress(exercises.length);
     }
@@ -213,7 +240,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
         _currentExerciseIndex--;
         _currentSeriesIndex = 0;
       });
-      _loadLastWeightForCurrent();
+      _syncWeightField();
     }
   }
 
