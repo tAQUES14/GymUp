@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CustomWorkout;
+use App\Models\Exercise;
 use App\Models\Gym;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -35,20 +37,70 @@ class AuthController extends Controller
             'role'     => 'student',
         ]);
 
+        $this->createInitialWorkout($user);
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
             'message' => 'Usuário criado com sucesso',
-            'token' => $token,
-            'user' => $user
+            'token'   => $token,
+            'user'    => $user,
         ]);
+    }
+
+    /**
+     * Cria o "Treino Inicial" para o novo usuário.
+     * Idempotente: se o treino já existir, não duplica.
+     */
+    private function createInitialWorkout(User $user): void
+    {
+        $workout = CustomWorkout::firstOrCreate(
+            [
+                'user_id' => $user->id,
+                'name'    => 'Treino Inicial',
+            ],
+            [
+                'description'  => 'Treino inicial gerado automaticamente.',
+                'level'        => 'beginner',
+                'duration'     => 60,
+                'is_generated' => true,
+            ]
+        );
+
+        // Se o treino já existia, não repete os exercícios.
+        if (! $workout->wasRecentlyCreated) {
+            return;
+        }
+
+        $exercises = [
+            ['name' => 'Supino Reto',       'muscle_group' => 'Peito'],
+            ['name' => 'Agachamento Livre',  'muscle_group' => 'Pernas'],
+            ['name' => 'Remada Curvada',     'muscle_group' => 'Costas'],
+            ['name' => 'Rosca Direta',       'muscle_group' => 'Bíceps'],
+        ];
+
+        foreach ($exercises as $data) {
+            $exercise = Exercise::firstOrCreate(
+                ['name' => $data['name']],
+                [
+                    'muscle_group' => $data['muscle_group'],
+                    'default_rest' => 60,
+                ]
+            );
+
+            $workout->exercises()->attach($exercise->id, [
+                'sets' => 3,
+                'reps' => 12,
+                'rest' => 60,
+            ]);
+        }
     }
 
     public function login(Request $request)
     {
         $request->validate([
-            'email' => 'required|email',
-            'password' => 'required'
+            'email'    => 'required|email',
+            'password' => 'required',
         ]);
 
         $user = User::where('email', $request->email)->first();
@@ -63,8 +115,8 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Login realizado com sucesso',
-            'token' => $token,
-            'user' => $user
+            'token'   => $token,
+            'user'    => $user,
         ]);
     }
 
@@ -80,7 +132,7 @@ class AuthController extends Controller
         $request->user()->currentAccessToken()->delete();
 
         return response()->json([
-            'message' => 'Logout realizado com sucesso'
+            'message' => 'Logout realizado com sucesso',
         ]);
     }
 }

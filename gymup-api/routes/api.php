@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\WeightController;
 use App\Http\Controllers\Api\CustomWorkoutController;
 use App\Http\Controllers\Api\WorkoutHistoryController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\ProgressSummaryController;
 
 /*
 |--------------------------------------------------------------------------
@@ -65,8 +66,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // 🔹 Histórico de Cargas (Weight)
     Route::prefix('exercises')->group(function () {
-        Route::post('{exercise}/weight', [WeightController::class, 'store']);
+        Route::put('{exercise}/weight/set', [WeightController::class, 'saveSetWeight']);
         Route::get('{exercise}/weight/last', [WeightController::class, 'last']);
+        Route::get('{exercise}/history', [WeightController::class, 'history']);
+        Route::get('{exercise}/progress', [WeightController::class, 'progress']);
+        Route::get('{exercise}/pr', [WeightController::class, 'pr']);
+        Route::get('{exercise}/progress-score', [WeightController::class, 'progressScore']);
     });
 
     // 🔹 Treinos Personalizados (IA)
@@ -83,6 +88,9 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::get('/checkin/status', [CheckinController::class, 'status']);
+
+    // 🔹 Resumo de Progresso (agregado)
+    Route::get('/me/progress-summary', [ProgressSummaryController::class, 'index']);
 
     /*
     |--------------------------------------------------------------------------

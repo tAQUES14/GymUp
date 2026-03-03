@@ -110,24 +110,75 @@ class WorkoutController extends Controller
     /**
      * POST /api/workout/finish
      *
-     * Finishes the active session and marks finished_at.
-     * If conditions are met and points were not yet granted, grants them first.
-     * Returns 404 if no active session exists.
+     * Finishes the active session, computes progress from the sets data sent
+     * by the app, grants points if conditions are met, and returns the streak.
+     *
+     * If called when there is no active session (e.g. double-tap), looks for a
+     * session finished today and returns it with already_finished = true so the
+     * app can navigate to the completion screen without showing an error.
+     *
+     * Body (optional):
+     *   exercises_completed  – number of exercises the user fully completed
+     *   exercises_total      – total exercises in the workout
+     *   sets_completed       – total sets marked done (legacy, still accepted)
+     *   sets_total           – total sets in workout   (legacy, still accepted)
      */
     public function finish(Request $request, PointService $pointService)
     {
+        $request->validate([
+            'exercises_completed' => 'nullable|integer|min:0',
+            'exercises_total'     => 'nullable|integer|min:1',
+            'sets_completed'      => 'nullable|integer|min:0',
+            'sets_total'          => 'nullable|integer|min:1',
+        ]);
+
         $user = $request->user();
 
         $session = WorkoutSession::where('user_id', $user->id)
             ->whereNull('finished_at')
             ->first();
 
+        // ── No active session ─────────────────────────────────────────────────
         if (!$session) {
+            // Check if the user already finished a session today
+            $todaySession = WorkoutSession::where('user_id', $user->id)
+                ->whereNotNull('finished_at')
+                ->whereDate('started_at', now()->toDateString())
+                ->latest('finished_at')
+                ->first();
+
+            if ($todaySession) {
+                return response()->json([
+                    'message'          => 'Treino já finalizado hoje.',
+                    'already_finished' => true,
+                    'points_just_granted' => false,
+                    'streak'           => $this->calculateStreak($user->id),
+                    'session'          => $this->formatSession($todaySession),
+                ]);
+            }
+
             return response()->json([
                 'message' => 'Nenhuma sessão de treino ativa.',
             ], 404);
         }
 
+        // ── Update progress from exercises data (preferred) or sets data ──────
+        $progress = $session->progress; // keep existing if nothing sent
+
+        if ($request->filled('exercises_completed') && $request->filled('exercises_total')) {
+            $progress = (int) round(
+                ($request->exercises_completed / $request->exercises_total) * 100
+            );
+        } elseif ($request->filled('sets_completed') && $request->filled('sets_total')) {
+            $progress = (int) round(
+                ($request->sets_completed / $request->sets_total) * 100
+            );
+        }
+
+        $session->update(['progress' => $progress]);
+        $session->refresh();
+
+        // ── Grant points if conditions are met ────────────────────────────────
         $pointsJustGranted = false;
 
         if (!$session->points_granted && $session->meetsPointsConditions()) {
@@ -137,11 +188,14 @@ class WorkoutController extends Controller
             }
         }
 
+        // ── Finish session ────────────────────────────────────────────────────
         $session->update(['finished_at' => now()]);
 
         return response()->json([
             'message'             => 'Sessão de treino finalizada.',
+            'already_finished'    => false,
             'points_just_granted' => $pointsJustGranted,
+            'streak'              => $this->calculateStreak($user->id),
             'session'             => $this->formatSession($session->fresh()),
         ]);
     }
@@ -166,6 +220,44 @@ class WorkoutController extends Controller
     // ──────────────────────────────────────────────────────────────────────────
     // Private helpers
     // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Calculates the current consecutive-day streak for the user based on
+     * finished workout sessions (same logic as DashboardController).
+     */
+    private function calculateStreak(int $userId): int
+    {
+        $dates = WorkoutSession::where('user_id', $userId)
+            ->whereNotNull('finished_at')
+            ->orderBy('finished_at', 'desc')
+            ->pluck('finished_at')
+            ->map(fn($d) => $d->toDateString())
+            ->unique()
+            ->values()
+            ->all();
+
+        if (empty($dates)) {
+            return 0;
+        }
+
+        $today    = now()->toDateString();
+        $streak   = 0;
+        $expected = in_array($today, $dates, true)
+            ? now()->startOfDay()
+            : now()->subDay()->startOfDay();
+
+        foreach ($dates as $dateStr) {
+            $date = \Carbon\Carbon::parse($dateStr)->startOfDay();
+            if ($date->equalTo($expected)) {
+                $streak++;
+                $expected = $expected->subDay();
+            } elseif ($date->lt($expected)) {
+                break;
+            }
+        }
+
+        return $streak;
+    }
 
     /**
      * Grants 10 points inside a DB transaction with a pessimistic lock

@@ -9,8 +9,14 @@ class ExerciseWeight extends Model
     protected $fillable = [
         'user_id',
         'exercise_id',
+        'set_number',
         'weight',
         'reps',
-        'note',
+    ];
+
+    protected $casts = [
+        'weight' => 'float',
+        'reps' => 'integer',
+        'set_number' => 'integer',
     ];
 }
