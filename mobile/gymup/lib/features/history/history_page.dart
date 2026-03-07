@@ -1,15 +1,13 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
+import '../../core/api/api_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/gymup_app_bar.dart';
 import '../../core/widgets/gymup_card.dart';
 import '../../core/widgets/gymup_loading.dart';
-import '../auth/auth_service.dart';
 
 class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key});
@@ -20,32 +18,26 @@ class HistoryPage extends StatefulWidget {
 
 class _HistoryPageState extends State<HistoryPage> {
   Future<List<Map<String, dynamic>>> _fetchHistory() async {
-    final authService = context.read<AuthService>();
-    final token = await authService.getToken();
+    final response = await ApiService().get('/points/history?per_page=50');
 
-    final response = await http.get(
-      Uri.parse("http://127.0.0.1:8000/api/points/history"),
-      headers: {
-        "Authorization": "Bearer $token",
-        "Content-Type": "application/json",
-      },
-    );
-
-    if (response.statusCode != 200) {
-      throw Exception("Erro ao carregar histórico");
+    if (response.statusCode == 401) {
+      throw Exception('401');
     }
 
-    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception('Erro ao carregar histórico');
+    }
 
-    // ⚠️ Ajuste aqui se sua API retornar estrutura diferente
-    final List<dynamic> items = data is List ? data : data["data"];
+    final body = jsonDecode(response.body);
+    final List<dynamic> items = body is List ? body : (body['data'] as List<dynamic>? ?? []);
 
     return items.map<Map<String, dynamic>>((item) {
+      final bool isEarn = (item['type'] as String?) == 'earn';
       return {
-        "title": item["title"] ?? "Movimentação",
-        "points": item["points"] ?? 0,
-        "date": DateTime.parse(item["created_at"]),
-        "isPositive": (item["points"] ?? 0) >= 0,
+        'title': item['description'] as String? ?? 'Movimentação',
+        'points': (item['points'] as num?)?.toInt() ?? 0,
+        'date': DateTime.parse(item['created_at'] as String),
+        'isPositive': isEarn,
       };
     }).toList();
   }
@@ -63,6 +55,13 @@ class _HistoryPageState extends State<HistoryPage> {
           }
 
           if (snapshot.hasError) {
+            final err = snapshot.error.toString();
+            if (err.contains('401')) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                Navigator.of(context).pushReplacementNamed('/login');
+              });
+              return const SizedBox.shrink();
+            }
             return Center(
               child: Text(
                 'Erro ao carregar histórico.',

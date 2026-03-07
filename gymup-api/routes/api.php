@@ -14,6 +14,11 @@ use App\Http\Controllers\Api\WeightController;
 use App\Http\Controllers\Api\CustomWorkoutController;
 use App\Http\Controllers\Api\WorkoutHistoryController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\ProgressSummaryController;
+use App\Http\Controllers\Api\GoalController;
+use App\Http\Controllers\Api\BodyWeightController;
+use App\Http\Controllers\Api\ChallengeController;
+use App\Http\Controllers\Api\AdminChallengeController;
 
 /*
 |--------------------------------------------------------------------------
@@ -38,6 +43,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // 🔹 Perfil
     Route::get('/profile', [ProfileController::class, 'show']);
+    Route::put('/profile', [ProfileController::class, 'update']);
+
+    // 🔹 Resumo de Progresso
+    Route::get('/me/progress-summary', [ProgressSummaryController::class, 'index']);
 
     // 🔹 Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index']);
@@ -63,10 +72,17 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/status', [WorkoutController::class, 'status']);
     });
 
+    // 🔹 Endpoint alternativo: POST /workout-sessions/{id}/finish
+    Route::post('/workout-sessions/{id}/finish', [WorkoutController::class, 'finish']);
+
     // 🔹 Histórico de Cargas (Weight)
     Route::prefix('exercises')->group(function () {
-        Route::post('{exercise}/weight', [WeightController::class, 'store']);
+        Route::put('{exercise}/weight/set', [WeightController::class, 'saveSetWeight']);
         Route::get('{exercise}/weight/last', [WeightController::class, 'last']);
+        Route::get('{exercise}/history', [WeightController::class, 'history']);
+        Route::get('{exercise}/progress', [WeightController::class, 'progress']);
+        Route::get('{exercise}/pr', [WeightController::class, 'pr']);
+        Route::get('{exercise}/progress-score', [WeightController::class, 'progressScore']);
     });
 
     // 🔹 Treinos Personalizados (IA)
@@ -84,6 +100,19 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/checkin/status', [CheckinController::class, 'status']);
 
+    // 🔹 Metas pessoais
+    Route::post('/goals/preview', [GoalController::class, 'preview']);
+    Route::post('/goals', [GoalController::class, 'store']);
+    Route::get('/goals/current', [GoalController::class, 'current']);
+
+    // 🔹 Histórico de peso corporal
+    Route::post('/body-weight', [BodyWeightController::class, 'store']);
+    Route::get('/body-weight', [BodyWeightController::class, 'index']);
+
+    // 🔹 Desafios (aluno)
+    Route::get('/challenges/active', [ChallengeController::class, 'active']);
+    Route::get('/challenges/{id}/ranking', [ChallengeController::class, 'ranking']);
+
     /*
     |--------------------------------------------------------------------------
     | Rotas Admin
@@ -94,6 +123,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/admin/dashboard', [AdminDashboardController::class, 'index']);
         Route::get('/admin/redemptions', [RedemptionController::class, 'index']);
         Route::post('/redemptions/{id}/approve', [RedemptionController::class, 'approve']);
+
+        // 🔹 Desafios (admin)
+        Route::get('/admin/challenges', [AdminChallengeController::class, 'index']);
+        Route::post('/admin/challenges', [AdminChallengeController::class, 'store']);
+        Route::put('/admin/challenges/{id}', [AdminChallengeController::class, 'update']);
+        Route::post('/admin/challenges/{id}/finish', [AdminChallengeController::class, 'finish']);
     });
 
 });

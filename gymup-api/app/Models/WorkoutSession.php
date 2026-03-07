@@ -60,17 +60,18 @@ class WorkoutSession extends Model
     /**
      * Returns true when BOTH conditions required to earn points are met:
      *   - elapsed time >= config('workout.min_minutes')
-     *   - progress    >= config('workout.min_progress')
+     *   - progress    >= config('workout.min_progress_valid')
      */
     public function meetsPointsConditions(): bool
     {
         return $this->elapsedMinutes() >= config('workout.min_minutes')
-            && $this->progress >= config('workout.min_progress');
+            && $this->progress >= config('workout.min_progress_valid', 75);
     }
 
     /**
      * Returns true when the user has already earned points today.
-     * Uses started_at date so Carbon::setTestNow() works in tests.
+     * Uses finished_at (consistent with StreakService) so sessions that cross
+     * midnight are attributed to the day they were actually completed.
      * Accepts an optional date string (Y-m-d) to override "today".
      */
     public static function hasGrantedPointsToday($userId, $date = null): bool
@@ -79,7 +80,7 @@ class WorkoutSession extends Model
 
         return static::where('user_id', $userId)
             ->where('points_granted', true)
-            ->whereDate('started_at', $date)
+            ->whereDate('finished_at', $date)
             ->exists();
     }
 }

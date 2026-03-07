@@ -25,12 +25,11 @@ class DashboardTest extends TestCase
     /** @test */
     public function authenticated_user_receives_dashboard_structure()
     {
-        $gym = Gym::factory()->create();
-
+        $gym  = Gym::factory()->create();
         $user = User::factory()->create([
-            'gym_id' => $gym->id,
-            'role' => 'student',
-            'points_balance' => 100
+            'gym_id'         => $gym->id,
+            'role'           => 'student',
+            'points_balance' => 100,
         ]);
 
         Sanctum::actingAs($user);
@@ -38,7 +37,6 @@ class DashboardTest extends TestCase
         $response = $this->getJson('/api/dashboard');
 
         $response->assertStatus(200);
-
         $response->assertJsonStructure([
             'points_balance',
             'has_completed_today',
@@ -48,23 +46,20 @@ class DashboardTest extends TestCase
             'recent_activities',
             'streak',
             'total_checkins',
+            'total_workouts',
+            'total_workouts_with_points',
         ]);
     }
 
     /** @test */
     public function has_checked_in_today_is_false_when_no_checkin_exists()
     {
-        $gym = Gym::factory()->create();
-
-        $user = User::factory()->create([
-            'gym_id' => $gym->id,
-            'role' => 'student',
-        ]);
+        $gym  = Gym::factory()->create();
+        $user = User::factory()->create(['gym_id' => $gym->id, 'role' => 'student']);
 
         Sanctum::actingAs($user);
 
         $response = $this->getJson('/api/dashboard');
-
         $response->assertStatus(200);
         $this->assertFalse($response->json('has_checked_in_today'));
     }
@@ -72,96 +67,145 @@ class DashboardTest extends TestCase
     /** @test */
     public function has_checked_in_today_is_true_when_checkin_exists_today()
     {
-        $gym = Gym::factory()->create();
+        $gym  = Gym::factory()->create();
+        $user = User::factory()->create(['gym_id' => $gym->id, 'role' => 'student']);
 
-        $user = User::factory()->create([
-            'gym_id' => $gym->id,
-            'role' => 'student',
-        ]);
-
+        // Create a checkin record (not a WorkoutSession)
         Checkin::factory()->create([
-            'gym_id' => $gym->id,
-            'user_id' => $user->id,
-            'checkin_date' => Carbon::today()
+            'user_id'      => $user->id,
+            'gym_id'       => $gym->id,
+            'checkin_date' => Carbon::today()->toDateString(),
         ]);
 
         Sanctum::actingAs($user);
 
         $response = $this->getJson('/api/dashboard');
-
         $response->assertStatus(200);
         $this->assertTrue($response->json('has_checked_in_today'));
     }
 
     /** @test */
-    public function streak_counts_consecutive_days_correctly()
+    public function streak_counts_consecutive_days_with_checkin_and_valid_workout()
     {
-        $gym = Gym::factory()->create();
+        $gym  = Gym::factory()->create();
+        $user = User::factory()->create(['gym_id' => $gym->id, 'role' => 'student']);
 
-        $user = User::factory()->create([
-            'gym_id' => $gym->id,
-            'role' => 'student',
-        ]);
+        // 3 consecutive days: today, yesterday, day before yesterday
+        // Each day needs BOTH a checkin AND a valid workout
+        for ($i = 0; $i < 3; $i++) {
+            $date = Carbon::today()->subDays($i);
 
-        // 3 dias consecutivos (hoje, ontem, anteontem)
-        Checkin::factory()->create([
-            'gym_id' => $gym->id,
-            'user_id' => $user->id,
-            'checkin_date' => Carbon::today()
-        ]);
+            Checkin::factory()->create([
+                'gym_id'       => $gym->id,
+                'user_id'      => $user->id,
+                'checkin_date' => $date->toDateString(),
+            ]);
 
-        Checkin::factory()->create([
-            'gym_id' => $gym->id,
-            'user_id' => $user->id,
-            'checkin_date' => Carbon::yesterday()
-        ]);
-
-        Checkin::factory()->create([
-            'gym_id' => $gym->id,
-            'user_id' => $user->id,
-            'checkin_date' => Carbon::today()->subDays(2)
-        ]);
+            WorkoutSession::factory()->finished()->withPointsGranted()->create([
+                'user_id'    => $user->id,
+                'gym_id'     => $gym->id,
+                'started_at' => $date->copy()->setTime(10, 0),
+            ]);
+        }
 
         Sanctum::actingAs($user);
 
         $response = $this->getJson('/api/dashboard');
-
         $response->assertStatus(200);
         $this->assertEquals(3, $response->json('streak'));
     }
 
     /** @test */
-    public function streak_stops_when_sequence_is_broken()
+    public function streak_is_zero_when_only_checkins_without_workouts()
     {
-        $gym = Gym::factory()->create();
+        $gym  = Gym::factory()->create();
+        $user = User::factory()->create(['gym_id' => $gym->id, 'role' => 'student']);
 
-        $user = User::factory()->create([
-            'gym_id' => $gym->id,
-            'role' => 'student',
-        ]);
-
-        // hoje
+        // Only checkins, no valid workouts
         Checkin::factory()->create([
-            'gym_id' => $gym->id,
-            'user_id' => $user->id,
-            'checkin_date' => Carbon::today()
-        ]);
-
-        // anteontem (quebra ontem)
-        Checkin::factory()->create([
-            'gym_id' => $gym->id,
-            'user_id' => $user->id,
-            'checkin_date' => Carbon::today()->subDays(2)
+            'gym_id'       => $gym->id,
+            'user_id'      => $user->id,
+            'checkin_date' => Carbon::today(),
         ]);
 
         Sanctum::actingAs($user);
 
         $response = $this->getJson('/api/dashboard');
-
         $response->assertStatus(200);
+        $this->assertEquals(0, $response->json('streak'));
+    }
 
-        // streak deve ser 1 (apenas hoje)
+    /** @test */
+    public function streak_stops_when_sequence_is_broken()
+    {
+        $gym  = Gym::factory()->create();
+        $user = User::factory()->create(['gym_id' => $gym->id, 'role' => 'student']);
+
+        // Today: checkin + workout
+        Checkin::factory()->create([
+            'gym_id'       => $gym->id,
+            'user_id'      => $user->id,
+            'checkin_date' => Carbon::today(),
+        ]);
+        WorkoutSession::factory()->finished()->withPointsGranted()->create([
+            'user_id'    => $user->id,
+            'gym_id'     => $gym->id,
+            'started_at' => Carbon::today()->setTime(10, 0),
+        ]);
+
+        // Day before yesterday (gap: yesterday missing)
+        Checkin::factory()->create([
+            'gym_id'       => $gym->id,
+            'user_id'      => $user->id,
+            'checkin_date' => Carbon::today()->subDays(2),
+        ]);
+        WorkoutSession::factory()->finished()->withPointsGranted()->create([
+            'user_id'    => $user->id,
+            'gym_id'     => $gym->id,
+            'started_at' => Carbon::today()->subDays(2)->setTime(10, 0),
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/dashboard');
+        $response->assertStatus(200);
         $this->assertEquals(1, $response->json('streak'));
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // total_workouts / total_workouts_with_points
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /** @test */
+    public function total_workouts_counts_all_finished_sessions_including_without_points()
+    {
+        $gym  = Gym::factory()->create();
+        $user = User::factory()->create(['gym_id' => $gym->id]);
+        Sanctum::actingAs($user);
+
+        // 2 treinos com pontos (criados separadamente para respeitar o partial unique index)
+        WorkoutSession::factory()->finished()->withPointsGranted()->create([
+            'user_id'    => $user->id,
+            'gym_id'     => $gym->id,
+            'started_at' => now()->subHours(4),
+        ]);
+        WorkoutSession::factory()->finished()->withPointsGranted()->create([
+            'user_id'    => $user->id,
+            'gym_id'     => $gym->id,
+            'started_at' => now()->subHours(2),
+        ]);
+
+        // 1 treino sem pontos (bônus/inválido)
+        WorkoutSession::factory()->finished()->create([
+            'user_id'        => $user->id,
+            'gym_id'         => $gym->id,
+            'points_granted' => false,
+        ]);
+
+        $response = $this->getJson('/api/dashboard')->assertStatus(200);
+
+        $this->assertEquals(3, $response->json('total_workouts'));
+        $this->assertEquals(2, $response->json('total_workouts_with_points'));
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -239,10 +283,8 @@ class DashboardTest extends TestCase
         $user = User::factory()->create(['gym_id' => $gym->id]);
         Sanctum::actingAs($user);
 
-        // Fix "now" to a Wednesday (2025-01-08)
         Carbon::setTestNow(Carbon::parse('2025-01-08 12:00:00'));
 
-        // Finished session on Monday of this week (2025-01-06)
         WorkoutSession::factory()->create([
             'user_id'     => $user->id,
             'gym_id'      => $gym->id,
@@ -256,9 +298,9 @@ class DashboardTest extends TestCase
 
         $this->assertCount(7, $weekly);
         $this->assertTrue($weekly[0]);  // Monday — trained
-        $this->assertFalse($weekly[1]); // Tuesday — not trained
-        $this->assertFalse($weekly[2]); // Wednesday — not trained
-        $this->assertFalse($weekly[6]); // Sunday — not trained
+        $this->assertFalse($weekly[1]); // Tuesday
+        $this->assertFalse($weekly[2]); // Wednesday
+        $this->assertFalse($weekly[6]); // Sunday
 
         Carbon::setTestNow();
     }

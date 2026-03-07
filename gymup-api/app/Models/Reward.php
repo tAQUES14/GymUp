@@ -15,7 +15,8 @@ class Reward extends Model
         'description',
         'points_cost',
         'stock',
-        'active'
+        'discount_percent',
+        'active',
     ];
 
     public function gym()

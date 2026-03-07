@@ -6,31 +6,6 @@ class WorkoutExecutionService {
   final _api = ApiService();
 
   // ────────────────────────────────────────────────────────────────────────────
-  // Finish workout
-  // ────────────────────────────────────────────────────────────────────────────
-
-  /// POST /api/workout/finish
-  Future<Map<String, dynamic>> finishWorkout({
-    required int workoutId,
-    required int durationMinutes,
-    required int exercisesCompleted,
-    required int exercisesTotal,
-  }) async {
-    final response = await _api.post('/workout/finish', {
-      'workout_id': workoutId,
-      'duration_minutes': durationMinutes,
-      'exercises_completed': exercisesCompleted,
-      'exercises_total': exercisesTotal,
-    });
-
-    if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception(response.body);
-    }
-
-    return jsonDecode(response.body) as Map<String, dynamic>;
-  }
-
-  // ────────────────────────────────────────────────────────────────────────────
   // Weight: save per set
   // ────────────────────────────────────────────────────────────────────────────
 
@@ -51,34 +26,26 @@ class WorkoutExecutionService {
       return;
     }
 
-    final body = {
-      'set_number': setNumber,
-      'weight': weight,
-      'reps': reps,
-    };
+    final body = {'set_number': setNumber, 'weight': weight, 'reps': reps};
 
     debugPrint(
       '[ExecService] saveSetWeight HTTP PUT /exercises/$exerciseId/weight/set '
       'body=$body',
     );
 
-    final response = await _api.put(
-      '/exercises/$exerciseId/weight/set',
-      body,
-    );
+    final response = await _api.put('/exercises/$exerciseId/weight/set', body);
 
     debugPrint(
       '[ExecService] saveSetWeight RESPONSE status=${response.statusCode} '
       'body=${response.body}',
     );
 
-    if (response.statusCode != 201) {
+    if (response.statusCode != 201 && response.statusCode != 200) {
       throw Exception(
         'Falha ao salvar carga (HTTP ${response.statusCode}): ${response.body}',
       );
     }
   }
-
   // ────────────────────────────────────────────────────────────────────────────
   // Weight: load last per set
   // ────────────────────────────────────────────────────────────────────────────
@@ -109,10 +76,11 @@ class WorkoutExecutionService {
     if (decoded == null || decoded is! Map) return {};
 
     // Backend retorna { "1": 50.0, "2": 55.0, ... }
+    // Valores podem vir como num ou String dependendo do driver do BD.
     return decoded.map<int, double>(
       (key, value) => MapEntry(
         int.tryParse(key.toString()) ?? 0,
-        (value as num).toDouble(),
+        (value is num) ? value.toDouble() : double.tryParse(value.toString()) ?? 0.0,
       ),
     );
   }

@@ -13,19 +13,16 @@ class PersonalsPage extends StatelessWidget {
       'name': 'Ana Silva',
       'specialty': 'Hipertrofia e Emagrecimento',
       'description': 'Especialista em transformação corporal com foco em saúde e bem-estar. 5 anos de experiência.',
-      'image': 'https://randomuser.me/api/portraits/women/44.jpg', // Mock image
     },
     {
       'name': 'João Pereira',
       'specialty': 'Performance e Atletismo',
       'description': 'Treinamento voltado para atletas de alto rendimento e preparação física específica.',
-      'image': 'https://randomuser.me/api/portraits/men/32.jpg', // Mock image
     },
     {
       'name': 'Carlos Souza',
       'specialty': 'Iniciantes e Reabilitação',
       'description': 'Foco em correção postural, fortalecimento e introdução à musculação.',
-      'image': 'https://randomuser.me/api/portraits/men/64.jpg', // Mock image
     },
   ];
 
@@ -48,8 +45,15 @@ class PersonalsPage extends StatelessWidget {
                     children: [
                       CircleAvatar(
                         radius: 30,
-                        backgroundImage: NetworkImage(personal['image']!),
-                        backgroundColor: AppColors.primaryLight,
+                        backgroundColor: AppColors.primary,
+                        child: Text(
+                          personal['name']![0].toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(

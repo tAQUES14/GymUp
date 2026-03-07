@@ -6,6 +6,7 @@ import '../../core/widgets/gymup_button.dart';
 import '../../core/widgets/gymup_card.dart';
 import '../../core/widgets/gymup_text_field.dart';
 import '../workouts/workout_api_service.dart';
+import 'checkin_api_service.dart';
 import 'qr_service.dart';
 
 class CheckinPage extends StatefulWidget {
@@ -18,6 +19,7 @@ class CheckinPage extends StatefulWidget {
 class _CheckinPageState extends State<CheckinPage> {
   bool _isProcessing = false;
   final QrService _qrService = QrService();
+  final CheckinApiService _checkinService = CheckinApiService();
   final WorkoutApiService _workoutService = WorkoutApiService();
   final TextEditingController _manualController = TextEditingController();
 
@@ -110,8 +112,13 @@ class _CheckinPageState extends State<CheckinPage> {
         'BUG: workout com ID inválido (${workout.id}) retornado pelo backend.',
       );
 
-      // QR válido → inicia sessão de treino. Pontos serão concedidos apenas
-      // após o treino ser concluído com tempo e progresso suficientes.
+      // QR válido → registra check-in (idempotente: 409 = já feito hoje, OK).
+      await _checkinService.doCheckIn();
+
+      if (!mounted) return;
+
+      // Inicia sessão de treino. Pontos serão concedidos apenas após
+      // o treino ser concluído com tempo e progresso suficientes.
       final session = await _workoutService.startWorkout();
 
       if (!mounted) return;
@@ -133,7 +140,7 @@ class _CheckinPageState extends State<CheckinPage> {
               Text(
                 session.dailyPointsAlreadyGranted
                     ? 'Você já ganhou seus pontos hoje. Este treino extra não gera pontos, mas você pode treinar normalmente.'
-                    : 'Conclua o treino para ganhar 10 pontos.',
+                    : 'Conclua o treino para ganhar seus pontos!',
                 textAlign: TextAlign.center,
                 style: AppTypography.bodyLarge,
               ),

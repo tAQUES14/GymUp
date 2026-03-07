@@ -12,6 +12,8 @@ import '../../core/widgets/gymup_card.dart';
 import '../../core/widgets/gymup_text_field.dart';
 import '../../core/widgets/gymup_loading.dart';
 import '../auth/auth_service.dart';
+import '../goals/goal_api_service.dart';
+import '../goals/create_goal_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -33,7 +35,9 @@ class _ProfilePageState extends State<ProfilePage> {
   late TextEditingController _academiaController;
 
   Map<String, dynamic>? _userData;
-  late Future<void> _profileFuture;
+  GoalData?             _goalData;
+  double?               _currentWeight; // peso mais recente (log > perfil > meta)
+  late Future<void>     _profileFuture;
 
   final _api = ApiService();
 
@@ -63,8 +67,14 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _loadProfile() async {
     developer.log('GET ${ApiService.baseUrl}/profile', name: 'ProfilePage');
 
-    final response = await _api.get('/profile');
+    final goalService = GoalApiService();
+    final results = await Future.wait<dynamic>([
+      _api.get('/profile'),
+      goalService.getCurrentGoal().catchError((_) => null),
+      goalService.getBodyWeightHistory(limit: 1).catchError((_) => <BodyWeightLog>[]),
+    ]);
 
+    final response = results[0];
     developer.log(
       'ProfilePage response: status=${response.statusCode} body=${response.body}',
       name: 'ProfilePage',
@@ -74,16 +84,35 @@ class _ProfilePageState extends State<ProfilePage> {
       throw Exception('HTTP ${response.statusCode}: ${response.body}');
     }
 
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final gym = data['gym'] as Map<String, dynamic>?;
+    final data          = jsonDecode(response.body) as Map<String, dynamic>;
+    final gym           = data['gym'] as Map<String, dynamic>?;
+    final goal          = results[1] as GoalData?;
+    final weightHistory = results[2] as List<BodyWeightLog>;
+
+    // Resolve peso atual: log mais recente > peso do perfil > peso inicial da meta
+    final logWeight     = weightHistory.isNotEmpty ? weightHistory.first.weight : null;
+    final profileWeight = data['weight'] != null
+        ? double.tryParse(data['weight'].toString())
+        : null;
+    final resolvedWeight = logWeight ?? profileWeight ?? goal?.startWeight;
+
+    // Resolve altura (cm): perfil > meta
+    final profileHeight = data['height'] != null
+        ? double.tryParse(data['height'].toString())
+        : null;
+    final resolvedHeight = profileHeight ?? goal?.height;
 
     setState(() {
-      _userData = data;
+      _userData            = data;
+      _goalData            = goal;
+      _currentWeight       = resolvedWeight;
       _nomeController.text = data['name'] ?? '';
       _telefoneController.text = data['phone'] ?? '';
-      _idadeController.text = '';
-      _pesoController.text = (data['weight'] ?? '').toString();
-      _alturaController.text = (data['height'] ?? '').toString();
+      _idadeController.text    = '';
+      _pesoController.text     =
+          resolvedWeight != null ? resolvedWeight.toStringAsFixed(1) : '';
+      _alturaController.text   =
+          resolvedHeight != null ? resolvedHeight.toStringAsFixed(0) : '';
       _academiaController.text = gym?['name'] ?? '';
     });
   }
@@ -94,7 +123,7 @@ class _ProfilePageState extends State<ProfilePage> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await _api.put('/me', {
+      final response = await _api.put('/profile', {
         'name': _nomeController.text.trim(),
         'weight': double.tryParse(_pesoController.text.trim()),
         'height': double.tryParse(_alturaController.text.trim()),
@@ -151,9 +180,9 @@ class _ProfilePageState extends State<ProfilePage> {
           if (snapshot.hasError) {
             final err = snapshot.error.toString();
             developer.log('ProfilePage FutureBuilder error: $err', name: 'ProfilePage');
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -235,7 +264,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                         const SizedBox(height: 16),
                         GymUpTextField(
-                          label: 'Altura (m)',
+                          label: 'Altura (cm)',
                           controller: _alturaController,
                           readOnly: !_isEditing,
                         ),
@@ -258,6 +287,9 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                   ],
 
+                  const SizedBox(height: 24),
+                  _buildGoalsSection(),
+
                   const SizedBox(height: 48),
                   GymUpButton(
                     label: 'SAIR',
@@ -275,6 +307,108 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildGoalsSection() {
+    if (_goalData == null) {
+      // Estado 1: sem meta
+      return GymUpCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.flag_outlined, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Text('Metas', style: AppTypography.h3),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Você ainda não definiu uma meta pessoal.',
+              style: AppTypography.bodyMedium
+                  .copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  final peso   = double.tryParse(_pesoController.text);
+                  final altura = double.tryParse(_alturaController.text);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CreateGoalPage(
+                        initialWeight: peso,
+                        initialHeight: altura, // perfil e meta ambos em cm
+                      ),
+                    ),
+                  ).then((_) => setState(() { _profileFuture = _loadProfile(); }));
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('Definir meta'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Estado 2: com meta
+    final goal       = _goalData!;
+    final nowWeight  = _currentWeight ?? goal.startWeight;
+    final faltam     = (goal.targetWeight - nowWeight).abs();
+
+    return GymUpCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.flag_rounded, color: AppColors.accent),
+              const SizedBox(width: 8),
+              Text('Meta atual', style: AppTypography.h3),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(goal.goalTypeLabel, style: AppTypography.bodyLarge),
+          const SizedBox(height: 4),
+          Text(
+            '${nowWeight.toStringAsFixed(1)} kg → ${goal.targetWeight.toStringAsFixed(1)} kg  '
+            '(faltam ${faltam.toStringAsFixed(1)} kg)',
+            style: AppTypography.bodyMedium
+                .copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.pushNamed(context, '/goals')
+                  .then((_) => setState(() {
+                        _profileFuture = _loadProfile();
+                      })),
+              icon: const Icon(Icons.bar_chart_rounded),
+              label: const Text('Ver progresso'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.accent,
+                side: const BorderSide(color: AppColors.accent),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

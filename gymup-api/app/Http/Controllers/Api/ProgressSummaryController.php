@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\ExerciseWeight;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -11,54 +12,69 @@ class ProgressSummaryController extends Controller
     /**
      * GET /api/me/progress-summary
      *
-     * Retorna resumo agregado de progresso do usuário:
-     * - Evolução média 30 dias (delta_pct, delta_abs)
-     * - Exercício que mais evoluiu
-     * - PR mais recente (maior e1RM global)
+     * Returns aggregated progress summary:
+     * - Average e1RM change over 30 days
+     * - Best improving exercise
+     * - Latest PR (highest e1RM ever)
      */
     public function index(Request $request)
     {
         $userId = $request->user()->id;
 
-        // Query 1: Para cada exercício, calcula e1RM atual (últimos 7d)
-        // e e1RM passado (janela de 7d ao redor de 30 dias atrás).
-        // Usa set_number = 1 como referência padrão.
-        $exercises = DB::select("
-            SELECT
-                ew.exercise_id,
-                e.name AS exercise_name,
-                MAX(CASE
-                    WHEN ew.created_at >= now() - interval '7 days'
-                    THEN ew.weight * (1 + ew.reps / 30.0)
-                END) AS current_e1rm,
-                MAX(CASE
-                    WHEN ew.created_at BETWEEN (now() - interval '33 days')
-                                           AND (now() - interval '27 days')
-                    THEN ew.weight * (1 + ew.reps / 30.0)
-                END) AS past_e1rm
-            FROM exercise_weights ew
-            LEFT JOIN exercises e ON e.id = ew.exercise_id::integer
-            WHERE ew.user_id = ?
-              AND ew.set_number = 1
-              AND ew.created_at >= now() - interval '33 days'
-            GROUP BY ew.exercise_id, e.name
-        ", [$userId]);
+        // Use Eloquent instead of raw SQL to avoid cast issues and SQL injection.
+        // Get all exercise weights from the last 33 days for comparison windows.
+        $recentDate = now()->subDays(33);
 
-        $totalDeltaPct = 0.0;
-        $totalDeltaAbs = 0.0;
+        $weights = ExerciseWeight::where('user_id', $userId)
+            ->where('set_number', 1)
+            ->where('created_at', '>=', $recentDate)
+            ->get(['exercise_id', 'weight', 'reps', 'created_at']);
+
+        $sevenDaysAgo    = now()->subDays(7);
+        $pastWindowStart = now()->subDays(33);
+        $pastWindowEnd   = now()->subDays(27);
+
+        // Group by exercise and calculate current vs past e1RM
+        $byExercise = $weights->groupBy('exercise_id');
+
+        $totalDeltaPct     = 0.0;
+        $totalDeltaAbs     = 0.0;
         $countWithProgress = 0;
-        $bestExercise = null;
-        $bestDeltaPct = null;
+        $bestExercise      = null;
+        $bestDeltaPct      = null;
 
-        foreach ($exercises as $ex) {
-            if ($ex->current_e1rm === null || $ex->past_e1rm === null || (float) $ex->past_e1rm <= 0) {
+        // Get exercise names
+        $exerciseIds = $byExercise->keys()->toArray();
+        $exerciseNames = [];
+        if (!empty($exerciseIds)) {
+            $exerciseNames = DB::table('exercises')
+                ->whereIn('id', $exerciseIds)
+                ->pluck('name', 'id')
+                ->toArray();
+        }
+
+        foreach ($byExercise as $exerciseId => $records) {
+            // Current window: last 7 days
+            $currentE1rm = $records
+                ->filter(fn ($r) => $r->created_at->gte($sevenDaysAgo))
+                ->map(fn ($r) => $r->weight * (1 + $r->reps / 30.0))
+                ->max();
+
+            // Past window: 27-33 days ago
+            $pastE1rm = $records
+                ->filter(fn ($r) =>
+                    $r->created_at->gte($pastWindowStart) &&
+                    $r->created_at->lte($pastWindowEnd)
+                )
+                ->map(fn ($r) => $r->weight * (1 + $r->reps / 30.0))
+                ->max();
+
+            if ($currentE1rm === null || $pastE1rm === null || $pastE1rm <= 0) {
                 continue;
             }
 
-            $current = (float) $ex->current_e1rm;
-            $past = (float) $ex->past_e1rm;
-            $deltaAbs = $current - $past;
-            $deltaPct = ($deltaAbs / $past) * 100;
+            $deltaAbs = $currentE1rm - $pastE1rm;
+            $deltaPct = ($deltaAbs / $pastE1rm) * 100;
 
             $totalDeltaPct += $deltaPct;
             $totalDeltaAbs += $deltaAbs;
@@ -67,45 +83,39 @@ class ProgressSummaryController extends Controller
             if ($bestDeltaPct === null || $deltaPct > $bestDeltaPct) {
                 $bestDeltaPct = $deltaPct;
                 $bestExercise = [
-                    'exercise_id' => $ex->exercise_id,
-                    'name'        => $ex->exercise_name ?? 'Exercício #' . $ex->exercise_id,
+                    'exercise_id' => $exerciseId,
+                    'name'        => $exerciseNames[$exerciseId] ?? 'Exercício #' . $exerciseId,
                     'delta_pct'   => round($deltaPct, 1),
                 ];
             }
         }
 
-        // Query 2: PR global — registro com maior e1RM entre todos os exercícios
-        $pr = DB::selectOne("
-            SELECT
-                ew.exercise_id,
-                e.name AS exercise_name,
-                ew.weight,
-                ew.reps,
-                ew.weight * (1 + ew.reps / 30.0) AS e1rm,
-                ew.created_at
-            FROM exercise_weights ew
-            LEFT JOIN exercises e ON e.id = ew.exercise_id::integer
-            WHERE ew.user_id = ?
-            ORDER BY e1rm DESC, ew.created_at DESC
-            LIMIT 1
-        ", [$userId]);
+        // PR: best e1RM ever across all exercises
+        $prRecord = ExerciseWeight::where('user_id', $userId)
+            ->orderByRaw('(weight * (1 + reps / 30.0)) DESC')
+            ->first(['exercise_id', 'weight', 'reps', 'created_at']);
 
         $latestPr = null;
-        if ($pr && $pr->e1rm) {
+        if ($prRecord) {
             $latestPr = [
-                'exercise_id' => $pr->exercise_id,
-                'name'        => $pr->exercise_name ?? 'Exercício #' . $pr->exercise_id,
-                'weight'      => round((float) $pr->weight, 2),
-                'reps'        => (int) $pr->reps,
+                'exercise_id' => $prRecord->exercise_id,
+                'name'        => $exerciseNames[$prRecord->exercise_id]
+                    ?? 'Exercício #' . $prRecord->exercise_id,
+                'weight'      => round((float) $prRecord->weight, 2),
+                'reps'        => (int) $prRecord->reps,
             ];
         }
 
         return response()->json([
-            'overall_delta_pct'       => $countWithProgress > 0 ? round($totalDeltaPct / $countWithProgress, 1) : null,
-            'overall_delta_abs'       => $countWithProgress > 0 ? round($totalDeltaAbs / $countWithProgress, 1) : null,
+            'overall_delta_pct'       => $countWithProgress > 0
+                ? round($totalDeltaPct / $countWithProgress, 1)
+                : null,
+            'overall_delta_abs'       => $countWithProgress > 0
+                ? round($totalDeltaAbs / $countWithProgress, 1)
+                : null,
             'best_exercise'           => $bestExercise,
-            'latest_pr'              => $latestPr,
-            'exercises_count'         => count($exercises),
+            'latest_pr'               => $latestPr,
+            'exercises_count'         => $byExercise->count(),
             'exercises_with_progress' => $countWithProgress,
         ]);
     }

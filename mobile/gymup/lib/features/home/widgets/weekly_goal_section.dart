@@ -17,7 +17,11 @@ class WeeklyGoalSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool weeklyGoalMet = workoutsDone >= weeklyGoal;
+    final int faltam = weeklyGoalMet ? 0 : weeklyGoal - workoutsDone;
+
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           flex: 3,
@@ -49,12 +53,26 @@ class WeeklyGoalSection extends StatelessWidget {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
-                    value: workoutsDone / weeklyGoal,
+                    value: (workoutsDone / weeklyGoal).clamp(0.0, 1.0),
                     backgroundColor: AppColors.background,
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      AppColors.primary,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      weeklyGoalMet ? AppColors.accent : AppColors.primary,
                     ),
                     minHeight: 6,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  weeklyGoalMet
+                      ? 'Meta da semana concluída!'
+                      : 'Falta${faltam == 1 ? '' : 'm'} $faltam treino${faltam == 1 ? '' : 's'} para manter seu streak',
+                  style: AppTypography.caption.copyWith(
+                    color: weeklyGoalMet
+                        ? AppColors.accent
+                        : AppColors.textSecondary,
+                    fontWeight: weeklyGoalMet
+                        ? FontWeight.w600
+                        : FontWeight.normal,
                   ),
                 ),
               ],
@@ -79,7 +97,10 @@ class WeeklyGoalSection extends StatelessWidget {
                       size: 24,
                     ),
                     const SizedBox(width: 4),
-                    Text('$streak dias', style: AppTypography.h3),
+                    Text(
+                      streak == 1 ? '1 sem.' : '$streak sem.',
+                      style: AppTypography.h3,
+                    ),
                   ],
                 ),
               ],

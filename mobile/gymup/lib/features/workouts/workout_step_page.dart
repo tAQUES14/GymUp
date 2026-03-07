@@ -5,6 +5,7 @@ import '../../../../core/theme/app_typography.dart';
 import 'controllers/workout_execution_controller.dart';
 import 'models/workout_model.dart';
 import 'workout_api_service.dart';
+import 'workout_complete_page.dart';
 
 class WorkoutStepPage extends StatefulWidget {
   final WorkoutModel workout;
@@ -29,6 +30,8 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
   DateTime? _sessionStart;
   bool _pointsGranted = false;
   bool _isFinishing = false;
+  // Guard: prevents double-tap spam after the last set is marked done.
+  bool _isAllDone = false;
 
   // ── Elapsed timer ─────────────────────────────────────────────────────────
   Timer? _elapsedTimer;
@@ -119,7 +122,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            (_session?.isBonusSession ?? false)
+            (_session?.dailyPointsAlreadyGranted ?? false)
                 ? 'Erro ao atualizar progresso.'
                 : 'Erro ao atualizar progresso. Sem isso você não ganha pontos.',
           ),
@@ -191,10 +194,17 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
   int _seriesCount(ExerciseModel exercise) => exercise.sets;
 
   void _markSeriesDone() {
+    // Guard: all exercises done — just re-open the finish dialog (no extra saves).
+    if (_isAllDone) {
+      _onFimPressed();
+      return;
+    }
+
     final exercise = _workout!.exercises[_currentExerciseIndex];
     final totalSeries = _seriesCount(exercise);
-    // Salva o peso da série atual antes de avançar (fire-and-forget)
+    // Salva o peso da série atual antes de avançar (fire-and-forget).
     _saveWeight(_currentSeriesIndex + 1);
+
     if (_currentSeriesIndex < totalSeries - 1) {
       setState(() => _currentSeriesIndex++);
       _syncWeightField();
@@ -207,6 +217,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
     final exercises = _workout!.exercises;
     _completedExercises++;
     // peso já salvo por série em _markSeriesDone
+
     if (_currentExerciseIndex < exercises.length - 1) {
       setState(() {
         _currentExerciseIndex++;
@@ -215,9 +226,12 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
       _syncWeightField();
       _sendProgress(exercises.length); // fire-and-forget
     } else {
-      // All exercises done — send final progress but do NOT navigate
+      // Último exercício concluído — bloqueia re-entrada e pergunta ao usuário.
+      _isAllDone = true;
       await _sendProgress(exercises.length);
-      setState(() {}); // refresh UI
+      if (!mounted) return;
+      setState(() {}); // atualiza dots / progresso
+      _onFimPressed();  // abre o dialog de "Finalizar treino?"
     }
   }
 
@@ -247,7 +261,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
   // ── Finish workout ────────────────────────────────────────────────────────
 
   Future<void> _onFimPressed() async {
-    final bool isBonusSession = _session?.isBonusSession ?? false;
+    final bool isBonusSession = _session?.dailyPointsAlreadyGranted ?? false;
 
     // Bonus session: no points at stake — always a simple confirmation.
     if (isBonusSession) {
@@ -362,12 +376,14 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
     _finishWorkout();
   }
 
-  Future<void> _finishWorkout() async {
+  // BUG 1 fix: parâmetro confirmPartial para tratar o ciclo PARTIAL_CONFIRM.
+  // BUG 2 fix: usa WorkoutFinishResult como fonte de verdade — sem hardcode.
+  Future<void> _finishWorkout({bool confirmPartial = false}) async {
+    if (!mounted) return;
     setState(() => _isFinishing = true);
     _elapsedTimer?.cancel();
     try {
-      // 1. Mandatory progress sync — backend must have the latest value before
-      //    evaluating point eligibility on finish.
+      // 1. Sincroniza progresso com o backend antes da avaliação de pontos.
       final total = _workout!.exercises.length;
       final best = _completedExercises > _currentExerciseIndex
           ? _completedExercises
@@ -375,28 +391,128 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
       final syncProgress = ((best / total) * 100).round().clamp(0, 100);
       await _workoutService.updateProgress(syncProgress);
 
-      // 2. Finish the session.
-      final finishSession = await _workoutService.finishWorkout();
-
-      // 3. Refetch for authoritative state (meets_conditions, points_granted).
-      WorkoutSessionData status = finishSession;
-      try {
-        final refreshed = await _workoutService.getStatus();
-        if (refreshed != null) status = refreshed;
-      } catch (_) {}
+      // 2. Finaliza a sessão — backend é a fonte de verdade.
+      // Usa _sessionStart (vindo do backend) para calcular duração exata no
+      // momento do finish, evitando divergência com o _elapsed cacheado.
+      final durationSeconds = _sessionStart != null
+          ? DateTime.now().difference(_sessionStart!).inSeconds
+          : _elapsed.inSeconds;
+      final finishResult = await _workoutService.finishWorkout(
+        completionPercent: syncProgress,
+        durationSeconds: durationSeconds,
+        confirmPartial: confirmPartial,
+      );
 
       if (!mounted) return;
-      setState(() {
-        _session = status;
-        _pointsGranted = status.pointsGranted;
-      });
+
+      // Treino parcial (70–74%): sessão ainda aberta, aguarda confirmação.
+      if (finishResult.isPartialConfirm) {
+        setState(() => _isFinishing = false);
+        _startElapsedTimer();
+        final confirmed = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => AlertDialog(
+            title: const Text('Treino incompleto'),
+            content: Text(finishResult.message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Confirmar'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed == true && mounted) {
+          await _finishWorkout(confirmPartial: true);
+        }
+        return;
+      }
+
+      // VALID ou INVALID — a sessão já está fechada no backend em ambos os casos.
+      // Para INVALID: treino contado, porém sem pontos (motivo exibido na tela de conclusão).
+
+      // Modal de meta semanal — aparece naturalmente só uma vez/semana,
+      // pois weekly_goal_just_completed só é true quando o count cruza exatamente
+      // a meta pela primeira vez.
+      if (finishResult.weeklyGoalJustCompleted && mounted) {
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => AlertDialog(
+            title: const Text(
+              'Meta semanal concluída!',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+            content: const Text(
+              'Você manteve seu streak.\n'
+              'Continue treinando para aumentar ainda mais.',
+            ),
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Boa!'),
+              ),
+            ],
+          ),
+        );
+        if (!mounted) return;
+      }
+
+      // Feedback de desafio ativo (aparece somente quando o treino conta pontos)
+      final cp = finishResult.challengeProgress;
+      if (cp != null && mounted) {
+        final String challengeMsg = _buildChallengeMessage(cp);
+        await showDialog<void>(
+          context: context,
+          builder: (_) => AlertDialog(
+            content: Text(challengeMsg),
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Boa!'),
+              ),
+            ],
+          ),
+        );
+        if (!mounted) return;
+      }
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => WorkoutCompletePage(
+            workoutNome: widget.workout.name,
+            duracaoMinutos: _elapsed.inMinutes,
+            setsConcluidos: _completedExercises,
+            setsTotais: total,
+            streak: finishResult.streakCurrent,
+            pontosGerados: finishResult.pointsGenerated,
+            totalPontos: finishResult.totalPoints,
+            noPointsReason: finishResult.isInvalid ? finishResult.message : null,
+          ),
+        ),
+        (_) => false,
+      );
     } catch (e) {
       if (!mounted) return;
       if (e.toString().contains('401')) {
         Navigator.of(context).pushReplacementNamed('/login');
         return;
       }
-      // Network / server error — restore state, stay on screen, offer retry.
+      // Erro de rede — restaura estado para o usuário poder tentar novamente.
       setState(() => _isFinishing = false);
       _startElapsedTimer();
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -408,30 +524,29 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
           duration: const Duration(seconds: 6),
           action: SnackBarAction(
             label: 'Tentar novamente',
-            onPressed: _finishWorkout,
+            // Preserva o contexto de confirmPartial caso o erro tenha ocorrido
+            // durante a segunda chamada (após o usuário confirmar parcial).
+            onPressed: () => _finishWorkout(confirmPartial: confirmPartial),
           ),
         ),
       );
-      return;
     }
-    if (mounted) {
-      final bool isBonusSession = _session?.isBonusSession ?? false;
-      final bool pointsGranted = _session?.pointsGranted ?? false;
-      final String message = (!isBonusSession && pointsGranted)
-          ? 'Parabéns! Você ganhou 10 pontos.'
-          : 'Treino finalizado ✅';
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          duration: const Duration(seconds: 4),
-          backgroundColor: (!isBonusSession && pointsGranted)
-              ? AppColors.accent
-              : null,
-        ),
-      );
-      Navigator.of(context).pushReplacementNamed('/home');
+  }
+
+  // ── Challenge progress message ────────────────────────────────────────────
+
+  String _buildChallengeMessage(Map<String, dynamic> cp) {
+    final type = cp['type'] as String?;
+    if (type == 'simple') {
+      final current   = (cp['my_workouts'] as num?)?.toInt() ?? 0;
+      final goal      = (cp['goal_workouts'] as num?)?.toInt() ?? 0;
+      final justDone  = cp['simple_goal_just_completed'] as bool? ?? false;
+      if (justDone) return 'Desafio concluido! $current / $goal treinos';
+      return '+1 treino no desafio\n$current / $goal treinos';
     }
+    final position = (cp['my_position'] as num?)?.toInt();
+    if (position != null) return 'Voce esta em ${position}o lugar no desafio';
+    return 'Progresso registrado no desafio!';
   }
 
   // ── Back button / pop handling ────────────────────────────────────────────
@@ -478,7 +593,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
             ),
           ) ??
           false;
-    } else if (_session?.isBonusSession ?? false) {
+    } else if (_session?.dailyPointsAlreadyGranted ?? false) {
       // Bonus session: no points at stake, simple exit.
       return await showDialog<bool>(
             context: context,
@@ -510,6 +625,45 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
             ),
           ) ??
           false;
+    } else if (_session?.meetsConditions ?? false) {
+      // Critérios atingidos mas treino ainda não finalizado.
+      // Oferece finalizar (garantindo pontos) ou sair sem finalizar.
+      final result = await showDialog<String>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: Text('Treino já validado!', style: AppTypography.h3),
+              content: Text(
+                'Seu treino já atingiu os critérios mínimos. Finalize para garantir seus pontos ou saia sem finalizar.',
+                style: AppTypography.bodyLarge,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'exit'),
+                  child: Text(
+                    'Sair sem finalizar',
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () => Navigator.pop(ctx, 'finish'),
+                  child: const Text('Finalizar treino'),
+                ),
+              ],
+            ),
+          ) ??
+          'cancel';
+
+      if (result == 'finish' && mounted) {
+        _finishWorkout();
+        return false; // _finishWorkout navega para WorkoutCompletePage
+      }
+      return result == 'exit';
     } else {
       return await showDialog<bool>(
             context: context,
@@ -614,11 +768,13 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
             icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white),
             onPressed: _handlePopAttempt,
           ),
-          Text(
-            'Execução',
-            style: AppTypography.h3.copyWith(color: Colors.white),
+          Expanded(
+            child: Text(
+              widget.workout.name,
+              style: AppTypography.h3.copyWith(color: Colors.white),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          const Spacer(),
           const Icon(Icons.timer_outlined, color: Colors.white70, size: 18),
           const SizedBox(width: 4),
           Text(
@@ -647,7 +803,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
           const Icon(Icons.verified_rounded, color: AppColors.accent, size: 16),
           const SizedBox(width: 8),
           Text(
-            'Seus 10 pontos já estão garantidos.',
+            'Seus pontos já estão garantidos.',
             style: AppTypography.caption.copyWith(
               color: AppColors.accent,
               fontWeight: FontWeight.w600,
@@ -665,7 +821,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
     if (_pointsGranted) return _buildPointsBanner();
 
     // Bonus session: another session already granted points today.
-    if (_session!.isBonusSession) {
+    if (_session!.dailyPointsAlreadyGranted) {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),

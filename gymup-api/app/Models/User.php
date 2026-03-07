@@ -21,7 +21,16 @@ class User extends Authenticatable
         'points_balance',
         'height',
         'weight',
-        'birth_date'
+        'birth_date',
+        'weekly_streak',
+        'week_goal_completed',
+        'current_week_start',
+        'current_week_goal',
+    ];
+
+    protected $casts = [
+        'week_goal_completed' => 'boolean',
+        'current_week_start'  => 'date',
     ];
 
     protected $hidden = [
@@ -52,5 +61,10 @@ class User extends Authenticatable
     public function workoutSessions()
     {
         return $this->hasMany(WorkoutSession::class);
+    }
+
+    public function goals()
+    {
+        return $this->hasMany(UserGoal::class);
     }
 }

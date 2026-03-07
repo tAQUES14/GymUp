@@ -3,62 +3,59 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\Checkin;
-use App\Services\PointService;
 use Illuminate\Support\Facades\Auth;
 
 class CheckinController extends Controller
 {
-    // 🔹 Registrar checkin (ganha pontos)
-    public function store(PointService $pointService)
+    /**
+     * POST /api/checkin
+     *
+     * Registers a check-in for the authenticated user.
+     * Check-in alone does NOT generate points — points are only awarded
+     * when a valid workout is completed on the same day.
+     */
+    public function store()
     {
-        $user = Auth::user();
-
+        $user  = Auth::user();
         $today = now()->toDateString();
 
-        // Verifica se já fez checkin hoje
         $already = Checkin::where('user_id', $user->id)
-            ->whereDate('created_at', $today)
+            ->where('checkin_date', $today)
             ->exists();
 
         if ($already) {
             return response()->json([
-                'message' => 'Check-in já realizado hoje.'
-            ], 400);
+                'message' => 'Check-in já realizado hoje.',
+            ], 409);
         }
 
-        // Criar checkin com gym_id e checkin_date preenchidos
         Checkin::create([
-            'user_id'      => $user->id,
-            'gym_id'       => $user->gym_id,
-            'checkin_date' => $today,
+            'user_id'       => $user->id,
+            'gym_id'        => $user->gym_id,
+            'checkin_date'  => $today,
             'checked_in_at' => now(),
         ]);
 
-        // Adiciona 10 pontos via PointService para criar PointTransaction,
-        // garantindo que o ranking por período contabilize check-ins corretamente.
-        $pointService->earnPoints($user, 10, 'Check-in na academia');
-
         return response()->json([
-            'message' => 'Check-in realizado com sucesso',
-            'points_added' => 10
+            'message' => 'Check-in realizado com sucesso. Complete seu treino para ganhar pontos!',
         ]);
     }
 
-    // 🔹 Status do checkin
+    /**
+     * GET /api/checkin/status
+     */
     public function status()
     {
-        $user = Auth::user();
+        $user  = Auth::user();
         $today = now()->toDateString();
 
-        $jaRegistrouHoje = Checkin::where('user_id', $user->id)
-            ->whereDate('created_at', $today)
+        $checkedInToday = Checkin::where('user_id', $user->id)
+            ->where('checkin_date', $today)
             ->exists();
 
         return response()->json([
-            'qr_validado' => true, // depois podemos melhorar
-            'ja_registrou_hoje' => $jaRegistrouHoje
+            'checked_in_today' => $checkedInToday,
         ]);
     }
 }

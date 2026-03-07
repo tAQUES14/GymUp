@@ -27,6 +27,7 @@ class RecentActivity {
 }
 
 class DashboardData {
+  final String name;
   final int pointsBalance;
   final bool hasCompletedToday;
   final bool hasActiveSession;
@@ -34,8 +35,14 @@ class DashboardData {
   final List<bool> weeklyProgress;
   final List<RecentActivity> recentActivities;
   final int streak;
+  final int weeklyGoal;
+  final int remainingWorkoutsThisWeek;
+  final int totalCheckins;
+  final int totalWorkouts;
+  final int totalWorkoutsWithPoints;
 
   const DashboardData({
+    required this.name,
     required this.pointsBalance,
     required this.hasCompletedToday,
     required this.hasActiveSession,
@@ -43,10 +50,18 @@ class DashboardData {
     required this.weeklyProgress,
     required this.recentActivities,
     required this.streak,
+    required this.weeklyGoal,
+    required this.remainingWorkoutsThisWeek,
+    required this.totalCheckins,
+    required this.totalWorkouts,
+    required this.totalWorkoutsWithPoints,
   });
+
+  int get totalWorkoutsWithoutPoints => totalWorkouts - totalWorkoutsWithPoints;
 
   factory DashboardData.fromJson(Map<String, dynamic> json) {
     return DashboardData(
+      name: json['name'] as String? ?? '',
       pointsBalance: (json['points_balance'] as num).toInt(),
       hasCompletedToday: json['has_completed_today'] as bool? ?? false,
       hasActiveSession: json['has_active_session'] as bool? ?? false,
@@ -58,6 +73,13 @@ class DashboardData {
           .map((e) => RecentActivity.fromJson(e as Map<String, dynamic>))
           .toList(),
       streak: (json['streak'] as num?)?.toInt() ?? 0,
+      weeklyGoal: (json['weekly_goal'] as num?)?.toInt() ?? 3,
+      remainingWorkoutsThisWeek:
+          (json['remaining_workouts_this_week'] as num?)?.toInt() ?? 0,
+      totalCheckins: (json['total_checkins'] as num?)?.toInt() ?? 0,
+      totalWorkouts: (json['total_workouts'] as num?)?.toInt() ?? 0,
+      totalWorkoutsWithPoints:
+          (json['total_workouts_with_points'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -76,7 +98,6 @@ class WorkoutSessionData {
   final bool meetsConditions;
   final int minMinutes;
   final int minProgress;
-  final bool isBonusSession;
   final bool dailyPointsAlreadyGranted;
 
   const WorkoutSessionData({
@@ -92,7 +113,6 @@ class WorkoutSessionData {
     required this.meetsConditions,
     required this.minMinutes,
     required this.minProgress,
-    required this.isBonusSession,
     required this.dailyPointsAlreadyGranted,
   });
 
@@ -109,10 +129,66 @@ class WorkoutSessionData {
       canEarnPoints: json['can_earn_points'] as bool? ?? false,
       meetsConditions: json['meets_conditions'] as bool? ?? false,
       minMinutes: (json['min_minutes'] as num?)?.toInt() ?? 10,
-      minProgress: (json['min_progress'] as num?)?.toInt() ?? 70,
-      isBonusSession: json['is_bonus_session'] as bool? ?? false,
+      minProgress: (json['min_progress'] as num?)?.toInt() ?? 75,
       dailyPointsAlreadyGranted:
           json['daily_points_already_granted'] as bool? ?? false,
+    );
+  }
+}
+
+/// Resultado do POST /workout/finish — fonte de verdade para pontos e streak.
+class WorkoutFinishResult {
+  /// VALID | PARTIAL_CONFIRM | INVALID
+  final String status;
+  final String message;
+  final int pointsGenerated;
+  final int streakCurrent;
+  final int totalPoints;
+  final bool checkinValidated;
+
+  /// True quando este treino foi o que completou a meta semanal pela primeira
+  /// vez nesta semana. Usado para exibir o modal comemorativo (uma vez/semana).
+  final bool weeklyGoalJustCompleted;
+
+  final int remainingWorkoutsThisWeek;
+  final WorkoutSessionData session;
+
+  /// Dados do desafio ativo após o treino. Null se não houver desafio.
+  final Map<String, dynamic>? challengeProgress;
+
+  const WorkoutFinishResult({
+    required this.status,
+    required this.message,
+    required this.pointsGenerated,
+    required this.streakCurrent,
+    required this.totalPoints,
+    required this.checkinValidated,
+    required this.weeklyGoalJustCompleted,
+    required this.remainingWorkoutsThisWeek,
+    required this.session,
+    this.challengeProgress,
+  });
+
+  bool get isValid => status == 'VALID';
+  bool get isPartialConfirm => status == 'PARTIAL_CONFIRM';
+  bool get isInvalid => status == 'INVALID';
+
+  factory WorkoutFinishResult.fromJson(Map<String, dynamic> json) {
+    return WorkoutFinishResult(
+      status: json['status'] as String? ?? 'INVALID',
+      message: json['message'] as String? ?? '',
+      pointsGenerated: (json['points_generated'] as num?)?.toInt() ?? 0,
+      streakCurrent: (json['streak_current'] as num?)?.toInt() ?? 0,
+      totalPoints: (json['total_points'] as num?)?.toInt() ?? 0,
+      checkinValidated: json['checkin_validated'] as bool? ?? false,
+      weeklyGoalJustCompleted:
+          json['weekly_goal_just_completed'] as bool? ?? false,
+      remainingWorkoutsThisWeek:
+          (json['remaining_workouts_this_week'] as num?)?.toInt() ?? 0,
+      session: WorkoutSessionData.fromJson(
+        json['session'] as Map<String, dynamic>,
+      ),
+      challengeProgress: json['challenge_progress'] as Map<String, dynamic>?,
     );
   }
 }
@@ -121,9 +197,6 @@ class WorkoutApiService {
   final _api = ApiService();
 
   /// GET /api/custom-workouts
-  ///
-  /// Retorna a lista de treinos do usuário autenticado com seus exercícios.
-  /// Lança [Exception('401')] se não autenticado.
   Future<List<WorkoutModel>> getWorkouts() async {
     final response = await _api.get('/custom-workouts');
 
@@ -141,10 +214,6 @@ class WorkoutApiService {
   }
 
   /// GET /api/dashboard
-  ///
-  /// Retorna os dados consolidados da home: pontos, progresso semanal,
-  /// atividades recentes, e flags de estado (has_active_session, etc.).
-  /// Lança [Exception('401')] se não autenticado.
   Future<DashboardData> getDashboard() async {
     final response = await _api.get('/dashboard');
 
@@ -160,19 +229,12 @@ class WorkoutApiService {
   }
 
   /// POST /api/workout/start
-  ///
-  /// Inicia uma nova sessão de treino ou retorna a sessão ativa existente.
-  /// Nunca lança exceção para sessão duplicada — o backend é idempotente.
-  /// Lança [Exception('401')] se não autenticado.
   Future<WorkoutSessionData> startWorkout() async {
     final response = await _api.post('/workout/start', {});
     return _parseSession(response.statusCode, response.body);
   }
 
   /// GET /api/workout/status
-  ///
-  /// Retorna a sessão mais recente ou null se não houver nenhuma.
-  /// Lança [Exception('401')] se não autenticado.
   Future<WorkoutSessionData?> getStatus() async {
     final response = await _api.get('/workout/status');
 
@@ -191,11 +253,6 @@ class WorkoutApiService {
   }
 
   /// POST /api/workout/progress { progress: 0-100 }
-  ///
-  /// Atualiza o progresso da sessão ativa.
-  /// O backend concede pontos automaticamente quando as condições forem
-  /// atingidas (tempo mínimo + progress >= 70%).
-  /// Lança [Exception('401')] ou [Exception('404')] conforme o backend.
   Future<WorkoutSessionData> updateProgress(int progress) async {
     final response = await _api.post('/workout/progress', {
       'progress': progress,
@@ -205,12 +262,30 @@ class WorkoutApiService {
 
   /// POST /api/workout/finish
   ///
-  /// Finaliza a sessão ativa. Se as condições forem atendidas e os pontos
-  /// ainda não foram concedidos, o backend os concede agora.
-  /// Lança [Exception('401')] ou [Exception('404')] conforme o backend.
-  Future<WorkoutSessionData> finishWorkout() async {
-    final response = await _api.post('/workout/finish', {});
-    return _parseSession(response.statusCode, response.body);
+  /// Envia completion_percent, duration_seconds e confirm_partial.
+  /// Retorna [WorkoutFinishResult] com status, message, points_generated,
+  /// streak_current, total_points — a fonte de verdade.
+  Future<WorkoutFinishResult> finishWorkout({
+    required int completionPercent,
+    required int durationSeconds,
+    bool confirmPartial = false,
+  }) async {
+    final response = await _api.post('/workout/finish', {
+      'completion_percent': completionPercent,
+      'duration_seconds': durationSeconds,
+      'confirm_partial': confirmPartial,
+    });
+
+    if (response.statusCode == 401) throw Exception('401');
+    if (response.statusCode == 404) throw Exception('404');
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(data['message'] ?? 'Erro ao finalizar treino.');
+    }
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return WorkoutFinishResult.fromJson(data);
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -221,8 +296,6 @@ class WorkoutApiService {
     if (statusCode == 401) throw Exception('401');
     if (statusCode == 404) throw Exception('404');
 
-    // 409 is treated as success — backend returns the existing session.
-    // 200 = existing session returned, 201 = new session created.
     if (statusCode != 200 && statusCode != 201 && statusCode != 409) {
       final data = jsonDecode(body) as Map<String, dynamic>;
       throw Exception(data['message'] ?? 'Erro na sessão de treino.');

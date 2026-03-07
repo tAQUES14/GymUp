@@ -7,6 +7,9 @@ import '../../core/theme/app_typography.dart';
 import '../../core/widgets/gymup_app_bar.dart';
 import '../../core/widgets/gymup_card.dart';
 import '../../core/widgets/gymup_loading.dart';
+import '../goals/goal_api_service.dart';
+import '../goals/goal_summary_page.dart';
+import '../goals/create_goal_page.dart';
 
 class ProgressPage extends StatefulWidget {
   const ProgressPage({super.key});
@@ -20,6 +23,7 @@ class _ProgressPageState extends State<ProgressPage> {
 
   Map<String, dynamic>? _dashboard;
   Map<String, dynamic>? _summary;
+  GoalData?             _goalData;
   String? _error;
   bool _loading = true;
 
@@ -36,12 +40,15 @@ class _ProgressPageState extends State<ProgressPage> {
     });
 
     try {
-      final results = await Future.wait([
+      final results = await Future.wait<dynamic>([
         _api.get('/dashboard'),
         _api.get('/me/progress-summary'),
+        GoalApiService().getCurrentGoal().catchError((_) => null),
       ]);
 
-      final dashRes = results[0];
+      // ignore: avoid_dynamic_calls
+      final dashRes    = results[0];
+      // ignore: avoid_dynamic_calls
       final summaryRes = results[1];
 
       if (dashRes.statusCode == 401 || summaryRes.statusCode == 401) {
@@ -52,16 +59,17 @@ class _ProgressPageState extends State<ProgressPage> {
         throw Exception('Erro ao carregar dashboard');
       }
 
-      final dashboard = jsonDecode(dashRes.body) as Map<String, dynamic>;
-      final summary = summaryRes.statusCode == 200
-          ? jsonDecode(summaryRes.body) as Map<String, dynamic>
+      final dashboard = jsonDecode(dashRes.body as String) as Map<String, dynamic>;
+      final summary   = summaryRes.statusCode == 200
+          ? jsonDecode(summaryRes.body as String) as Map<String, dynamic>
           : <String, dynamic>{};
 
       if (!mounted) return;
       setState(() {
         _dashboard = dashboard;
-        _summary = summary;
-        _loading = false;
+        _summary   = summary;
+        _goalData  = results[2] as GoalData?;
+        _loading   = false;
       });
     } catch (e) {
       if (!mounted) return;
@@ -119,10 +127,14 @@ class _ProgressPageState extends State<ProgressPage> {
 
     final int totalPresencas = (data['total_checkins'] as num?)?.toInt() ?? 0;
     final int totalTreinos = (data['total_workouts'] as num?)?.toInt() ?? 0;
+    final int treinosComPontos =
+        (data['total_workouts_with_points'] as num?)?.toInt() ?? 0;
+    final int treinosSemPontos = totalTreinos - treinosComPontos;
 
-    final List<int> weeklyPoints =
-        (data['weekly_points'] as List<dynamic>? ?? [0, 0, 0, 0])
-            .map((e) => (e as num).toInt())
+    // weekly_progress: List<bool> (Mon–Sun) — converte para int para o gráfico.
+    final List<int> weeklyDays =
+        (data['weekly_progress'] as List<dynamic>? ?? List.filled(7, false))
+            .map((e) => (e as bool?) == true ? 1 : 0)
             .toList();
 
     return RefreshIndicator(
@@ -133,11 +145,15 @@ class _ProgressPageState extends State<ProgressPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildSummaryCards(totalPresencas, totalTreinos),
+            _buildSummaryCards(totalPresencas, totalTreinos, treinosComPontos, treinosSemPontos),
             const SizedBox(height: 32),
-            Text('Pontos nas últimas 4 semanas', style: AppTypography.h3),
+            Text('Treinos esta semana', style: AppTypography.h3),
             const SizedBox(height: 16),
-            _buildChart(weeklyPoints),
+            _buildChart(weeklyDays),
+            const SizedBox(height: 32),
+
+            // Meta pessoal
+            _buildGoalProgressCard(weeklyDays),
             const SizedBox(height: 32),
 
             // Evolução 30 dias
@@ -152,7 +168,7 @@ class _ProgressPageState extends State<ProgressPage> {
             _buildBestExerciseCard(summary),
             const SizedBox(height: 32),
 
-            _buildAchievementCard(totalTreinos),
+            _buildAchievementCard(treinosComPontos),
           ],
         ),
       ),
@@ -163,39 +179,96 @@ class _ProgressPageState extends State<ProgressPage> {
   // Summary Cards (existentes)
   // ──────────────────────────────────────────────────────────────────────────
 
-  Widget _buildSummaryCards(int presencas, int treinos) {
-    return Row(
+  Widget _buildSummaryCards(
+    int presencas,
+    int treinos,
+    int treinosComPontos,
+    int treinosSemPontos,
+  ) {
+    return Column(
       children: [
-        Expanded(
-          child: GymUpCard(
-            color: AppColors.primary,
-            child: Column(
-              children: [
-                Text(
-                  '$presencas',
-                  style: AppTypography.h1.copyWith(color: Colors.white),
+        Row(
+          children: [
+            Expanded(
+              child: GymUpCard(
+                color: AppColors.primary,
+                child: Column(
+                  children: [
+                    Text(
+                      '$presencas',
+                      style: AppTypography.h1.copyWith(color: Colors.white),
+                    ),
+                    Text(
+                      'Check-ins',
+                      style: AppTypography.caption.copyWith(
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  'Presenças',
-                  style: AppTypography.caption.copyWith(color: Colors.white70),
-                ),
-              ],
+              ),
             ),
-          ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: GymUpCard(
+                child: Column(
+                  children: [
+                    Text(
+                      '$treinos',
+                      style: AppTypography.h1.copyWith(
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    Text('Treinos totais', style: AppTypography.caption),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: GymUpCard(
-            child: Column(
-              children: [
-                Text(
-                  '$treinos',
-                  style: AppTypography.h1.copyWith(color: AppColors.primary),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: GymUpCard(
+                child: Column(
+                  children: [
+                    Text(
+                      '$treinosComPontos',
+                      style: AppTypography.h2.copyWith(
+                        color: AppColors.accent,
+                      ),
+                    ),
+                    Text(
+                      'Com pontos',
+                      style: AppTypography.caption,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
-                Text('Treinos', style: AppTypography.caption),
-              ],
+              ),
             ),
-          ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: GymUpCard(
+                child: Column(
+                  children: [
+                    Text(
+                      '$treinosSemPontos',
+                      style: AppTypography.h2.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    Text(
+                      'Sem pontos',
+                      style: AppTypography.caption,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -245,7 +318,10 @@ class _ProgressPageState extends State<ProgressPage> {
                   },
                 ),
                 const SizedBox(height: 8),
-                Text('Sem ${index + 1}', style: AppTypography.caption),
+                Text(
+                  const ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'][index % 7],
+                  style: AppTypography.caption,
+                ),
               ],
             );
           }),
@@ -405,6 +481,198 @@ class _ProgressPageState extends State<ProgressPage> {
           ),
         ],
       ),
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Meta pessoal
+  // ──────────────────────────────────────────────────────────────────────────
+
+  Widget _buildGoalProgressCard(List<int> weeklyDays) {
+    // Sem meta definida
+    if (_goalData == null) {
+      return GymUpCard(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.flag_outlined, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Text('Meta Pessoal', style: AppTypography.h3),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Nenhuma meta definida. Defina uma meta para acompanhar seu progresso aqui.',
+              style: AppTypography.bodyMedium
+                  .copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.of(context)
+                    .push(MaterialPageRoute(
+                        builder: (_) => const CreateGoalPage()))
+                    .then((_) => _loadData()),
+                icon: const Icon(Icons.add),
+                label: const Text('Definir meta'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final goal         = _goalData!;
+    final workoutsDone = weeklyDays.where((d) => d == 1).length;
+    final weeklyGoal   = goal.estimatedWorkoutsPerWeek;
+    final progress     = (workoutsDone / weeklyGoal).clamp(0.0, 1.0);
+
+    final deltaKg   = (goal.targetWeight - goal.startWeight).abs();
+    final direction = goal.goalType == 'weight_gain' ? 'ganhar' : 'perder';
+
+    return GestureDetector(
+      onTap: () => Navigator.of(context)
+          .push(MaterialPageRoute(builder: (_) => const GoalSummaryPage()))
+          .then((_) => _loadData()),
+      child: GymUpCard(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Cabeçalho
+            Row(
+              children: [
+                const Icon(Icons.flag_rounded, color: AppColors.accent),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('Meta Pessoal', style: AppTypography.h3),
+                ),
+                Icon(Icons.arrow_forward_ios_rounded,
+                    size: 14, color: AppColors.textSecondary),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              goal.goalType == 'consistency'
+                  ? 'Consistência de treinos'
+                  : '${goal.goalTypeLabel}: $direction ${deltaKg.toStringAsFixed(0)} kg',
+              style: AppTypography.bodyMedium
+                  .copyWith(color: AppColors.textSecondary),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Treinos da semana vs meta
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Treinos esta semana', style: AppTypography.bodyMedium),
+                Text(
+                  '$workoutsDone / $weeklyGoal',
+                  style: AppTypography.bodyMedium.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: workoutsDone >= weeklyGoal
+                        ? AppColors.accent
+                        : AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 8,
+                backgroundColor: AppColors.background,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  workoutsDone >= weeklyGoal
+                      ? AppColors.accent
+                      : AppColors.primary,
+                ),
+              ),
+            ),
+
+            // Pesos (apenas se não for consistency)
+            if (goal.goalType != 'consistency') ...[
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: _goalWeightCol(
+                      'Peso inicial',
+                      '${goal.startWeight.toStringAsFixed(0)} kg',
+                      AppColors.textSecondary,
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward,
+                      color: AppColors.textSecondary, size: 20),
+                  Expanded(
+                    child: _goalWeightCol(
+                      'Peso meta',
+                      '${goal.targetWeight.toStringAsFixed(0)} kg',
+                      AppColors.primary,
+                    ),
+                  ),
+                  Expanded(
+                    child: _goalWeightCol(
+                      'Diferença',
+                      '${deltaKg.toStringAsFixed(0)} kg',
+                      AppColors.accent,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+
+            // Déficit calórico
+            if (goal.estimatedDailyCalorieDeficit != null) ...[
+              const SizedBox(height: 16),
+              Divider(color: AppColors.textSecondary.withAlpha(40)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.local_fire_department,
+                      color: AppColors.warning, size: 18),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${goal.estimatedDailyCalorieDeficit} kcal/dia estimadas',
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.warning,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _goalWeightCol(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+              fontSize: 18, fontWeight: FontWeight.bold, color: color),
+        ),
+        const SizedBox(height: 2),
+        Text(label,
+            style: AppTypography.caption, textAlign: TextAlign.center),
+      ],
     );
   }
 

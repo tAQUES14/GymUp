@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/gymup_loading.dart';
+import '../challenges/challenge_api_service.dart';
+import '../challenges/challenge_details_page.dart';
+import '../goals/goal_api_service.dart';
 import '../workouts/models/workout_model.dart';
 import '../workouts/workout_api_service.dart';
+import 'widgets/active_challenge_card.dart';
 import 'widgets/home_header.dart';
 import 'widgets/points_card.dart';
 import 'widgets/weekly_goal_section.dart';
@@ -19,7 +23,9 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  DashboardData? _dashboardData;
+  DashboardData?  _dashboardData;
+  GoalData?       _goalData;
+  ChallengeData?  _challengeData;
 
   /// Primeiro treino real do usuário. Nunca conterá IDs negativos.
   /// Null enquanto carrega ou se o usuário não tiver treinos cadastrados.
@@ -55,18 +61,22 @@ class _HomePageState extends State<HomePage> {
       final results = await Future.wait<dynamic>([
         api.getDashboard(),
         api.getWorkouts(),
+        GoalApiService().getCurrentGoal().catchError((_) => null),
+        ChallengeApiService().getActiveChallenge().catchError((_) => null),
       ]);
 
       // Só aplica se ainda for a chamada mais recente e o widget estiver montado.
       if (!mounted || seq != _loadSeq) return;
 
-      final data = results[0] as DashboardData;
+      final data     = results[0] as DashboardData;
       final workouts = results[1] as List<WorkoutModel>;
 
       setState(() {
-        _dashboardData = data;
-        _todayWorkout = workouts.isNotEmpty ? workouts.first : null;
-        _isLoading = false;
+        _dashboardData  = data;
+        _todayWorkout   = workouts.isNotEmpty ? workouts.first : null;
+        _goalData       = results[2] as GoalData?;
+        _challengeData  = results[3] as ChallengeData?;
+        _isLoading      = false;
       });
     } catch (e) {
       if (!mounted || seq != _loadSeq) return;
@@ -152,7 +162,7 @@ class _HomePageState extends State<HomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const HomeHeader(nome: 'Aluno', photoUrl: null),
+              HomeHeader(nome: data.name, photoUrl: null),
               const SizedBox(height: 24),
 
               PointsCard(pontos: data.pointsBalance),
@@ -161,14 +171,14 @@ class _HomePageState extends State<HomePage> {
               WeeklyGoalSection(
                 streak: data.streak,
                 workoutsDone: data.weeklyProgress.where((d) => d).length,
-                weeklyGoal: 3,
+                weeklyGoal: data.weeklyGoal,
               ),
               const SizedBox(height: 24),
 
               _CheckInButton(
                 hasCheckedInToday: data.hasCheckedInToday,
                 hasCompletedToday: data.hasCompletedToday,
-                onTap: (data.hasCheckedInToday || data.hasCompletedToday)
+                onTap: data.hasCompletedToday
                     ? null
                     : _handleStartWorkout,
               ),
@@ -192,6 +202,22 @@ class _HomePageState extends State<HomePage> {
               WeeklyProgressBar(weeklyProgress: data.weeklyProgress),
               const SizedBox(height: 24),
 
+              _buildGoalCard(),
+              const SizedBox(height: 24),
+
+              if (_challengeData != null) ...[
+                ActiveChallengeCard(
+                  challenge: _challengeData!,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          ChallengeDetailsPage(challenge: _challengeData!),
+                    ),
+                  ).then((_) => _loadDashboard()),
+                ),
+                const SizedBox(height: 24),
+              ],
+
               RecentActivitiesList(activities: data.recentActivities),
               const SizedBox(height: 24),
 
@@ -199,6 +225,120 @@ class _HomePageState extends State<HomePage> {
               const SizedBox(height: 40),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  // ── Card de Meta ──────────────────────────────────────────────────────────
+
+  Widget _buildGoalCard() {
+    // Sem meta: convite para criar
+    if (_goalData == null) {
+      return GestureDetector(
+        onTap: () => Navigator.pushNamed(context, '/goals/create')
+            .then((_) => _loadDashboard()),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.20),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.flag_rounded, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Defina sua meta',
+                      style: AppTypography.bodyMedium
+                          .copyWith(fontWeight: FontWeight.w700, color: AppColors.primary),
+                    ),
+                    Text(
+                      'Acompanhe sua evolução com uma meta pessoal.',
+                      style: AppTypography.caption
+                          .copyWith(color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 14,
+                color: AppColors.primary.withValues(alpha: 0.6),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Com meta: resumo compacto
+    final goal = _goalData!;
+    final deltaKg = (goal.targetWeight - goal.startWeight).abs();
+
+    return GestureDetector(
+      onTap: () => Navigator.pushNamed(context, '/goals')
+          .then((_) => _loadDashboard()),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.accent.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: AppColors.accent.withValues(alpha: 0.25),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(
+                color: AppColors.accent,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.flag_rounded, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Sua meta: ${goal.goalTypeLabel}',
+                    style: AppTypography.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.accent,
+                    ),
+                  ),
+                  Text(
+                    '${goal.startWeight.toStringAsFixed(1)} → ${goal.targetWeight.toStringAsFixed(1)} kg  (${deltaKg.toStringAsFixed(1)} kg)',
+                    style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 14,
+              color: AppColors.accent.withValues(alpha: 0.7),
+            ),
+          ],
         ),
       ),
     );
@@ -430,19 +570,19 @@ class _CheckInButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool done = hasCheckedInToday || hasCompletedToday;
+    final bool done = hasCompletedToday;
 
     final String title = hasCompletedToday
-        ? 'Treino concluído hoje!'
+        ? 'Treino concluído hoje'
         : hasCheckedInToday
-        ? 'Check-in feito hoje!'
-        : 'Fazer Check-in';
+        ? 'Check-in realizado!'
+        : 'Faça check-in na academia';
 
     final String subtitle = hasCompletedToday
-        ? 'Parabéns! Você completou o treino de hoje.'
+        ? 'Continue treinando para manter seu streak semanal'
         : hasCheckedInToday
-        ? 'Presença de hoje confirmada'
-        : 'Escaneie o QR para iniciar o treino';
+        ? 'Você já pode iniciar seu treino.'
+        : 'para iniciar seu treino';
 
     final Color color = done ? AppColors.accent : AppColors.primary;
 

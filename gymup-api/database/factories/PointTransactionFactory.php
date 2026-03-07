@@ -11,11 +11,13 @@ class PointTransactionFactory extends Factory
     public function definition(): array
     {
         return [
-            'user_id' => User::factory(),
-            'gym_id' => Gym::factory(),
-            'type' => 'earn',
-            'points' => 10,
-            'description' => $this->faker->sentence,
+            'user_id'      => User::factory(),
+            'gym_id'       => Gym::factory(),
+            'type'         => 'earn',
+            'category'     => 'workout',
+            'points'       => 10,
+            'description'  => $this->faker->sentence,
+            'reference_id' => null,
         ];
     }
 }

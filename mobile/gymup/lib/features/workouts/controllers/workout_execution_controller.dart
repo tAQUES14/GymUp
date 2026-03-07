@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../models/workout_model.dart';
 import '../services/exercise_stats_service.dart';
 import '../../services/workout_execution_service.dart';
+import '../workout_api_service.dart';
 
 /// Central state for a workout execution session.
 ///
@@ -215,16 +216,22 @@ class WorkoutExecutionController extends ChangeNotifier {
   // Backend: finish workout
   // ──────────────────────────────────────────────
 
-  Future<Map<String, dynamic>> finishWorkout({
+  final WorkoutApiService _apiService = WorkoutApiService();
+
+  Future<WorkoutFinishResult> finishWorkout({
     required int durationMinutes,
     required int exercisesCompleted,
     required int exercisesTotal,
+    bool confirmPartial = false,
   }) {
-    return _service.finishWorkout(
-      workoutId: workout.id,
-      durationMinutes: durationMinutes,
-      exercisesCompleted: exercisesCompleted,
-      exercisesTotal: exercisesTotal,
+    final completionPercent = exercisesTotal > 0
+        ? ((exercisesCompleted / exercisesTotal) * 100).round()
+        : 0;
+
+    return _apiService.finishWorkout(
+      completionPercent: completionPercent,
+      durationSeconds: durationMinutes * 60,
+      confirmPartial: confirmPartial,
     );
   }
 }

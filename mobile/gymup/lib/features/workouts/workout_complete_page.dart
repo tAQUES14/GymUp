@@ -7,6 +7,9 @@ class WorkoutCompletePage extends StatefulWidget {
   final int setsConcluidos;
   final int setsTotais;
   final int streak;
+  final int pontosGerados;
+  final int totalPontos;
+  final String? noPointsReason;
 
   const WorkoutCompletePage({
     super.key,
@@ -15,6 +18,9 @@ class WorkoutCompletePage extends StatefulWidget {
     required this.setsConcluidos,
     required this.setsTotais,
     required this.streak,
+    required this.pontosGerados,
+    required this.totalPontos,
+    this.noPointsReason,
   });
 
   @override
@@ -55,7 +61,9 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.primary,
+      backgroundColor: widget.noPointsReason != null
+          ? const Color(0xFF455A64)
+          : AppColors.primary,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 28),
@@ -64,30 +72,33 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage>
             children: [
               const Spacer(flex: 2),
 
-              // Troféu animado
-              ScaleTransition(
-                scale: _scaleAnim,
-                child: FadeTransition(
-                  opacity: _fadeAnim,
-                  child: const Icon(
-                    Icons.emoji_events_rounded,
-                    size: 108,
-                    color: Color(0xFFFFD700),
+              // Troféu animado — exibido apenas quando o treino foi validado
+              if (widget.noPointsReason == null) ...[
+                ScaleTransition(
+                  scale: _scaleAnim,
+                  child: FadeTransition(
+                    opacity: _fadeAnim,
+                    child: const Icon(
+                      Icons.emoji_events_rounded,
+                      size: 108,
+                      color: Color(0xFFFFD700),
+                    ),
                   ),
                 ),
-              ),
-
-              const SizedBox(height: 28),
+                const SizedBox(height: 28),
+              ],
 
               // Título e subtítulo
               FadeTransition(
                 opacity: _fadeAnim,
                 child: Column(
                   children: [
-                    const Text(
-                      'Presença registrada!',
+                    Text(
+                      widget.noPointsReason != null
+                          ? 'Treino não validado'
+                          : 'Treino validado!',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 28,
                         fontWeight: FontWeight.w900,
@@ -149,44 +160,103 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage>
 
               const SizedBox(height: 20),
 
-              // +10 pontos destaque
-              FadeTransition(
-                opacity: _fadeAnim,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 28,
-                    vertical: 16,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFD700).withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: const Color(0xFFFFD700).withValues(alpha: 0.45),
+              // Aviso quando pontos não foram contados
+              if (widget.pontosGerados == 0 && widget.noPointsReason != null)
+                FadeTransition(
+                  opacity: _fadeAnim,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.25),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          color: Colors.white.withValues(alpha: 0.75),
+                          size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            widget.noPointsReason!,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.75),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Icon(
-                        Icons.star_rounded,
-                        color: Color(0xFFFFD700),
-                        size: 30,
+                ),
+
+              const SizedBox(height: 8),
+
+              // Pontos gerados (do backend)
+              if (widget.pontosGerados > 0)
+                FadeTransition(
+                  opacity: _fadeAnim,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 28,
+                      vertical: 16,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFD700).withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: const Color(0xFFFFD700).withValues(alpha: 0.45),
                       ),
-                      SizedBox(width: 10),
-                      Text(
-                        '+10 pontos',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.5,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.star_rounded,
+                          color: Color(0xFFFFD700),
+                          size: 30,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 10),
+                        Text(
+                          '+${widget.pontosGerados} pontos',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
+
+              // Total de pontos
+              if (widget.totalPontos > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: FadeTransition(
+                    opacity: _fadeAnim,
+                    child: Text(
+                      'Total: ${widget.totalPontos} pontos',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.7),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
 
               const Spacer(flex: 3),
 

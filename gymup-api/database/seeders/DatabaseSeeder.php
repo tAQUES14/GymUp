@@ -29,5 +29,8 @@ class DatabaseSeeder extends Seeder
         // ── 4. Treino padrão vinculado ao usuário de teste ─────────────────────
         // Deve rodar APÓS a criação do usuário — WorkoutSeeder busca por e-mail.
         $this->call(WorkoutSeeder::class);
+
+        // ── 5. Recompensas de exemplo ────────────────────────────────────────
+        $this->call(RewardSeeder::class);
     }
 }

@@ -13,8 +13,10 @@ class PointTransaction extends Model
         'user_id',
         'gym_id',
         'type',
+        'category',
         'points',
-        'description'
+        'description',
+        'reference_id',
     ];
 
     public function user()

@@ -15,12 +15,13 @@ import 'package:gymup/features/workouts/workout_detail_page.dart';
 import 'package:gymup/features/workouts/workout_step_page.dart';
 import 'package:gymup/features/workouts/workout_generated_page.dart';
 import 'package:gymup/features/workouts/workout_concept_page.dart';
-import 'package:gymup/features/workouts/workout_execution_simple_page.dart';
 import 'package:gymup/features/workouts/workout_execution_exercise_page.dart';
 import 'package:gymup/features/workouts/models/workout_model.dart';
 import 'package:gymup/features/personals/personals_page.dart';
 import 'package:gymup/features/progress/progress_page.dart';
 import 'package:gymup/features/history/history_page.dart';
+import 'package:gymup/features/goals/create_goal_page.dart';
+import 'package:gymup/features/goals/goal_summary_page.dart';
 
 class GymUpApp extends StatelessWidget {
   const GymUpApp({super.key});
@@ -46,6 +47,8 @@ class GymUpApp extends StatelessWidget {
         '/personals': (context) => const PersonalsPage(),
         '/progress': (context) => const ProgressPage(),
         '/history': (context) => const HistoryPage(),
+        '/goals/create': (context) => const CreateGoalPage(),
+        '/goals': (context) => const GoalSummaryPage(),
         '/workout-generated': (context) => const WorkoutGeneratedPage(),
         '/workout-concept': (context) => const WorkoutConceptPage(),
       },
@@ -62,14 +65,6 @@ class GymUpApp extends StatelessWidget {
           final workout = settings.arguments as WorkoutModel;
           return MaterialPageRoute(
             builder: (_) => WorkoutStepPage(workout: workout),
-          );
-        }
-
-        if (settings.name == '/workout-execution') {
-          final workout = settings.arguments as WorkoutModel;
-          return MaterialPageRoute(
-            builder: (_) =>
-                WorkoutExecutionSimplePage(workout: workout),
           );
         }
 

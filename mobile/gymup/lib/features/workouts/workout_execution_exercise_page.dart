@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import 'controllers/workout_execution_controller.dart';
 import 'models/workout_model.dart';
+import 'workout_api_service.dart';
 import 'workout_complete_page.dart';
 
 
@@ -59,6 +60,17 @@ class _WorkoutExecutionExercisePageState
     _weightController = TextEditingController();
     _weightFocusNode = FocusNode();
     _startWorkoutTimer();
+
+    // Sincroniza o timer com o elapsed real da sessão ativa no backend.
+    // Isso corrige divergências quando o usuário chega nesta página com uma
+    // sessão já em andamento (e.g. retomada após sair do app).
+    WorkoutApiService().getStatus().then((session) {
+      if (session != null && mounted && session.elapsedSeconds > 0) {
+        _elapsedTime.value = Duration(seconds: session.elapsedSeconds);
+      }
+    }).catchError((_) {
+      // Falha silenciosa — timer local continua funcionando normalmente.
+    });
 
     // Exibe SnackBar vermelho sempre que um save de carga falhar no backend.
     _ctrl.addListener(_onControllerSaveError);
@@ -228,7 +240,7 @@ class _WorkoutExecutionExercisePageState
   // Finalizar treino
   // ─────────────────────────────────────────────────────────────────────────
 
-  Future<void> _finishWorkout() async {
+  Future<void> _finishWorkout({bool confirmPartial = false}) async {
     final durationMinutes = _elapsedTime.value.inMinutes;
     final completedExercises = _ctrl.completedExercisesCount;
     final totalExercises = _totalExercises;
@@ -238,11 +250,47 @@ class _WorkoutExecutionExercisePageState
         durationMinutes: durationMinutes,
         exercisesCompleted: completedExercises,
         exercisesTotal: totalExercises,
+        confirmPartial: confirmPartial,
       );
 
-      final streak = result['streak'] ?? 1;
       if (!mounted) return;
 
+      if (result.isPartialConfirm) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => AlertDialog(
+            title: const Text('Treino incompleto'),
+            content: Text(result.message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Confirmar'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed == true) {
+          await _finishWorkout(confirmPartial: true);
+        }
+        return;
+      }
+
+      if (result.isInvalid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.message),
+            backgroundColor: Colors.red[700],
+          ),
+        );
+        return;
+      }
+
+      // VALID — navega para tela de conclusão com dados do backend
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
@@ -251,7 +299,9 @@ class _WorkoutExecutionExercisePageState
             duracaoMinutos: durationMinutes,
             setsConcluidos: completedExercises,
             setsTotais: totalExercises,
-            streak: streak,
+            streak: result.streakCurrent,
+            pontosGerados: result.pointsGenerated,
+            totalPontos: result.totalPoints,
           ),
         ),
         (_) => false,

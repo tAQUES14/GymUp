@@ -18,6 +18,8 @@ class AuthController extends Controller
             'email'    => 'required|email|unique:users,email',
             'password' => 'required|min:6',
             'gym_id'   => 'nullable|exists:gyms,id',
+            'weight'   => 'nullable|numeric|min:30|max:300',
+            'height'   => 'nullable|numeric|min:100|max:250',
         ]);
 
         // Usa a gym informada ou garante que a gym padrão existe.
