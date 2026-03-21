@@ -12,7 +12,7 @@ class RewardController extends Controller
     {
         $rewards = Reward::where('gym_id', $request->user()->gym_id)
             ->where('active', true)
-            ->get(['id', 'name', 'description', 'points_cost', 'stock']);
+            ->get(['id', 'name', 'description', 'points_cost', 'stock', 'image_url', 'category']);
 
         return response()->json($rewards);
     }

@@ -34,7 +34,7 @@ class AuthController extends Controller
             'email'    => $request->email,
             'password' => Hash::make($request->password),
             'gym_id'   => $gymId,
-            'role'     => 'student',
+            'role'     => 'user',
         ]);
 
         $token = $user->createToken('auth_token')->plainTextToken;

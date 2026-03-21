@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Checkin;
 use App\Models\PointTransaction;
+use App\Models\UserTrainingSchedule;
 use App\Models\WorkoutSession;
 use App\Services\StreakService;
 use Carbon\Carbon;
@@ -39,6 +40,12 @@ class DashboardController extends Controller
         // ── Streak semanal (inclui rotação de semana e snapshot de meta) ─────
         $streakState = $streakService->getStreakState($user);
 
+        // ── Agenda de treino do usuário ────────────────────────────────────
+        $trainingDays = UserTrainingSchedule::where('user_id', $userId)
+            ->orderBy('day_of_week')
+            ->pluck('day_of_week')
+            ->toArray();
+
         // ── Workout-based fields ─────────────────────────────────────────────
         // Use finished_at for consistency with StreakService — the workout
         // counts for the day it was completed, not the day it was started.
@@ -60,6 +67,8 @@ class DashboardController extends Controller
             'weekly_progress'      => $this->getWeeklyProgress($userId),
             'recent_activities'    => $this->getRecentActivities($userId),
             'streak'                        => $streakState['streak'],
+            'best_streak'                   => $streakState['best_streak'],
+            'training_days'                 => $trainingDays,
             'remaining_workouts_this_week'  => $streakState['remaining_workouts_this_week'],
             'weekly_goal'                   => $streakState['weekly_goal'],
             'total_checkins'              => $totalCheckins,

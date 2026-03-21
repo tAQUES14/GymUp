@@ -4,6 +4,8 @@ class Reward {
   final String description;
   final int pointsCost;
   final int? stock;
+  final String? imageUrl;
+  final String? category;
 
   const Reward({
     required this.id,
@@ -11,15 +13,19 @@ class Reward {
     required this.description,
     required this.pointsCost,
     this.stock,
+    this.imageUrl,
+    this.category,
   });
 
   factory Reward.fromJson(Map<String, dynamic> json) {
     return Reward(
-      id: json['id'] as int,
-      name: json['name'] as String? ?? '',
+      id:          json['id'] as int,
+      name:        json['name'] as String? ?? '',
       description: json['description'] as String? ?? '',
-      pointsCost: (json['points_cost'] as num?)?.toInt() ?? 0,
-      stock: json['stock'] != null ? (json['stock'] as num).toInt() : null,
+      pointsCost:  (json['points_cost'] as num?)?.toInt() ?? 0,
+      stock:       json['stock'] != null ? (json['stock'] as num).toInt() : null,
+      imageUrl:    json['image_url'] as String?,
+      category:    json['category'] as String?,
     );
   }
 }

@@ -34,6 +34,13 @@ class ExerciseModel {
   final int id;
   final String name;
   final String muscleGroup;
+  final String? gifUrl;
+  final String? description;
+  final String? primaryMuscle;
+  final List<String> secondaryMuscles;
+  final List<String> executionSteps;
+  final List<String> commonMistakes;
+  final List<String> tips;
   final int defaultRest;
   final int sets;
   final int reps;
@@ -42,17 +49,28 @@ class ExerciseModel {
   List<WorkoutSet> workoutSets;
 
   /// True once the user has completed all sets of this exercise.
-  /// Marked one-way: once true it stays true regardless of later unchecks,
-  /// so revisiting an exercise does not inflate the progress counter.
   bool isCompleted;
 
-  /// Convenience: checks whether every set in workoutSets is marked done.
   bool get allSetsCompleted => workoutSets.every((s) => s.isCompleted);
+
+  bool get hasEducationalContent =>
+      executionSteps.isNotEmpty ||
+      commonMistakes.isNotEmpty ||
+      primaryMuscle != null ||
+      (description != null && description!.isNotEmpty) ||
+      gifUrl != null;
 
   ExerciseModel({
     required this.id,
     required this.name,
     required this.muscleGroup,
+    this.gifUrl,
+    this.description,
+    this.primaryMuscle,
+    this.secondaryMuscles = const [],
+    this.executionSteps = const [],
+    this.commonMistakes = const [],
+    this.tips = const [],
     required this.defaultRest,
     required this.sets,
     required this.reps,
@@ -71,6 +89,8 @@ class ExerciseModel {
       'id': id,
       'name': name,
       'muscle_group': muscleGroup,
+      'gif_url': gifUrl,
+      'description': description,
       'default_rest': defaultRest,
       'sets': sets,
       'reps': reps,
@@ -101,10 +121,23 @@ class ExerciseModel {
       );
     }
 
+    List<String> strList(dynamic v) {
+      if (v == null) return const [];
+      if (v is List) return v.map((e) => e.toString()).toList();
+      return const [];
+    }
+
     return ExerciseModel(
       id: map['id'] as int,
       name: map['name'] ?? '',
       muscleGroup: map['muscle_group'] ?? '',
+      gifUrl: map['gif_url'] as String?,
+      description: map['description'] as String?,
+      primaryMuscle: map['primary_muscle'] as String?,
+      secondaryMuscles: strList(map['secondary_muscles']),
+      executionSteps: strList(map['execution_steps']),
+      commonMistakes: strList(map['common_mistakes']),
+      tips: strList(map['tips']),
       defaultRest: (map['default_rest'] ?? 60) as int,
       sets: setsCount,
       reps: repsCount,
@@ -124,6 +157,7 @@ class WorkoutModel {
   final String? level;
   final List<ExerciseModel> exercises;
   final bool isGenerated;
+  final int betweenExerciseRestSeconds;
 
   WorkoutModel({
     required this.id,
@@ -133,6 +167,7 @@ class WorkoutModel {
     this.level,
     required this.exercises,
     this.isGenerated = false,
+    this.betweenExerciseRestSeconds = 180,
   });
 
   Map<String, dynamic> toMap() {
@@ -144,6 +179,7 @@ class WorkoutModel {
       'level': level,
       'exercises': exercises.map((x) => x.toMap()).toList(),
       'is_generated': isGenerated,
+      'between_exercise_rest_seconds': betweenExerciseRestSeconds,
     };
   }
 
@@ -160,6 +196,7 @@ class WorkoutModel {
         ),
       ),
       isGenerated: map['is_generated'] ?? false,
+      betweenExerciseRestSeconds: (map['between_exercise_rest_seconds'] as num?)?.toInt() ?? 180,
     );
   }
 }

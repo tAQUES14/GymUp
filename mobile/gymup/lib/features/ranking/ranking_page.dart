@@ -2,32 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
-import '../../core/widgets/gymup_app_bar.dart';
-import '../../core/widgets/gymup_card.dart';
 import '../../core/widgets/gymup_loading.dart';
 import 'ranking_api_service.dart';
 import 'ranking_periodo.dart';
 
+const _kBlue     = Color(0xFF2563EB);
+const _kBlueDark = Color(0xFF1D4ED8);
+const _kGold     = Color(0xFFF59E0B);
+const _kSilver   = Color(0xFF94A3B8);
+const _kBronze   = Color(0xFFCD7F32);
+
 class RankingPage extends StatefulWidget {
   const RankingPage({super.key});
-
   @override
   State<RankingPage> createState() => _RankingPageState();
 }
 
 class _RankingPageState extends State<RankingPage> {
   final _service = RankingApiService();
-
   RankingPeriodo _periodo = RankingPeriodo.semanal;
-
   List<RankingItem> _ranking = [];
   int? _currentUserId;
   bool _isLoading = false;
   String? _error;
-
-  /// Referência ao fetch em andamento. Mais robusto que flag booleana:
-  /// garante que NENHUM code-path (initState, pull-to-refresh, chip)
-  /// consiga disparar um segundo request enquanto outro está em voo.
   Future<void>? _activeFetch;
 
   @override
@@ -38,13 +35,9 @@ class _RankingPageState extends State<RankingPage> {
     });
   }
 
-  // ── Carrega o ranking do período atual ─────────────────────────────────────
   Future<void> _carregarRanking() async {
     if (_activeFetch != null) return;
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+    setState(() { _isLoading = true; _error = null; });
     try {
       _activeFetch = _executarFetch();
       await _activeFetch;
@@ -53,74 +46,59 @@ class _RankingPageState extends State<RankingPage> {
     }
   }
 
-  // ── Troca o período e inicia EXATAMENTE 1 request ─────────────────────────
   void _trocarPeriodo(RankingPeriodo novo) {
     if (_periodo == novo || _activeFetch != null) return;
-    setState(() {
-      _periodo = novo;
-      _isLoading = true;
-      _error = null;
-    });
+    setState(() { _periodo = novo; _isLoading = true; _error = null; });
     _activeFetch = _executarFetch();
     _activeFetch!.whenComplete(() => _activeFetch = null);
   }
 
-  // ── Parte assíncrona pura: não chama setState no início ───────────────────
   Future<void> _executarFetch() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       _currentUserId = prefs.getInt('user_id');
-
       final items = await _service.getRanking(period: _periodo.param);
-
       if (mounted) {
-        setState(() {
-          _ranking = items;
-          _isLoading = false;
-        });
+        setState(() { _ranking = items; _isLoading = false; });
       }
     } on Exception catch (e) {
       final msg = e.toString().replaceFirst('Exception: ', '');
-
       if (msg == '401' && mounted) {
         Navigator.pushReplacementNamed(context, '/login');
         return;
       }
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Erro ao carregar ranking: $msg')),
         );
-        setState(() {
-          _error = msg;
-          _isLoading = false;
-        });
+        setState(() { _error = msg; _isLoading = false; });
       }
-    }
-  }
-
-  Color _getMedalColor(int index) {
-    switch (index) {
-      case 0:
-        return const Color(0xFFFFD700);
-      case 1:
-        return const Color(0xFFC0C0C0);
-      case 2:
-        return const Color(0xFFCD7F32);
-      default:
-        return AppColors.primaryLight;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const GymUpAppBar(title: 'Ranking'),
       backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: _kBlue,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        titleSpacing: 20,
+        title: Text(
+          'Ranking',
+          style: AppTypography.h3.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.3,
+          ),
+        ),
+      ),
       body: RefreshIndicator(
         onRefresh: _carregarRanking,
-        color: AppColors.primary,
+        color: _kBlue,
         child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverToBoxAdapter(
               child: Padding(
@@ -128,9 +106,9 @@ class _RankingPageState extends State<RankingPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _buildDesafioCard(),
+                    _buildHeroBanner(),
                     const SizedBox(height: 16),
-                    _buildPeriodoChips(),
+                    _buildPeriodSelector(),
                     const SizedBox(height: 16),
                   ],
                 ),
@@ -142,11 +120,46 @@ class _RankingPageState extends State<RankingPage> {
             else if (_error != null)
               SliverFillRemaining(
                 child: Center(
-                  child: Text(
-                    'Erro ao carregar ranking.\n$_error',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.bodyLarge.copyWith(
-                      color: AppColors.error,
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 64, height: 64,
+                          decoration: BoxDecoration(
+                            color: AppColors.error.withValues(alpha: 0.08),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(Icons.wifi_off_rounded,
+                              color: AppColors.error, size: 28),
+                        ),
+                        const SizedBox(height: 16),
+                        Text('Erro ao carregar',
+                            style: AppTypography.bodyLarge
+                                .copyWith(fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 8),
+                        Text(_error!,
+                            textAlign: TextAlign.center,
+                            style: AppTypography.bodyMedium
+                                .copyWith(color: AppColors.textSecondary)),
+                        const SizedBox(height: 20),
+                        GestureDetector(
+                          onTap: _carregarRanking,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 24, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: _kBlue,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Text('Tentar novamente',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -157,130 +170,113 @@ class _RankingPageState extends State<RankingPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.emoji_events_outlined,
-                        size: 64,
-                        color: AppColors.textSecondary.withValues(alpha: 0.4),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Nenhuma presença registrada\nneste período.',
-                        textAlign: TextAlign.center,
-                        style: AppTypography.bodyLarge.copyWith(
-                          color: AppColors.textSecondary,
+                      Container(
+                        width: 72, height: 72,
+                        decoration: BoxDecoration(
+                          color: _kBlue.withValues(alpha: 0.07),
+                          shape: BoxShape.circle,
                         ),
+                        child: Icon(Icons.emoji_events_outlined,
+                            size: 32,
+                            color: _kBlue.withValues(alpha: 0.5)),
                       ),
+                      const SizedBox(height: 16),
+                      Text('Sem dados neste período',
+                          style: AppTypography.bodyLarge
+                              .copyWith(fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 6),
+                      Text('Faça check-ins para aparecer no ranking!',
+                          style: AppTypography.bodyMedium
+                              .copyWith(color: AppColors.textSecondary)),
                     ],
                   ),
                 ),
               )
-            else
+            else ...[
+              if (_ranking.length >= 2)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: _Podium(
+                      top3: _ranking.take(3).toList(),
+                      currentUserId: _currentUserId,
+                    ),
+                  ),
+                ),
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                 sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate((context, index) {
-                    final item = _ranking[index];
-                    final isCurrentUser = item.userId == _currentUserId;
-
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: GymUpCard(
-                        color: isCurrentUser
-                            ? AppColors.primary.withValues(alpha: 0.1)
-                            : AppColors.surface,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final offset = _ranking.length >= 2 ? 3 : 0;
+                      final item = _ranking[offset + index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _RankingListItem(
+                          item: item,
+                          isMe: item.userId == _currentUserId,
                         ),
-                        child: Row(
-                          children: [
-                            CircleAvatar(
-                              backgroundColor: _getMedalColor(index),
-                              foregroundColor: Colors.white,
-                              child: Text(
-                                '#${item.position}',
-                                style: AppTypography.h3.copyWith(
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    item.name,
-                                    style: AppTypography.bodyLarge.copyWith(
-                                      fontWeight: isCurrentUser
-                                          ? FontWeight.bold
-                                          : FontWeight.normal,
-                                    ),
-                                  ),
-                                  if (isCurrentUser)
-                                    Text(
-                                      'Você',
-                                      style: AppTypography.caption.copyWith(
-                                        color: AppColors.primary,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            Text(
-                              '${item.points} pts',
-                              style: AppTypography.h3.copyWith(
-                                color: AppColors.accent,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }, childCount: _ranking.length),
+                      );
+                    },
+                    childCount: _ranking.length >= 2
+                        ? (_ranking.length - 3).clamp(0, _ranking.length)
+                        : _ranking.length,
+                  ),
                 ),
               ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildDesafioCard() {
+  Widget _buildHeroBanner() {
     return Container(
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.primaryDark],
+          colors: [_kBlue, _kBlueDark],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.35),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: _kBlue.withValues(alpha: 0.28),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(20),
       child: Row(
         children: [
-          const Icon(Icons.emoji_events, color: Colors.amber, size: 40),
+          Container(
+            width: 52, height: 52,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.emoji_events_rounded,
+                color: Colors.amber, size: 28),
+          ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Desafio Atual',
-                  style: AppTypography.h3.copyWith(color: Colors.white),
+                  'Competição ${_periodo.label}',
+                  style: AppTypography.bodyLarge.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
-                  'Quem tiver mais pontos no período\nselecionado vence o desafio.',
+                  'Acumule pontos com check-ins e treinos.',
                   style: AppTypography.caption.copyWith(
-                    color: Colors.white.withValues(alpha: 0.85),
+                    color: Colors.white.withValues(alpha: 0.80),
                   ),
                 ),
               ],
@@ -291,42 +287,303 @@ class _RankingPageState extends State<RankingPage> {
     );
   }
 
-  Widget _buildPeriodoChips() {
-    return Row(
-      children: RankingPeriodo.values.map((periodo) {
-        final isSelected = _periodo == periodo;
-        return Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: ChoiceChip(
-              label: Center(
+  Widget _buildPeriodSelector() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: RankingPeriodo.values.map((periodo) {
+          final isSelected = _periodo == periodo;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => _trocarPeriodo(periodo),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: isSelected ? _kBlue : Colors.transparent,
+                  borderRadius: BorderRadius.circular(9),
+                  boxShadow: isSelected
+                      ? [BoxShadow(
+                          color: _kBlue.withValues(alpha: 0.20),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        )]
+                      : null,
+                ),
                 child: Text(
                   periodo.label,
-                  style: AppTypography.caption.copyWith(
-                    color: isSelected ? Colors.white : AppColors.textSecondary,
-                    fontWeight: isSelected
-                        ? FontWeight.bold
-                        : FontWeight.normal,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : const Color(0xFF64748B),
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    fontSize: 13,
                   ),
                 ),
               ),
-              selected: isSelected,
-              // _trocarPeriodo ignora o bool do ChoiceChip e usa o enum diretamente,
-              // garantindo exatamente 1 setState + 1 request por interação.
-              onSelected: (_) => _trocarPeriodo(periodo),
-              selectedColor: AppColors.primary,
-              backgroundColor: AppColors.surface,
-              side: BorderSide(
-                color: isSelected
-                    ? AppColors.primary
-                    : AppColors.textSecondary.withValues(alpha: 0.3),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+// ── Pódio top 3 ───────────────────────────────────────────────────────────────
+
+class _Podium extends StatelessWidget {
+  final List<RankingItem> top3;
+  final int? currentUserId;
+  const _Podium({required this.top3, this.currentUserId});
+
+  @override
+  Widget build(BuildContext context) {
+    final first  = top3[0];
+    final second = top3.length > 1 ? top3[1] : null;
+    final third  = top3.length > 2 ? top3[2] : null;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: second != null
+              ? _PodiumSlot(
+                  item: second,
+                  color: _kSilver,
+                  podiumHeight: 72,
+                  avatarSize: 44,
+                  isMe: second.userId == currentUserId,
+                )
+              : const SizedBox(),
+        ),
+        Expanded(
+          child: _PodiumSlot(
+            item: first,
+            color: _kGold,
+            podiumHeight: 100,
+            avatarSize: 52,
+            isMe: first.userId == currentUserId,
+            showCrown: true,
+          ),
+        ),
+        Expanded(
+          child: third != null
+              ? _PodiumSlot(
+                  item: third,
+                  color: _kBronze,
+                  podiumHeight: 52,
+                  avatarSize: 40,
+                  isMe: third.userId == currentUserId,
+                )
+              : const SizedBox(),
+        ),
+      ],
+    );
+  }
+}
+
+class _PodiumSlot extends StatelessWidget {
+  final RankingItem item;
+  final Color color;
+  final double podiumHeight;
+  final double avatarSize;
+  final bool isMe;
+  final bool showCrown;
+
+  const _PodiumSlot({
+    required this.item,
+    required this.color,
+    required this.podiumHeight,
+    required this.avatarSize,
+    required this.isMe,
+    this.showCrown = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final initial   = item.name.isNotEmpty ? item.name[0].toUpperCase() : '?';
+    final firstName = item.name.split(' ').first;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (showCrown)
+          const Text('👑', style: TextStyle(fontSize: 18))
+        else
+          const SizedBox(height: 24),
+        Container(
+          width: avatarSize,
+          height: avatarSize,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: isMe
+                ? Border.all(color: _kBlue, width: 2.5)
+                : Border.all(
+                    color: color.withValues(alpha: 0.35), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.35),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
-              showCheckmark: false,
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            ],
+          ),
+          child: Center(
+            child: Text(
+              initial,
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: avatarSize * 0.40,
+              ),
             ),
           ),
-        );
-      }).toList(),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          firstName,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isMe ? FontWeight.w700 : FontWeight.w600,
+            color: isMe ? _kBlue : const Color(0xFF1E293B),
+          ),
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          '${item.points} pts',
+          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: podiumHeight,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.10),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(10),
+              topRight: Radius.circular(10),
+            ),
+            border: Border(
+              top: BorderSide(color: color, width: 2),
+              left: BorderSide(color: color.withValues(alpha: 0.25)),
+              right: BorderSide(color: color.withValues(alpha: 0.25)),
+            ),
+          ),
+          child: Center(
+            child: Text(
+              '#${item.position}',
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w800,
+                fontSize: 20,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Item de lista (4º em diante) ─────────────────────────────────────────────
+
+class _RankingListItem extends StatelessWidget {
+  final RankingItem item;
+  final bool isMe;
+  const _RankingListItem({required this.item, required this.isMe});
+
+  @override
+  Widget build(BuildContext context) {
+    final initial = item.name.isNotEmpty ? item.name[0].toUpperCase() : '?';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: isMe ? _kBlue.withValues(alpha: 0.06) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isMe
+              ? _kBlue.withValues(alpha: 0.25)
+              : const Color(0xFFF1F5F9),
+        ),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 32,
+            child: Text(
+              '#${item.position}',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: isMe ? _kBlue : const Color(0xFF94A3B8),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(
+              color: isMe ? _kBlue : const Color(0xFFE2E8F0),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                initial,
+                style: TextStyle(
+                  color: isMe ? Colors.white : const Color(0xFF64748B),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.name,
+                  style: TextStyle(
+                    fontWeight: isMe ? FontWeight.w700 : FontWeight.w500,
+                    fontSize: 14,
+                    color: isMe ? _kBlue : const Color(0xFF1E293B),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (isMe)
+                  const Text('Você',
+                      style: TextStyle(fontSize: 11, color: _kBlue)),
+              ],
+            ),
+          ),
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: _kGold.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              '${item.points} pts',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: _kGold,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

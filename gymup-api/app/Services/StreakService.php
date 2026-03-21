@@ -14,11 +14,16 @@ class StreakService
     // ──────────────────────────────────────────────────────────────────────────
 
     /**
-     * Read-only streak state. Triggers week rotation if needed.
-     * Called from DashboardController.
+     * Read-only streak state. Uses lazy evaluation to detect missed training days.
+     *
+     * If the user has a training schedule, checks all days since last_workout_date
+     * for missed training days and resets the streak if any are found.
+     *
+     * Also maintains weekly progress data (for the weekly progress bar UI).
      *
      * @return array{
      *   streak: int,
+     *   best_streak: int,
      *   remaining_workouts_this_week: int,
      *   workouts_done_this_week: int,
      *   weekly_goal: int,
@@ -27,21 +32,25 @@ class StreakService
      */
     public function getStreakState(User $user): array
     {
+        $user->refresh();
+
+        // Lazily detect missed training days and break streak if needed
+        if ($this->hasTrainingSchedule($user)) {
+            $this->checkAndBreakStreakIfNeeded($user, now()->toDateString());
+            $user->refresh();
+        }
+
+        // Weekly rotation for weekly progress display
         $this->refreshWeekIfNeeded($user);
         $user->refresh();
 
-        // Lazy-heal: the goal may have been reached without processWorkoutForWeeklyStreak
-        // being called (e.g. workouts completed before the weekly streak system was deployed,
-        // or a race condition where the session was already finished). If the training-day
-        // count already meets the weekly goal but the flag was never set, fix it now so the
-        // streak is never stuck at 0 after the goal is met.
+        // Lazy-heal: fix week_goal_completed if workouts already meet goal
         if (! $user->week_goal_completed) {
             $effectiveGoal = (int) ($user->current_week_goal ?? $this->getUserWeeklyGoal($user->id));
             $daysThisWeek  = $this->countTrainingDaysThisWeek($user);
 
             if ($daysThisWeek >= $effectiveGoal) {
                 $user->week_goal_completed = true;
-                $user->weekly_streak       = ((int) ($user->weekly_streak ?? 0)) + 1;
                 $user->save();
                 $user->refresh();
             }
@@ -53,66 +62,165 @@ class StreakService
     /**
      * Called after a valid workout is granted points.
      *
-     * Checks if the weekly goal was just met for the first time this week.
-     * If yes:
-     *   - Sets week_goal_completed = true
-     *   - Increments weekly_streak immediately
-     *   - Returns weekly_goal_just_completed = true
+     * Daily streak logic:
+     *   - If user has a training schedule AND today is a training day:
+     *       * Break streak if any training days were missed since last_workout_date
+     *       * Increment current_streak
+     *       * Update best_streak
+     *       * Idempotent: only counts once per day
+     *   - If user has no training schedule: streak is not modified
      *
-     * The streak increment is idempotent within the same week because
-     * week_goal_completed prevents double-counting.
+     * Also handles weekly goal tracking (for bonus points and UI display).
      *
      * @return array{
      *   streak: int,
+     *   best_streak: int,
      *   remaining_workouts_this_week: int,
      *   workouts_done_this_week: int,
      *   weekly_goal: int,
      *   week_goal_completed: bool,
+     *   streak_just_increased: bool,
      *   weekly_goal_just_completed: bool
      * }
      */
-    public function processWorkoutForWeeklyStreak(User $user): array
+    public function processWorkoutForDailyStreak(User $user): array
     {
+        $user->refresh();
+        $today = now()->toDateString();
+        $streakJustIncreased = false;
+
+        if ($this->hasTrainingSchedule($user)) {
+            $todayIsTrainingDay = $this->isTrainingDay($user, now()->dayOfWeek);
+
+            $lastWorkoutDateStr = $user->last_workout_date instanceof \Carbon\Carbon
+                ? $user->last_workout_date->toDateString()
+                : (string) ($user->last_workout_date ?? '');
+
+            if ($todayIsTrainingDay && $lastWorkoutDateStr !== $today) {
+                // Detect and apply any streak breaks from missed days
+                $this->checkAndBreakStreakIfNeeded($user, $today);
+                $user->refresh();
+
+                $newStreak = ((int) $user->current_streak) + 1;
+
+                $user->current_streak    = $newStreak;
+                $user->best_streak       = max($newStreak, (int) $user->best_streak);
+                $user->last_workout_date = $today;
+                $user->save();
+                $user->refresh();
+
+                $streakJustIncreased = true;
+            }
+        }
+
+        // Weekly tracking for progress display and bonus trigger
         $this->refreshWeekIfNeeded($user);
         $user->refresh();
 
-        $justCompleted = false;
+        $weeklyJustCompleted = false;
 
-        // Only check if goal not yet completed this week
         if (! $user->week_goal_completed) {
             $effectiveGoal = (int) ($user->current_week_goal ?? $this->getUserWeeklyGoal($user->id));
             $daysThisWeek  = $this->countTrainingDaysThisWeek($user);
 
             if ($daysThisWeek >= $effectiveGoal) {
                 $user->week_goal_completed = true;
-                $user->weekly_streak       = ((int) ($user->weekly_streak ?? 0)) + 1;
                 $user->save();
                 $user->refresh();
-                $justCompleted = true;
+                $weeklyJustCompleted = true;
             }
         }
 
         return array_merge(
             $this->buildState($user),
-            ['weekly_goal_just_completed' => $justCompleted]
+            [
+                'streak_just_increased'      => $streakJustIncreased,
+                'weekly_goal_just_completed' => $weeklyJustCompleted,
+            ]
         );
     }
 
+    /**
+     * Backward-compatible alias used by WorkoutController.
+     * Delegates to processWorkoutForDailyStreak.
+     */
+    public function processWorkoutForWeeklyStreak(User $user): array
+    {
+        return $this->processWorkoutForDailyStreak($user);
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
-    // Week rotation (lazy — triggered on any request)
+    // Daily streak core logic
     // ──────────────────────────────────────────────────────────────────────────
 
     /**
-     * Detects if the calendar week has changed since last tracking.
+     * Scans every day between last_workout_date (exclusive) and $upToDate (exclusive).
+     * If any of those days is a training day with no completed workout,
+     * resets current_streak to 0 immediately and returns.
      *
-     * Rules:
-     *   - First call ever: initialize week fields, do not alter streak.
-     *   - New week detected AND week_goal_completed == false:
-     *       previous week ended without meeting the goal → streak resets to 0.
-     *   - New week detected AND week_goal_completed == true:
-     *       previous week was successful → preserve current streak value.
-     *   - Resets week_goal_completed and updates current_week_start / current_week_goal.
+     * If last_schedule_change is set and is AFTER last_workout_date + 1 day,
+     * only checks from last_schedule_change forward. This prevents a schedule
+     * change from retroactively breaking a streak for days before the change.
+     */
+    private function checkAndBreakStreakIfNeeded(User $user, string $upToDate): void
+    {
+        if (! $user->last_workout_date) {
+            return; // No history yet — nothing to break
+        }
+
+        $lastDate  = Carbon::parse($user->last_workout_date);
+        $upTo      = Carbon::parse($upToDate);
+        $startFrom = $lastDate->copy()->addDay();
+
+        // Do not reinterpret days before the schedule was last changed
+        if ($user->last_schedule_change) {
+            $scheduleChange = Carbon::parse($user->last_schedule_change);
+            if ($scheduleChange->gt($startFrom)) {
+                $startFrom = $scheduleChange->copy();
+            }
+        }
+
+        $current = $startFrom->copy();
+
+        while ($current->lt($upTo)) {
+            if ($this->isTrainingDay($user, $current->dayOfWeek)) {
+                $done = WorkoutSession::where('user_id', $user->id)
+                    ->whereDate('finished_at', $current->toDateString())
+                    ->where('points_granted', true)
+                    ->exists();
+
+                if (! $done) {
+                    $user->current_streak = 0;
+                    $user->save();
+                    return;
+                }
+            }
+
+            $current->addDay();
+        }
+    }
+
+    private function isTrainingDay(User $user, int $dayOfWeek): bool
+    {
+        return $user->trainingSchedules()
+            ->where('day_of_week', $dayOfWeek)
+            ->exists();
+    }
+
+    private function hasTrainingSchedule(User $user): bool
+    {
+        return $user->trainingSchedules()->exists();
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Weekly rotation (for weekly progress display only)
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Resets week_goal_completed and refreshes current_week_start / current_week_goal
+     * when a new calendar week has started (Monday-based).
      *
+     * Does NOT modify the daily streak or weekly_streak anymore.
      * Idempotent: no-op if the current week hasn't changed.
      */
     private function refreshWeekIfNeeded(User $user): void
@@ -131,18 +239,11 @@ class StreakService
             ? $user->current_week_start->toDateString()
             : (string) $user->current_week_start;
 
-        // Nothing to do — still in the same week
         if ($storedStart >= $thisWeekStart) {
-            return;
+            return; // Still the same week
         }
 
-        // A new week has started
-        if (! $user->week_goal_completed) {
-            // Previous week ended without meeting the goal → break streak
-            $user->weekly_streak = 0;
-        }
-
-        // Reset for the new week (snapshot the current goal at week start)
+        // New week started — reset weekly display tracking
         $user->week_goal_completed = false;
         $user->current_week_start  = $thisWeekStart;
         $user->current_week_goal   = $this->getUserWeeklyGoal($user->id);
@@ -160,7 +261,8 @@ class StreakService
         $remaining     = max(0, $effectiveGoal - $daysThisWeek);
 
         return [
-            'streak'                       => (int) ($user->weekly_streak ?? 0),
+            'streak'                       => (int) ($user->current_streak ?? 0),
+            'best_streak'                  => (int) ($user->best_streak ?? 0),
             'remaining_workouts_this_week' => $remaining,
             'workouts_done_this_week'      => $daysThisWeek,
             'weekly_goal'                  => $effectiveGoal,

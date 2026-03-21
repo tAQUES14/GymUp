@@ -13,7 +13,7 @@ return new class extends Migration
 {
     Schema::table('users', function (Blueprint $table) {
         $table->foreignId('gym_id')->nullable()->constrained()->onDelete('cascade');
-        $table->enum('role', ['admin', 'student'])->default('student');
+        $table->string('role', 20)->default('user');
         $table->integer('points_balance')->default(0);
         $table->decimal('height', 5, 2)->nullable();
         $table->decimal('weight', 5, 2)->nullable();

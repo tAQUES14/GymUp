@@ -45,7 +45,8 @@ admin/node_modules/
 admin/.env
 admin/dist/
 
-.claude/
+.docs/
+claude/
 GYMUP_DOMAIN.md
 GYMUP_TESTS_REQUIRED.md
 Docs

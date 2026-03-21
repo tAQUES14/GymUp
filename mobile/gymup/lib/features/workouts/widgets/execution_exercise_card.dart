@@ -4,6 +4,7 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/gymup_card.dart';
 import '../exercise_history_page.dart';
 import '../models/workout_model.dart';
+import 'exercise_image_widget.dart';
 import 'sets_table.dart';
 
 class ExecutionExerciseCard extends StatefulWidget {
@@ -49,18 +50,7 @@ class _ExecutionExerciseCardState extends State<ExecutionExerciseCard> {
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[800],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.fitness_center,
-                      color: Colors.white54,
-                    ),
-                  ),
+                  ExerciseImageWidget(exercise: widget.exercise, size: 60),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(

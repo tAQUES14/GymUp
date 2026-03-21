@@ -19,10 +19,68 @@ class AdminChallengeController extends Controller
     public function index(Request $request)
     {
         $challenges = GymChallenge::where('gym_id', $request->user()->gym_id)
+            ->withCount('participants')
             ->orderByDesc('starts_at')
             ->get();
 
         return response()->json(['challenges' => $challenges]);
+    }
+
+    /**
+     * GET /api/admin/challenges/{id}
+     *
+     * Retorna detalhes de um desafio com participantes.
+     */
+    public function show(Request $request, int $id)
+    {
+        $challenge = GymChallenge::where('id', $id)
+            ->where('gym_id', $request->user()->gym_id)
+            ->withCount('participants')
+            ->firstOrFail();
+
+        $participants = $challenge->participants()
+            ->with('user:id,name,email')
+            ->orderByDesc('total_challenge_points')
+            ->orderByDesc('workouts_this_challenge')
+            ->get()
+            ->map(fn($p) => [
+                'id'                     => $p->id,
+                'user_id'                => $p->user_id,
+                'name'                   => $p->user->name ?? '—',
+                'email'                  => $p->user->email ?? '—',
+                'total_challenge_points' => $p->total_challenge_points,
+                'workouts_this_challenge'=> $p->workouts_this_challenge,
+                'goal_completed'         => $p->goal_completed,
+                'goal_completed_at'      => $p->goal_completed_at?->toDateString(),
+                'reward_granted'         => $p->reward_granted,
+            ]);
+
+        return response()->json([
+            'challenge'    => $challenge,
+            'participants' => $participants,
+        ]);
+    }
+
+    /**
+     * DELETE /api/admin/challenges/{id}
+     *
+     * Remove um desafio (somente se ainda não iniciado).
+     */
+    public function destroy(Request $request, int $id)
+    {
+        $challenge = GymChallenge::where('id', $id)
+            ->where('gym_id', $request->user()->gym_id)
+            ->firstOrFail();
+
+        if ($challenge->starts_at->isPast()) {
+            return response()->json([
+                'message' => 'Não é possível excluir um desafio que já foi iniciado.',
+            ], 422);
+        }
+
+        $challenge->delete();
+
+        return response()->json(['message' => 'Desafio excluído com sucesso.']);
     }
 
     /**

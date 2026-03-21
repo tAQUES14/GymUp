@@ -3,19 +3,18 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../workouts/workout_api_service.dart';
 
-String _formatarTempoRelativo(DateTime date) {
-  final agora = DateTime.now();
-  final hoje = DateTime(agora.year, agora.month, agora.day);
+String _relativeTime(DateTime date) {
+  final today = DateTime.now();
+  final d     = DateTime(today.year, today.month, today.day);
   final local = date.toLocal();
-  final diaEvento = DateTime(local.year, local.month, local.day);
-  final diferenca = hoje.difference(diaEvento).inDays;
+  final event = DateTime(local.year, local.month, local.day);
+  final diff  = d.difference(event).inDays;
 
-  if (diferenca <= 0) return 'Hoje';
-  if (diferenca == 1) return 'Ontem';
-  return 'Há $diferenca dias';
+  if (diff <= 0) return 'Hoje';
+  if (diff == 1) return 'Ontem';
+  return 'Há $diff dias';
 }
 
-/// Exibe as últimas atividades de treino com dados vindos da API REST.
 class RecentActivitiesList extends StatelessWidget {
   final List<RecentActivity> activities;
 
@@ -23,83 +22,141 @@ class RecentActivitiesList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Últimas atividades', style: AppTypography.h3),
-        const SizedBox(height: 16),
-        if (activities.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Row(
+    if (activities.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.inbox_rounded, color: Colors.grey.shade400, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.inbox_outlined,
-                  color: AppColors.textSecondary.withValues(alpha: 0.5),
-                  size: 20,
+                Text(
+                  'Nenhuma atividade ainda',
+                  style: AppTypography.bodyMedium.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
-                const SizedBox(width: 8),
-                Text('Nenhuma atividade ainda.', style: AppTypography.caption),
+                Text(
+                  'Seus treinos aparecerão aqui.',
+                  style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                ),
               ],
             ),
-          )
-        else
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: activities.length,
-            itemBuilder: (context, index) {
-              final activity = activities[index];
-              final tempoRelativo = _formatarTempoRelativo(activity.date);
+          ],
+        ),
+      );
+    }
 
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.accent.withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.fitness_center_rounded,
-                        color: AppColors.accent,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Treino realizado',
-                            style: AppTypography.bodyLarge.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          Text(tempoRelativo, style: AppTypography.caption),
-                        ],
-                      ),
-                    ),
-                    Text(
-                      activity.points > 0
-                          ? '+${activity.points} pts'
-                          : 'Sem pontos',
-                      style: AppTypography.bodyMedium.copyWith(
-                        color: activity.points > 0
-                            ? AppColors.accent
-                            : AppColors.textSecondary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
           ),
-      ],
+        ],
+      ),
+      child: ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: activities.length,
+        separatorBuilder: (_, _) => Divider(
+          height: 1,
+          indent: 68,
+          color: Colors.grey.shade100,
+        ),
+        itemBuilder: (_, i) => _ActivityItem(activity: activities[i]),
+      ),
+    );
+  }
+}
+
+class _ActivityItem extends StatelessWidget {
+  final RecentActivity activity;
+
+  const _ActivityItem({required this.activity});
+
+  @override
+  Widget build(BuildContext context) {
+    final tempoRelativo = _relativeTime(activity.date);
+    final temPontos     = activity.points > 0;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          // Ícone
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.accent.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.fitness_center_rounded,
+              color: AppColors.accent,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 14),
+          // Texto
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Treino concluído',
+                  style: AppTypography.bodyMedium.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  tempoRelativo,
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Pontos
+          Text(
+            temPontos ? '+${activity.points} pts' : 'Sem pontos',
+            style: AppTypography.caption.copyWith(
+              fontWeight: FontWeight.w700,
+              color: temPontos ? AppColors.accent : AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

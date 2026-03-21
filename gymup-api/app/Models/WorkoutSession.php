@@ -17,6 +17,9 @@ class WorkoutSession extends Model
         'progress',
         'points_granted',
         'points_granted_at',
+        'is_valid',
+        'counts_for_points',
+        'counts_for_streak',
     ];
 
     protected $casts = [
@@ -25,6 +28,9 @@ class WorkoutSession extends Model
         'points_granted_at' => 'datetime',
         'points_granted'    => 'boolean',
         'progress'          => 'integer',
+        'is_valid'          => 'boolean',
+        'counts_for_points' => 'boolean',
+        'counts_for_streak' => 'boolean',
     ];
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -41,6 +47,11 @@ class WorkoutSession extends Model
         return $this->belongsTo(Gym::class);
     }
 
+    public function workoutSets()
+    {
+        return $this->hasMany(WorkoutSet::class, 'workout_session_id');
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // Domain helpers
     // ──────────────────────────────────────────────────────────────────────────
@@ -51,20 +62,39 @@ class WorkoutSession extends Model
         return $this->finished_at === null;
     }
 
-    /** Elapsed time in minutes since the session started (uses testable now()). */
+    /**
+     * Elapsed time in minutes for this session.
+     *
+     * Rules:
+     *   - No started_at → 0
+     *   - Finished session → finished_at - started_at
+     *   - Active session   → now() - started_at
+     *   - Negative result  → 0 (clock skew guard)
+     */
     public function elapsedMinutes(): float
     {
-        return $this->started_at->diffInMinutes(now());
+        if (!$this->started_at) {
+            return 0;
+        }
+
+        $endpoint = $this->finished_at ?? now();
+        $minutes  = $this->started_at->diffInMinutes($endpoint);
+
+        return max(0, $minutes);
     }
 
     /**
-     * Returns true when BOTH conditions required to earn points are met:
+     * Returns true when ALL conditions required to earn points are met:
      *   - elapsed time >= config('workout.min_minutes')
-     *   - progress    >= config('workout.min_progress_valid')
+     *   - elapsed time <= config('workout.max_minutes', 360)  [stale session guard]
+     *   - progress     >= config('workout.min_progress_valid')
      */
     public function meetsPointsConditions(): bool
     {
-        return $this->elapsedMinutes() >= config('workout.min_minutes')
+        $elapsed = $this->elapsedMinutes();
+
+        return $elapsed >= config('workout.min_minutes')
+            && $elapsed <= config('workout.max_minutes', 360)
             && $this->progress >= config('workout.min_progress_valid', 75);
     }
 

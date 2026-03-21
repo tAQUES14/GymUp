@@ -100,6 +100,54 @@ class AuthApiService {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
+  /// Solicita o envio do link de recuperação de senha.
+  /// Sempre retorna sem erro quando o servidor processa (200).
+  Future<void> forgotPassword({required String email}) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/forgot-password'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: jsonEncode({'email': email}),
+    );
+
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(data['message'] ?? 'Erro ao processar solicitação');
+    }
+  }
+
+  /// Redefine a senha com o token recebido por e-mail.
+  Future<void> resetPassword({
+    required String token,
+    required String email,
+    required String password,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/reset-password'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: jsonEncode({
+        'token':                 token,
+        'email':                 email,
+        'password':              password,
+        'password_confirmation': password,
+      }),
+    );
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+    if (response.statusCode == 422) {
+      throw Exception(data['message'] ?? 'Token inválido ou expirado.');
+    }
+    if (response.statusCode != 200) {
+      throw Exception(data['message'] ?? 'Erro ao redefinir senha');
+    }
+  }
+
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('auth_token');

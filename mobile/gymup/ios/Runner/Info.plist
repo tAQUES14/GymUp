@@ -45,5 +45,20 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- URL Scheme: gymup://reset-password?token=...&email=... (fallback / dev) -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>gymup</string>
+			</array>
+		</dict>
+	</array>
+	<!-- Universal Links: declare FlutterDeepLinkingEnabled so app_links is notified -->
+	<key>FlutterDeepLinkingEnabled</key>
+	<true/>
 </dict>
 </plist>

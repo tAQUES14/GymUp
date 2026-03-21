@@ -3,11 +3,12 @@ import 'package:flutter/services.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
-import '../../core/widgets/gymup_app_bar.dart';
-import '../../core/widgets/gymup_card.dart';
 import '../../core/widgets/gymup_loading.dart';
 import 'goal_api_service.dart';
 import 'create_goal_page.dart';
+
+const _kBlue     = Color(0xFF2563EB);
+const _kBlueDark = Color(0xFF1D4ED8);
 
 class GoalSummaryPage extends StatefulWidget {
   /// Dados da meta. Se [isPendingSave] for true, ainda não foi persistida.
@@ -25,11 +26,11 @@ class GoalSummaryPage extends StatefulWidget {
 class _GoalSummaryPageState extends State<GoalSummaryPage> {
   final _service = GoalApiService();
 
-  GoalData?        _goal;
+  GoalData?           _goal;
   List<BodyWeightLog> _weightHistory = [];
-  bool      _loading = true;
-  bool      _saving  = false;
-  String?   _error;
+  bool    _loading = true;
+  bool    _saving  = false;
+  String? _error;
 
   @override
   void initState() {
@@ -47,7 +48,6 @@ class _GoalSummaryPageState extends State<GoalSummaryPage> {
     try {
       final results = await Future.wait([
         _service.getCurrentGoal(),
-        // histórico de peso é não-crítico: falha silenciosa com lista vazia
         _service.getBodyWeightHistory(limit: 12)
             .catchError((_) => <BodyWeightLog>[]),
       ]);
@@ -91,8 +91,24 @@ class _GoalSummaryPageState extends State<GoalSummaryPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const GymUpAppBar(title: 'Minha Meta'),
       backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: _kBlue,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          'Minha Meta',
+          style: AppTypography.h3.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.3,
+          ),
+        ),
+        titleSpacing: 0,
+      ),
       body: _buildBody(),
     );
   }
@@ -100,6 +116,7 @@ class _GoalSummaryPageState extends State<GoalSummaryPage> {
   Widget _buildBody() {
     if (_loading) return const GymUpLoading();
 
+    // ── Estado de erro ─────────────────────────────────────────────────────
     if (_error != null && _goal == null) {
       return Center(
         child: Padding(
@@ -107,17 +124,36 @@ class _GoalSummaryPageState extends State<GoalSummaryPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.error_outline, size: 48, color: AppColors.error),
-              const SizedBox(height: 16),
-              Text(_error!, style: AppTypography.bodyMedium, textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: _loadGoal,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Tentar novamente'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.wifi_off_rounded, size: 34, color: Colors.grey.shade400),
+              ),
+              const SizedBox(height: 20),
+              Text('Sem conexão', style: AppTypography.h3),
+              const SizedBox(height: 8),
+              Text(
+                _error!,
+                style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _loadGoal,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text('Tentar novamente'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _kBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
                 ),
               ),
             ],
@@ -126,6 +162,7 @@ class _GoalSummaryPageState extends State<GoalSummaryPage> {
       );
     }
 
+    // ── Estado vazio ───────────────────────────────────────────────────────
     if (_goal == null) {
       return Center(
         child: Padding(
@@ -133,27 +170,42 @@ class _GoalSummaryPageState extends State<GoalSummaryPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.flag_outlined, size: 64, color: AppColors.textSecondary),
-              const SizedBox(height: 16),
-              Text('Nenhuma meta definida ainda.',
-                  style: AppTypography.h3, textAlign: TextAlign.center),
-              const SizedBox(height: 8),
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: _kBlue.withValues(alpha: 0.07),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.flag_rounded, size: 38, color: _kBlue),
+              ),
+              const SizedBox(height: 20),
               Text(
-                'Defina uma meta para acompanhar sua evolução motivacional.',
-                style: AppTypography.bodyMedium
-                    .copyWith(color: AppColors.textSecondary),
+                'Nenhuma meta definida',
+                style: AppTypography.h3.copyWith(fontWeight: FontWeight.w700),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const CreateGoalPage()),
-                ),
-                icon: const Icon(Icons.add),
-                label: const Text('Definir Meta'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
+              const SizedBox(height: 8),
+              Text(
+                'Defina uma meta para acompanhar\nsua evolução motivacional.',
+                style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 28),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const CreateGoalPage()),
+                  ),
+                  icon: const Icon(Icons.add_rounded, size: 20),
+                  label: const Text('Definir Meta'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _kBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
                 ),
               ),
             ],
@@ -166,120 +218,169 @@ class _GoalSummaryPageState extends State<GoalSummaryPage> {
 
     return RefreshIndicator(
       onRefresh: _loadGoal,
+      color: _kBlue,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildGoalHeader(goal),
-            const SizedBox(height: 20),
-            _buildWeightProgressCard(goal),
-            const SizedBox(height: 16),
-            if (goal.estimatedDailyCalorieDeficit != null) ...[
-              _buildCalorieCard(goal),
-              const SizedBox(height: 16),
-            ],
-            _buildWorkoutsCard(goal),
-            const SizedBox(height: 16),
-            _buildDetailsCard(goal),
-            const SizedBox(height: 16),
-            _buildDisclaimer(),
-            const SizedBox(height: 24),
 
-            // Erro ao salvar
-            if (_error != null) ...[
-              Text(
-                _error!,
-                style: TextStyle(color: AppColors.error),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-            ],
+            // ── Hero ──────────────────────────────────────────────────────
+            _buildHero(goal),
 
-            // Botão principal: Salvar (preview) ou Redefinir (já salva)
-            if (widget.isPendingSave)
-              ElevatedButton(
-                onPressed: _saving ? null : _saveGoal,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+
+                  // ── Progresso de peso ────────────────────────────────
+                  _buildWeightCard(goal),
+
+                  const SizedBox(height: 14),
+
+                  // ── Estimativas (calorias + treinos) ─────────────────
+                  Row(
+                    children: [
+                      if (goal.estimatedDailyCalorieDeficit != null)
+                        Expanded(child: _buildCalorieCard(goal)),
+                      if (goal.estimatedDailyCalorieDeficit != null)
+                        const SizedBox(width: 12),
+                      Expanded(child: _buildWorkoutsCard(goal)),
+                    ],
                   ),
-                ),
-                child: _saving
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2),
-                      )
-                    : const Text('Salvar meta'),
-              )
-            else
-              OutlinedButton.icon(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => CreateGoalPage(
-                      initialWeight: _weightHistory.isNotEmpty
-                          ? _weightHistory.first.weight
-                          : _goal?.startWeight,
-                      initialHeight: _goal?.height,
+
+                  const SizedBox(height: 14),
+
+                  // ── Dados informados ─────────────────────────────────
+                  _buildDetailsCard(goal),
+
+                  const SizedBox(height: 14),
+
+                  // ── Disclaimer ────────────────────────────────────────
+                  _buildDisclaimer(),
+
+                  const SizedBox(height: 28),
+
+                  // ── Erro ao salvar ────────────────────────────────────
+                  if (_error != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.error.withValues(alpha: 0.20)),
+                      ),
+                      child: Text(
+                        _error!,
+                        style: TextStyle(color: AppColors.error, fontSize: 13),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
-                  ),
-                ),
-                icon: const Icon(Icons.edit_outlined),
-                label: const Text('Redefinir Meta'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  side: BorderSide(color: AppColors.primary),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
+                    const SizedBox(height: 14),
+                  ],
+
+                  // ── CTA ───────────────────────────────────────────────
+                  if (widget.isPendingSave)
+                    _buildSaveButton()
+                  else
+                    _buildRedefineButton(goal),
+                ],
               ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildGoalHeader(GoalData goal) {
+  // ── Hero com gradiente azul ────────────────────────────────────────────────
+
+  Widget _buildHero(GoalData goal) {
     return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
+      width: double.infinity,
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppColors.primary, AppColors.primary.withAlpha(200)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
+          colors: [_kBlue, _kBlueDark],
         ),
-        borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.flag, color: Colors.white, size: 36),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          // Tipo de meta
+          Row(
             children: [
-              Text(goal.goalTypeLabel,
-                  style: AppTypography.h2.copyWith(color: Colors.white)),
-              Text(
-                '${goal.targetMonths} ${goal.targetMonths == 1 ? 'mês' : 'meses'} de prazo',
-                style: AppTypography.bodyMedium.copyWith(color: Colors.white70),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.flag_rounded, color: Colors.white, size: 24),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      goal.goalTypeLabel,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        height: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${goal.targetMonths} ${goal.targetMonths == 1 ? 'mês' : 'meses'} de prazo',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.80),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               if (widget.isPendingSave)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.30)),
+                  ),
                   child: Text(
-                    'Prévia — ainda não salva',
-                    style: AppTypography.caption
-                        .copyWith(color: Colors.white60),
+                    'Prévia',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.90),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // Stats de peso
+          Row(
+            children: [
+              _heroStat('${goal.startWeight.toStringAsFixed(1)} kg', 'Início'),
+              _heroDivider(),
+              _heroStat('${goal.targetWeight.toStringAsFixed(1)} kg', 'Meta'),
+              _heroDivider(),
+              _heroStat(
+                '${(goal.targetWeight - goal.startWeight).abs().toStringAsFixed(1)} kg',
+                goal.goalType == 'weight_loss' ? 'A perder' : 'A ganhar',
+              ),
             ],
           ),
         ],
@@ -287,63 +388,137 @@ class _GoalSummaryPageState extends State<GoalSummaryPage> {
     );
   }
 
-  Widget _buildWeightProgressCard(GoalData goal) {
+  Widget _heroStat(String value, String label) => Expanded(
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                height: 1.0,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.70),
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+
+  Widget _heroDivider() => Container(
+        width: 1,
+        height: 32,
+        color: Colors.white.withValues(alpha: 0.20),
+      );
+
+  // ── Card de progresso de peso ──────────────────────────────────────────────
+
+  Widget _buildWeightCard(GoalData goal) {
     final currentWeight = _weightHistory.isNotEmpty
         ? _weightHistory.first.weight
         : goal.startWeight;
 
     final totalDelta = (goal.targetWeight - goal.startWeight).abs();
     final doneDelta  = (currentWeight - goal.startWeight).abs();
-    // progresso: 0.0 = início, 1.0 = meta atingida
-    final progress = totalDelta > 0
+    final progress   = totalDelta > 0
         ? (doneDelta / totalDelta).clamp(0.0, 1.0)
         : 1.0;
 
-    // sentido: perda → current deve ser <= start; ganho → current >= start
-    final isLoss = goal.goalType == 'weight_loss';
-    final isOnTrack = isLoss
+    final isLoss     = goal.goalType == 'weight_loss';
+    final isOnTrack  = isLoss
         ? currentWeight <= goal.startWeight
         : currentWeight >= goal.startWeight;
 
     final progressColor = progress >= 1.0
-        ? AppColors.accent
-        : (isOnTrack ? AppColors.primary : AppColors.warning);
+        ? const Color(0xFF10B981)
+        : (isOnTrack ? _kBlue : AppColors.warning);
 
-    return GymUpCard(
-      padding: const EdgeInsets.all(20),
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Evolução de Peso', style: AppTypography.bodyLarge),
+              Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: _kBlue.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.monitor_weight_rounded, color: _kBlue, size: 17),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Evolução de Peso',
+                    style: AppTypography.bodyLarge.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
               if (!widget.isPendingSave)
-                TextButton.icon(
-                  onPressed: () => _showRegisterWeightDialog(goal),
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Registrar'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                GestureDetector(
+                  onTap: () => _showRegisterWeightDialog(goal),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: _kBlue.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.add_rounded, size: 14, color: _kBlue),
+                        const SizedBox(width: 3),
+                        Text(
+                          'Registrar',
+                          style: AppTypography.caption.copyWith(
+                            color: _kBlue,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 16),
+
+          const SizedBox(height: 18),
 
           // Três colunas: Inicial | Atual | Meta
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _weightCol('Inicial', '${goal.startWeight.toStringAsFixed(1)} kg',
-                  AppColors.textSecondary),
-              _weightCol('Atual', '${currentWeight.toStringAsFixed(1)} kg',
-                  AppColors.textPrimary),
-              _weightCol('Meta', '${goal.targetWeight.toStringAsFixed(1)} kg',
-                  AppColors.primary),
+              _weightCol('Início', goal.startWeight, const Color(0xFF94A3B8)),
+              _weightDivider(),
+              _weightCol('Atual', currentWeight, const Color(0xFF0F172A)),
+              _weightDivider(),
+              _weightCol('Meta', goal.targetWeight, _kBlue),
             ],
           ),
+
           const SizedBox(height: 16),
 
           // Barra de progresso
@@ -352,37 +527,51 @@ class _GoalSummaryPageState extends State<GoalSummaryPage> {
             child: LinearProgressIndicator(
               value: progress,
               minHeight: 8,
-              backgroundColor: AppColors.textSecondary.withAlpha(40),
+              backgroundColor: const Color(0xFFF1F5F9),
               valueColor: AlwaysStoppedAnimation<Color>(progressColor),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 7),
           Text(
             progress >= 1.0
-                ? 'Meta atingida!'
-                : '${(progress * 100).toStringAsFixed(0)}% do caminho'
-                    ' — faltam ${(totalDelta - doneDelta).abs().toStringAsFixed(1)} kg',
-            style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                ? 'Meta atingida! Parabéns!'
+                : '${(progress * 100).toStringAsFixed(0)}% concluído  •  faltam ${(totalDelta - doneDelta).abs().toStringAsFixed(1)} kg',
+            style: AppTypography.caption.copyWith(
+              color: progressColor,
+              fontWeight: FontWeight.w600,
+            ),
           ),
 
-          // Histórico resumido (últimas 3 entradas)
+          // Histórico resumido
           if (_weightHistory.length > 1) ...[
+            const SizedBox(height: 14),
+            Container(height: 1, color: const Color(0xFFF1F5F9)),
             const SizedBox(height: 12),
-            Divider(color: AppColors.textSecondary.withAlpha(40)),
-            const SizedBox(height: 8),
+            Text(
+              'Últimos registros',
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 6),
             ..._weightHistory.take(3).map((log) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  padding: const EdgeInsets.symmetric(vertical: 3),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         _formatDate(log.recordedAt),
-                        style: AppTypography.caption
-                            .copyWith(color: AppColors.textSecondary),
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                       Text(
                         '${log.weight.toStringAsFixed(1)} kg',
-                        style: AppTypography.caption,
+                        style: AppTypography.caption.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF0F172A),
+                        ),
                       ),
                     ],
                   ),
@@ -393,17 +582,320 @@ class _GoalSummaryPageState extends State<GoalSummaryPage> {
     );
   }
 
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final diff = now.difference(date).inDays;
-    if (diff == 0) return 'Hoje';
-    if (diff == 1) return 'Ontem';
-    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}';
+  Widget _weightCol(String label, double value, Color color) => Expanded(
+        child: Column(
+          children: [
+            Text(
+              '${value.toStringAsFixed(1)} kg',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: color,
+                height: 1.0,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+      );
+
+  Widget _weightDivider() => Container(
+        width: 1,
+        height: 36,
+        color: const Color(0xFFF1F5F9),
+      );
+
+  // ── Card de calorias ───────────────────────────────────────────────────────
+
+  Widget _buildCalorieCard(GoalData goal) {
+    final deficit = goal.estimatedDailyCalorieDeficit!;
+    final isLoss  = goal.goalType == 'weight_loss';
+    const orange  = Color(0xFFF97316);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: orange.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.local_fire_department_rounded, color: orange, size: 20),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '$deficit',
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF0F172A),
+              height: 1.0,
+            ),
+          ),
+          Text(
+            'kcal/dia',
+            style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            isLoss ? 'Déficit calórico' : 'Surplus calórico',
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
   }
+
+  // ── Card de treinos ────────────────────────────────────────────────────────
+
+  Widget _buildWorkoutsCard(GoalData goal) {
+    const green = Color(0xFF10B981);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: green.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.fitness_center_rounded, color: green, size: 20),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '${goal.estimatedWorkoutsPerWeek}x',
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF0F172A),
+              height: 1.0,
+            ),
+          ),
+          Text(
+            'por semana',
+            style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Treinos recomendados',
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Card de detalhes ───────────────────────────────────────────────────────
+
+  Widget _buildDetailsCard(GoalData goal) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: _kBlue.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.person_rounded, color: _kBlue, size: 17),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Dados informados',
+                style: AppTypography.bodyLarge.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _detail('Sexo',              goal.genderLabel),
+          _detail('Altura',            '${goal.height.toStringAsFixed(0)} cm'),
+          _detail('Idade',             '${goal.age} anos'),
+          _detail('Nível de atividade', goal.activityLevelLabel),
+        ],
+      ),
+    );
+  }
+
+  Widget _detail(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
+          ),
+          Text(
+            value,
+            style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Disclaimer ─────────────────────────────────────────────────────────────
+
+  Widget _buildDisclaimer() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _kBlue.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _kBlue.withValues(alpha: 0.12)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline_rounded, size: 17, color: _kBlue.withValues(alpha: 0.60)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Estimativa motivacional (Mifflin-St Jeor). '
+              'Não substitui acompanhamento médico ou nutricional.',
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Botões ─────────────────────────────────────────────────────────────────
+
+  Widget _buildSaveButton() {
+    return GestureDetector(
+      onTap: _saving ? null : _saveGoal,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 200),
+        opacity: _saving ? 0.7 : 1.0,
+        child: Container(
+          height: 52,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [_kBlue, _kBlueDark],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: _kBlue.withValues(alpha: 0.28),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Center(
+            child: _saving
+                ? const SizedBox(
+                    height: 22,
+                    width: 22,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2.5,
+                    ),
+                  )
+                : const Text(
+                    'Salvar Meta',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                    ),
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRedefineButton(GoalData goal) {
+    return OutlinedButton.icon(
+      onPressed: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => CreateGoalPage(
+            initialWeight: _weightHistory.isNotEmpty
+                ? _weightHistory.first.weight
+                : _goal?.startWeight,
+            initialHeight: _goal?.height,
+          ),
+        ),
+      ),
+      icon: const Icon(Icons.edit_rounded, size: 18),
+      label: const Text('Redefinir Meta'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: _kBlue,
+        side: const BorderSide(color: _kBlue, width: 1.5),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    );
+  }
+
+  // ── Registrar peso ─────────────────────────────────────────────────────────
 
   Future<void> _showRegisterWeightDialog(GoalData goal) async {
     final ctrl = TextEditingController();
-    // Pré-preenche com o peso mais recente
     if (_weightHistory.isNotEmpty) {
       ctrl.text = _weightHistory.first.weight.toStringAsFixed(1);
     }
@@ -411,29 +903,35 @@ class _GoalSummaryPageState extends State<GoalSummaryPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Registrar peso'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Registrar peso', style: TextStyle(fontWeight: FontWeight.w700)),
         content: TextField(
           controller: ctrl,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: [
             FilteringTextInputFormatter.allow(RegExp(r'^\d{0,3}\.?\d{0,1}')),
           ],
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Peso atual (kg)',
-            border: OutlineInputBorder(),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: _kBlue, width: 1.5),
+            ),
           ),
           autofocus: true,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancelar'),
+            child: Text('Cancelar', style: TextStyle(color: AppColors.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: _kBlue,
               foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             child: const Text('Salvar'),
           ),
@@ -460,7 +958,7 @@ class _GoalSummaryPageState extends State<GoalSummaryPage> {
           behavior: SnackBarBehavior.floating,
         ),
       );
-      _loadGoal(); // recarrega para atualizar o card
+      _loadGoal();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -469,129 +967,13 @@ class _GoalSummaryPageState extends State<GoalSummaryPage> {
     }
   }
 
-  Widget _weightCol(String label, String value, Color color) => Column(
-        children: [
-          Text(value,
-              style: TextStyle(
-                  fontSize: 20, fontWeight: FontWeight.bold, color: color)),
-          const SizedBox(height: 4),
-          Text(label, style: AppTypography.caption),
-        ],
-      );
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
-  Widget _buildCalorieCard(GoalData goal) {
-    final deficit = goal.estimatedDailyCalorieDeficit!;
-    final label   = goal.goalType == 'weight_loss'
-        ? 'Déficit calórico estimado'
-        : 'Surplus calórico estimado';
-    return GymUpCard(
-      padding: const EdgeInsets.all(20),
-      child: Row(
-        children: [
-          Icon(Icons.local_fire_department, color: AppColors.warning, size: 36),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: AppTypography.bodyLarge),
-                const SizedBox(height: 4),
-                Text(
-                  '$deficit kcal/dia',
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.warning),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWorkoutsCard(GoalData goal) {
-    return GymUpCard(
-      padding: const EdgeInsets.all(20),
-      child: Row(
-        children: [
-          Icon(Icons.fitness_center, color: AppColors.accent, size: 36),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Treinos recomendados', style: AppTypography.bodyLarge),
-                const SizedBox(height: 4),
-                Text(
-                  '${goal.estimatedWorkoutsPerWeek}x por semana',
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.accent),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailsCard(GoalData goal) {
-    return GymUpCard(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Dados informados', style: AppTypography.bodyLarge),
-          const SizedBox(height: 12),
-          _detail('Sexo', goal.genderLabel),
-          _detail('Altura', '${goal.height.toStringAsFixed(0)} cm'),
-          _detail('Idade', '${goal.age} anos'),
-          _detail('Nível de atividade', goal.activityLevelLabel),
-        ],
-      ),
-    );
-  }
-
-  Widget _detail(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label,
-                style: AppTypography.bodyMedium
-                    .copyWith(color: AppColors.textSecondary)),
-            Text(value, style: AppTypography.bodyMedium),
-          ],
-        ),
-      );
-
-  Widget _buildDisclaimer() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.textSecondary.withAlpha(25),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.textSecondary.withAlpha(75)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.info_outline, size: 20, color: AppColors.textSecondary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Estimativa motivacional baseada na fórmula de Mifflin-St Jeor. '
-              'Não substitui acompanhamento médico ou nutricional especializado.',
-              style: AppTypography.caption
-                  .copyWith(color: AppColors.textSecondary),
-            ),
-          ),
-        ],
-      ),
-    );
+  String _formatDate(DateTime date) {
+    final now  = DateTime.now();
+    final diff = now.difference(date).inDays;
+    if (diff == 0) return 'Hoje';
+    if (diff == 1) return 'Ontem';
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}';
   }
 }

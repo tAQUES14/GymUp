@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\BodyWeightLog;
 use App\Models\UserGoal;
 use App\Services\GoalService;
 use Illuminate\Http\Request;
@@ -35,6 +36,13 @@ class GoalController extends Controller
         $data = $request->validate($this->validationRules());
 
         $goal = $this->goalService->createGoal($request->user(), $data);
+
+        // Registra o peso inicial como peso corporal do dia,
+        // para que a aba de metas reflita o peso atual corretamente.
+        BodyWeightLog::updateOrCreate(
+            ['user_id' => $request->user()->id, 'recorded_at' => now()->toDateString()],
+            ['weight'  => $data['start_weight']]
+        );
 
         return response()->json($this->formatGoal($goal), 201);
     }

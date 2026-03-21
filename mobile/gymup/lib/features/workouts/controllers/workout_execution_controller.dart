@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import '../models/workout_model.dart';
 import '../services/exercise_stats_service.dart';
@@ -20,6 +22,9 @@ class WorkoutExecutionController extends ChangeNotifier {
 
   // One-way lock: once an exercise is fully done, it stays done
   final Set<int> _completedExerciseIds = {};
+
+  // Debounce timers: key = "$exerciseId-$setNumber"
+  final Map<String, Timer> _saveTimers = {};
 
   bool isLoadingWeights = false;
 
@@ -46,6 +51,10 @@ class WorkoutExecutionController extends ChangeNotifier {
   @override
   void dispose() {
     debugPrint('[Controller] DISPOSE workout=${workout.id} (hashCode=$hashCode)');
+    for (final t in _saveTimers.values) {
+      t.cancel();
+    }
+    _saveTimers.clear();
     super.dispose();
   }
 
@@ -76,24 +85,29 @@ class WorkoutExecutionController extends ChangeNotifier {
 
     notifyListeners();
 
-    _service
-        .saveSetWeight(
-          exerciseId: exerciseId,
-          setNumber: setNumber,
-          weight: weight,
-        )
-        .then((_) {
-      // Invalida cache do histórico para que dados novos apareçam
-      ExerciseStatsService().invalidate(exerciseId);
-      // Limpa erro anterior se o save voltou a funcionar
-      if (saveError != null) {
-        saveError = null;
+    // Debounce: cancel any pending save for this slot and restart the timer.
+    // The API call only fires 800 ms after the user stops typing.
+    final key = '$exerciseId-$setNumber';
+    _saveTimers[key]?.cancel();
+    _saveTimers[key] = Timer(const Duration(milliseconds: 800), () {
+      _saveTimers.remove(key);
+      _service
+          .saveSetWeight(
+            exerciseId: exerciseId,
+            setNumber: setNumber,
+            weight: weight,
+          )
+          .then((_) {
+        ExerciseStatsService().invalidate(exerciseId);
+        if (saveError != null) {
+          saveError = null;
+          notifyListeners();
+        }
+      }).catchError((e) {
+        saveError = 'Erro ao salvar carga. Verifique sua conexão.';
+        debugPrint('[Controller] saveSetWeight ERRO: $e');
         notifyListeners();
-      }
-    }).catchError((e) {
-      saveError = 'Erro ao salvar carga. Verifique sua conexão.';
-      debugPrint('[Controller] saveSetWeight ERRO: $e');
-      notifyListeners();
+      });
     });
   }
 

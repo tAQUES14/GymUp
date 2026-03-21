@@ -17,6 +17,7 @@ return [
     */
 
     'min_minutes'          => (int) env('WORKOUT_MIN_MINUTES', 10),
+    'max_minutes'          => (int) env('WORKOUT_MAX_MINUTES', 360),
     'min_progress_valid'   => (int) env('WORKOUT_MIN_PROGRESS_VALID', 75),
     'min_progress_partial' => (int) env('WORKOUT_MIN_PROGRESS_PARTIAL', 70),
     'session_timeout_hours' => (int) env('WORKOUT_SESSION_TIMEOUT_HOURS', 4),

@@ -88,31 +88,19 @@ class DashboardTest extends TestCase
     public function streak_counts_consecutive_days_with_checkin_and_valid_workout()
     {
         $gym  = Gym::factory()->create();
-        $user = User::factory()->create(['gym_id' => $gym->id, 'role' => 'student']);
-
-        // 3 consecutive days: today, yesterday, day before yesterday
-        // Each day needs BOTH a checkin AND a valid workout
-        for ($i = 0; $i < 3; $i++) {
-            $date = Carbon::today()->subDays($i);
-
-            Checkin::factory()->create([
-                'gym_id'       => $gym->id,
-                'user_id'      => $user->id,
-                'checkin_date' => $date->toDateString(),
-            ]);
-
-            WorkoutSession::factory()->finished()->withPointsGranted()->create([
-                'user_id'    => $user->id,
-                'gym_id'     => $gym->id,
-                'started_at' => $date->copy()->setTime(10, 0),
-            ]);
-        }
+        $user = User::factory()->create([
+            'gym_id'         => $gym->id,
+            'role'           => 'student',
+            'current_streak' => 3, // Streak is set directly (by StreakService on workout finish)
+            'best_streak'    => 3,
+        ]);
 
         Sanctum::actingAs($user);
 
         $response = $this->getJson('/api/dashboard');
         $response->assertStatus(200);
         $this->assertEquals(3, $response->json('streak'));
+        $this->assertEquals(3, $response->json('best_streak'));
     }
 
     /** @test */
@@ -139,37 +127,20 @@ class DashboardTest extends TestCase
     public function streak_stops_when_sequence_is_broken()
     {
         $gym  = Gym::factory()->create();
-        $user = User::factory()->create(['gym_id' => $gym->id, 'role' => 'student']);
-
-        // Today: checkin + workout
-        Checkin::factory()->create([
-            'gym_id'       => $gym->id,
-            'user_id'      => $user->id,
-            'checkin_date' => Carbon::today(),
-        ]);
-        WorkoutSession::factory()->finished()->withPointsGranted()->create([
-            'user_id'    => $user->id,
-            'gym_id'     => $gym->id,
-            'started_at' => Carbon::today()->setTime(10, 0),
-        ]);
-
-        // Day before yesterday (gap: yesterday missing)
-        Checkin::factory()->create([
-            'gym_id'       => $gym->id,
-            'user_id'      => $user->id,
-            'checkin_date' => Carbon::today()->subDays(2),
-        ]);
-        WorkoutSession::factory()->finished()->withPointsGranted()->create([
-            'user_id'    => $user->id,
-            'gym_id'     => $gym->id,
-            'started_at' => Carbon::today()->subDays(2)->setTime(10, 0),
+        // Simulate a broken streak: user missed a training day, streak was reset to 0
+        $user = User::factory()->create([
+            'gym_id'         => $gym->id,
+            'role'           => 'student',
+            'current_streak' => 0,  // Broken
+            'best_streak'    => 5,  // Previous best preserved
         ]);
 
         Sanctum::actingAs($user);
 
         $response = $this->getJson('/api/dashboard');
         $response->assertStatus(200);
-        $this->assertEquals(1, $response->json('streak'));
+        $this->assertEquals(0, $response->json('streak'));
+        $this->assertEquals(5, $response->json('best_streak'));
     }
 
     // ──────────────────────────────────────────────────────────────────────────

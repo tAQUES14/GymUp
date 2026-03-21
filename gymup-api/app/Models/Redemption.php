@@ -15,7 +15,14 @@ class Redemption extends Model
         'gym_id',
         'points_spent',
         'status',
-        'approved_at'
+        'approved_at',
+        'rejected_at',
+        'rejection_reason',
+    ];
+
+    protected $casts = [
+        'approved_at' => 'datetime',
+        'rejected_at' => 'datetime',
     ];
 
     public function user()

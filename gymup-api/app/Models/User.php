@@ -26,17 +26,51 @@ class User extends Authenticatable
         'week_goal_completed',
         'current_week_start',
         'current_week_goal',
+        'current_streak',
+        'best_streak',
+        'last_workout_date',
+        'last_schedule_change',
     ];
 
     protected $casts = [
         'week_goal_completed' => 'boolean',
         'current_week_start'  => 'date',
+        'last_workout_date'    => 'date',
+        'last_schedule_change' => 'date',
     ];
 
     protected $hidden = [
         'password',
         'remember_token',
     ];
+
+    // ── Role helpers ──────────────────────────────────────────────────────────
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === 'super_admin';
+    }
+
+    public function isGymAdmin(): bool
+    {
+        return $this->role === 'gym_admin';
+    }
+
+    public function isTrainer(): bool
+    {
+        return $this->role === 'trainer';
+    }
+
+    public function isUser(): bool
+    {
+        return $this->role === 'user';
+    }
+
+    /** Retorna true para qualquer role com acesso ao painel administrativo. */
+    public function canAccessAdminPanel(): bool
+    {
+        return in_array($this->role, ['super_admin', 'gym_admin', 'trainer'], true);
+    }
 
     public function gym()
     {
@@ -66,5 +100,16 @@ class User extends Authenticatable
     public function goals()
     {
         return $this->hasMany(UserGoal::class);
+    }
+
+    public function trainingSchedules()
+    {
+        return $this->hasMany(UserTrainingSchedule::class);
+    }
+
+    // Named userNotifications to avoid collision with Laravel's Notifiable::notifications()
+    public function userNotifications()
+    {
+        return $this->hasMany(UserNotification::class);
     }
 }

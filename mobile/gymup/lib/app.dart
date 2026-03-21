@@ -1,9 +1,14 @@
+import 'dart:async';
+
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:gymup/core/theme/app_theme.dart';
 import 'package:gymup/features/auth/auth_gate.dart';
 
 import 'package:gymup/features/auth/login_page.dart';
 import 'package:gymup/features/auth/register_page.dart';
+import 'package:gymup/features/auth/forgot_password_page.dart';
+import 'package:gymup/features/auth/reset_password_page.dart';
 import 'package:gymup/features/shell/app_shell.dart';
 import 'package:gymup/features/checkin/checkin_page.dart';
 import 'package:gymup/features/ranking/ranking_page.dart';
@@ -20,11 +25,76 @@ import 'package:gymup/features/workouts/models/workout_model.dart';
 import 'package:gymup/features/personals/personals_page.dart';
 import 'package:gymup/features/progress/progress_page.dart';
 import 'package:gymup/features/history/history_page.dart';
+import 'package:gymup/features/challenges/challenges_page.dart';
 import 'package:gymup/features/goals/create_goal_page.dart';
 import 'package:gymup/features/goals/goal_summary_page.dart';
 
-class GymUpApp extends StatelessWidget {
+class GymUpApp extends StatefulWidget {
   const GymUpApp({super.key});
+
+  @override
+  State<GymUpApp> createState() => _GymUpAppState();
+}
+
+class _GymUpAppState extends State<GymUpApp> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  late final AppLinks _appLinks;
+  StreamSubscription<Uri>? _linkSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _initDeepLinks();
+  }
+
+  @override
+  void dispose() {
+    _linkSub?.cancel();
+    super.dispose();
+  }
+
+  // ── Deep link setup ───────────────────────────────────────────────────────
+
+  Future<void> _initDeepLinks() async {
+    _appLinks = AppLinks();
+
+    // Link inicial: app aberto a partir de um link com o app fechado.
+    try {
+      final initialUri = await _appLinks.getInitialLink();
+      if (initialUri != null) _handleDeepLink(initialUri);
+    } catch (_) {}
+
+    // Links recebidos com o app em background/foreground.
+    _linkSub = _appLinks.uriLinkStream.listen(
+      _handleDeepLink,
+      onError: (_) {},
+    );
+  }
+
+  /// Interpreta URIs:
+  ///   https://gymup.app/reset-password?token=TOKEN&email=EMAIL
+  ///   gymup://reset-password?token=TOKEN&email=EMAIL
+  void _handleDeepLink(Uri uri) {
+    final isHttpResetPath = (uri.host == 'gymup.app' || uri.host == 'localhost') &&
+        uri.path == '/reset-password';
+    final isSchemeReset =
+        uri.scheme == 'gymup' && uri.host == 'reset-password';
+
+    if (!isHttpResetPath && !isSchemeReset) return;
+
+    final token = uri.queryParameters['token'];
+    final email = uri.queryParameters['email'];
+    if (token == null || email == null) return;
+
+    _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+      '/reset-password',
+      // Mantém o login na pilha para o botão "Voltar ao login" funcionar.
+      (route) => route.settings.name == '/login',
+      arguments: <String, String>{'token': token, 'email': email},
+    );
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -32,25 +102,29 @@ class GymUpApp extends StatelessWidget {
       title: 'GYMUP',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
+      navigatorKey: _navigatorKey,
       home: const AuthGate(),
 
       routes: {
-        '/login': (context) => const LoginPage(),
-        '/register': (context) => const RegisterPage(),
-        '/home': (context) => const AppShell(),
-        '/checkin': (context) => const CheckinPage(),
-        '/ranking': (context) => const RankingPage(),
-        '/store': (context) => const StorePage(),
-        '/profile': (context) => const ProfilePage(),
-        '/rewardDetails': (context) => const RewardDetailsPage(),
-        '/workouts': (context) => const WorkoutsPage(),
-        '/personals': (context) => const PersonalsPage(),
-        '/progress': (context) => const ProgressPage(),
-        '/history': (context) => const HistoryPage(),
-        '/goals/create': (context) => const CreateGoalPage(),
-        '/goals': (context) => const GoalSummaryPage(),
-        '/workout-generated': (context) => const WorkoutGeneratedPage(),
-        '/workout-concept': (context) => const WorkoutConceptPage(),
+        '/login':            (context) => const LoginPage(),
+        '/register':         (context) => const RegisterPage(),
+        '/forgot-password':  (context) => const ForgotPasswordPage(),
+        '/reset-password':   (context) => const ResetPasswordPage(),
+        '/home':             (context) => const AppShell(),
+        '/checkin':          (context) => const CheckinPage(),
+        '/ranking':          (context) => const RankingPage(),
+        '/store':            (context) => const StorePage(),
+        '/profile':          (context) => const ProfilePage(),
+        '/rewardDetails':    (context) => const RewardDetailsPage(),
+        '/workouts':         (context) => const WorkoutsPage(),
+        '/personals':        (context) => const PersonalsPage(),
+        '/progress':         (context) => const ProgressPage(),
+        '/history':          (context) => const HistoryPage(),
+        '/challenges':       (context) => const ChallengesPage(),
+        '/goals/create':     (context) => const CreateGoalPage(),
+        '/goals':            (context) => const GoalSummaryPage(),
+        '/workout-generated':(context) => const WorkoutGeneratedPage(),
+        '/workout-concept':  (context) => const WorkoutConceptPage(),
       },
 
       onGenerateRoute: (settings) {
@@ -60,22 +134,18 @@ class GymUpApp extends StatelessWidget {
             builder: (_) => WorkoutDetailPage(workout: workout),
           );
         }
-
         if (settings.name == '/workout-step') {
           final workout = settings.arguments as WorkoutModel;
           return MaterialPageRoute(
             builder: (_) => WorkoutStepPage(workout: workout),
           );
         }
-
         if (settings.name == '/workout-execution-exercise') {
           final workout = settings.arguments as WorkoutModel;
           return MaterialPageRoute(
-            builder: (_) =>
-                WorkoutExecutionExercisePage(workout: workout),
+            builder: (_) => WorkoutExecutionExercisePage(workout: workout),
           );
         }
-
         return null;
       },
     );

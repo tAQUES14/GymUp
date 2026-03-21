@@ -2,20 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
-import '../../core/widgets/gymup_app_bar.dart';
 import '../../core/widgets/gymup_loading.dart';
 import '../auth/auth_api_service.dart';
 import 'reward_api_service.dart';
 import 'reward_model.dart';
 import 'reward_details_page.dart';
 
-// Regra: 1 ponto = R$0,10 · resgate exige custo_pontos completos
+const _kBlue     = Color(0xFF2563EB);
+const _kBlueDark = Color(0xFF1D4ED8);
+const _kGreen    = Color(0xFF10B981);
 const double _kPontoValor = 0.10;
 
 String _fmtReais(double v) =>
     NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$').format(v);
 
-// ── Configuração visual por tipo de recompensa ─────────────────────────────
 class _RewardStyle {
   final IconData icon;
   final List<Color> gradient;
@@ -25,42 +25,27 @@ class _RewardStyle {
 _RewardStyle _styleFor(String titulo) {
   final t = titulo.toLowerCase();
   if (t.contains('camiseta') || t.contains('roupa')) {
-    return const _RewardStyle(
-      Icons.checkroom_rounded,
-      [Color(0xFF9B8FFF), Color(0xFF6C63FF)],
-    );
+    return const _RewardStyle(Icons.checkroom_rounded,
+        [Color(0xFF9B8FFF), Color(0xFF6C63FF)]);
   }
   if (t.contains('squeeze') || t.contains('garrafa')) {
-    return const _RewardStyle(
-      Icons.water_drop_rounded,
-      [Color(0xFF4DD0E1), Color(0xFF0097A7)],
-    );
+    return const _RewardStyle(Icons.water_drop_rounded,
+        [Color(0xFF4DD0E1), Color(0xFF0097A7)]);
   }
   if (t.contains('mensalidade') || t.contains('desconto')) {
-    return const _RewardStyle(
-      Icons.percent_rounded,
-      [Color(0xFFFFB74D), Color(0xFFF57C00)],
-    );
+    return const _RewardStyle(Icons.percent_rounded,
+        [Color(0xFFFFB74D), Color(0xFFF57C00)]);
   }
   if (t.contains('personal') || t.contains('aula')) {
-    return const _RewardStyle(
-      Icons.fitness_center_rounded,
-      [Color(0xFFEF9A9A), Color(0xFFE53935)],
-    );
+    return const _RewardStyle(Icons.fitness_center_rounded,
+        [Color(0xFFEF9A9A), Color(0xFFE53935)]);
   }
-  return const _RewardStyle(
-    Icons.card_giftcard_rounded,
-    [Color(0xFF9B8FFF), Color(0xFF6C63FF)],
-  );
+  return const _RewardStyle(Icons.card_giftcard_rounded,
+      [Color(0xFF9B8FFF), Color(0xFF6C63FF)]);
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// STORE PAGE
-// ─────────────────────────────────────────────────────────────────────────────
 
 class StorePage extends StatefulWidget {
   const StorePage({super.key});
-
   @override
   State<StorePage> createState() => _StorePageState();
 }
@@ -83,7 +68,6 @@ class _StorePageState extends State<StorePage> {
         RewardApiService().getRewards(),
         AuthApiService().getMe(),
       ]);
-
       if (mounted) {
         setState(() {
           _rewards = results[0] as List<Reward>;
@@ -108,129 +92,99 @@ class _StorePageState extends State<StorePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const GymUpAppBar(title: 'Loja'),
       backgroundColor: AppColors.background,
-      body: _buildBody(),
-    );
-  }
-
-  Widget _buildBody() {
-    if (_isLoading) {
-      return const GymUpLoading();
-    }
-
-    if (_error != null) {
-      return Center(
-        child: Text(
-          _error!,
-          style: AppTypography.bodyMedium,
-          textAlign: TextAlign.center,
-        ),
-      );
-    }
-
-    final rewards = _rewards ?? [];
-
-    if (rewards.isEmpty) {
-      return Center(
-        child: Text(
-          'Nenhuma recompensa disponível no momento.',
-          style: AppTypography.bodyMedium,
-          textAlign: TextAlign.center,
-        ),
-      );
-    }
-
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(
-          child: _BalanceStrip(userPoints: _userPoints),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
-          sliver: SliverGrid(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 0.80,
-            ),
-            delegate: SliverChildBuilderDelegate(
-              (context, i) => _RewardCard(
-                reward: rewards[i],
-                userPoints: _userPoints,
-              ),
-              childCount: rewards.length,
-            ),
+      appBar: AppBar(
+        backgroundColor: _kBlue,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        titleSpacing: 20,
+        title: Text(
+          'Loja',
+          style: AppTypography.h3.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.3,
           ),
         ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// BALANCE STRIP
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _BalanceStrip extends StatelessWidget {
-  final int userPoints;
-  const _BalanceStrip({required this.userPoints});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
+      ),
+      body: RefreshIndicator(
+        onRefresh: _loadData,
+        color: _kBlue,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            if (_isLoading)
+              const SliverFillRemaining(child: GymUpLoading())
+            else if (_error != null)
+              SliverFillRemaining(child: _buildError())
+            else if ((_rewards ?? []).isEmpty)
+              SliverFillRemaining(child: _buildEmpty())
+            else ...[
+              SliverToBoxAdapter(child: _BalanceHero(userPoints: _userPoints)),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+                sliver: SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 0.80,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, i) => _RewardCard(
+                      reward: (_rewards ?? [])[i],
+                      userPoints: _userPoints,
+                      onReturn: _loadData,
+                    ),
+                    childCount: (_rewards ?? []).length,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
-        child: Row(
+      ),
+    );
+  }
+
+  Widget _buildError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 36,
-              height: 36,
+              width: 64, height: 64,
               decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.10),
+                color: AppColors.error.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.stars_rounded,
-                color: AppColors.primary,
-                size: 18,
-              ),
+              child: Icon(Icons.wifi_off_rounded,
+                  color: AppColors.error, size: 28),
             ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Meu saldo',
-                  style: AppTypography.caption
-                      .copyWith(color: AppColors.textSecondary),
+            const SizedBox(height: 16),
+            Text('Erro ao carregar',
+                style: AppTypography.bodyLarge
+                    .copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            Text(_error!,
+                textAlign: TextAlign.center,
+                style: AppTypography.bodyMedium
+                    .copyWith(color: AppColors.textSecondary)),
+            const SizedBox(height: 20),
+            GestureDetector(
+              onTap: _loadData,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 24, vertical: 12),
+                decoration: BoxDecoration(
+                  color: _kBlue,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                Text(
-                  '$userPoints pts',
-                  style: AppTypography.bodyLarge
-                      .copyWith(fontWeight: FontWeight.w700),
-                ),
-              ],
-            ),
-            const Spacer(),
-            Text(
-              '≈ ${_fmtReais(userPoints * _kPontoValor)}',
-              style: AppTypography.bodyLarge.copyWith(
-                color: AppColors.primary,
-                fontWeight: FontWeight.w700,
+                child: const Text('Tentar novamente',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w600)),
               ),
             ),
           ],
@@ -238,39 +192,138 @@ class _BalanceStrip extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildEmpty() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 72, height: 72,
+            decoration: BoxDecoration(
+              color: _kBlue.withValues(alpha: 0.07),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.card_giftcard_rounded,
+                size: 32, color: _kBlue.withValues(alpha: 0.5)),
+          ),
+          const SizedBox(height: 16),
+          Text('Nenhuma recompensa disponível',
+              style: AppTypography.bodyLarge
+                  .copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          Text('Volte mais tarde!',
+              style: AppTypography.bodyMedium
+                  .copyWith(color: AppColors.textSecondary)),
+        ],
+      ),
+    );
+  }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// REWARD CARD (grid)
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Balance Hero ──────────────────────────────────────────────────────────────
+
+class _BalanceHero extends StatelessWidget {
+  final int userPoints;
+  const _BalanceHero({required this.userPoints});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [_kBlue, _kBlueDark],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: _kBlue.withValues(alpha: 0.28),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 52, height: 52,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.stars_rounded,
+                color: Colors.amber, size: 28),
+          ),
+          const SizedBox(width: 16),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Meu saldo',
+                  style: TextStyle(color: Colors.white70, fontSize: 13)),
+              Text(
+                '$userPoints pontos',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.5,
+                ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              const Text('Equivale a',
+                  style: TextStyle(color: Colors.white70, fontSize: 11)),
+              Text(
+                _fmtReais(userPoints * _kPontoValor),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Reward Card ───────────────────────────────────────────────────────────────
 
 class _RewardCard extends StatelessWidget {
   final Reward reward;
   final int userPoints;
-
-  const _RewardCard({required this.reward, required this.userPoints});
+  final VoidCallback? onReturn;
+  const _RewardCard({required this.reward, required this.userPoints, this.onReturn});
 
   @override
   Widget build(BuildContext context) {
-    final String titulo = reward.name;
-    final int custoPontos = reward.pointsCost;
-    final bool unlocked = userPoints >= custoPontos;
-    final int faltam = unlocked ? 0 : custoPontos - userPoints;
-    final cfg = _styleFor(titulo);
+    final titulo       = reward.name;
+    final custoPontos  = reward.pointsCost;
+    final unlocked     = userPoints >= custoPontos;
+    final faltam       = unlocked ? 0 : custoPontos - userPoints;
+    final cfg          = _styleFor(titulo);
 
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => RewardDetailsPage(
-            reward: reward,
-            userPoints: userPoints,
-          ),
+          builder: (_) =>
+              RewardDetailsPage(reward: reward, userPoints: userPoints),
         ),
-      ),
+      ).then((_) => onReturn?.call()),
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
@@ -285,55 +338,69 @@ class _RewardCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ── Gradient top ──────────────────────────────────────
+              // ── Imagem ou gradiente ──────────────────────────────
               Expanded(
                 flex: 56,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: cfg.gradient,
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+                    // Fundo: imagem real ou gradiente genérico
+                    if (reward.imageUrl != null)
+                      Image.network(
+                        reward.imageUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, e, st) => _GradientBox(
+                          gradient: cfg.gradient,
+                          icon: cfg.icon,
+                          unlocked: unlocked,
                         ),
+                        loadingBuilder: (_, child, progress) =>
+                            progress == null ? child : _GradientBox(
+                              gradient: cfg.gradient,
+                              icon: cfg.icon,
+                              unlocked: unlocked,
+                            ),
+                      )
+                    else
+                      _GradientBox(
+                        gradient: cfg.gradient,
+                        icon: cfg.icon,
+                        unlocked: unlocked,
                       ),
-                    ),
-                    // Locked overlay
+                    // Overlay escuro se bloqueado
                     if (!unlocked)
-                      Container(
-                        color: Colors.black.withValues(alpha: 0.10),
-                      ),
-                    Center(
-                      child: Icon(
-                        cfg.icon,
-                        size: 44,
-                        color: Colors.white
-                            .withValues(alpha: unlocked ? 1.0 : 0.65),
-                      ),
-                    ),
+                      Container(color: Colors.black.withValues(alpha: 0.30)),
+                    // Badge lock / check
                     if (!unlocked)
                       Positioned(
-                        top: 8,
-                        right: 8,
+                        top: 8, right: 8,
                         child: Container(
-                          padding: const EdgeInsets.all(4),
+                          padding: const EdgeInsets.all(5),
                           decoration: const BoxDecoration(
                             color: Colors.black26,
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
-                            Icons.lock_rounded,
-                            color: Colors.white70,
-                            size: 12,
+                          child: const Icon(Icons.lock_rounded,
+                              color: Colors.white70, size: 11),
+                        ),
+                      ),
+                    if (unlocked)
+                      Positioned(
+                        top: 8, right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: _kGreen.withValues(alpha: 0.90),
+                            shape: BoxShape.circle,
                           ),
+                          child: const Icon(Icons.check_rounded,
+                              color: Colors.white, size: 11),
                         ),
                       ),
                   ],
                 ),
               ),
-              // ── White bottom ──────────────────────────────────────
+              // ── White bottom ─────────────────────────────────────
               Expanded(
                 flex: 44,
                 child: Padding(
@@ -344,9 +411,10 @@ class _RewardCard extends StatelessWidget {
                     children: [
                       Text(
                         titulo,
-                        style: AppTypography.bodyMedium.copyWith(
+                        style: const TextStyle(
                           fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
+                          fontSize: 13,
+                          color: Color(0xFF1E293B),
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -368,15 +436,43 @@ class _RewardCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// POINTS BADGE
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Gradient Box (fallback sem imagem) ────────────────────────────────────────
+
+class _GradientBox extends StatelessWidget {
+  final List<Color> gradient;
+  final IconData icon;
+  final bool unlocked;
+  const _GradientBox({
+    required this.gradient,
+    required this.icon,
+    required this.unlocked,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: gradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Center(
+        child: Icon(icon,
+            size: 44,
+            color: Colors.white.withValues(alpha: unlocked ? 1.0 : 0.60)),
+      ),
+    );
+  }
+}
+
+// ── Points Badge ──────────────────────────────────────────────────────────────
 
 class _PointsBadge extends StatelessWidget {
   final int custoPontos;
   final bool unlocked;
   final int faltam;
-
   const _PointsBadge({
     required this.custoPontos,
     required this.unlocked,
@@ -385,29 +481,45 @@ class _PointsBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = unlocked ? AppColors.accent : AppColors.primary;
-    final icon = unlocked
-        ? Icons.check_circle_rounded
-        : Icons.stars_rounded;
-    final label = unlocked ? '$custoPontos pts' : '+$faltam pts';
-
+    if (unlocked) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: _kGreen.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.check_circle_rounded, size: 10, color: _kGreen),
+            const SizedBox(width: 4),
+            Text(
+              '$custoPontos pts',
+              style: const TextStyle(
+                  color: _kGreen, fontWeight: FontWeight.w700, fontSize: 11),
+            ),
+          ],
+        ),
+      );
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
+        color: const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 10, color: color),
+          const Icon(Icons.stars_rounded,
+              size: 10, color: Color(0xFF64748B)),
           const SizedBox(width: 4),
           Text(
-            label,
-            style: AppTypography.caption.copyWith(
-              color: color,
-              fontWeight: FontWeight.w700,
-            ),
+            '$custoPontos pts',
+            style: const TextStyle(
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w600,
+                fontSize: 11),
           ),
         ],
       ),
