@@ -50,3 +50,8 @@ claude/
 GYMUP_DOMAIN.md
 GYMUP_TESTS_REQUIRED.md
 Docs
+
+# Flutter generated
+**/generated_plugin_registrant.*
+**/GeneratedPluginRegistrant.*
+**/generated_plugins.cmake
