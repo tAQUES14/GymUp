@@ -14,19 +14,26 @@ class ChallengeController extends Controller
     /**
      * GET /api/challenges/active
      *
-     * Retorna o desafio ativo da academia com o progresso do aluno autenticado.
+     * Retorna o desafio comunitário ativo e todos os desafios pessoais ativos
+     * com o progresso do aluno autenticado.
      */
     public function active(Request $request)
     {
-        $user      = $request->user();
-        $challenge = $this->challengeService->getActiveChallenge($user->gym_id);
+        $user = $request->user();
 
-        if (!$challenge) {
-            return response()->json(['challenge' => null], 200);
-        }
+        $community = $this->challengeService->getActiveCommunityChallenge($user->gym_id);
+
+        $personalChallenges = $this->challengeService
+            ->getActivePersonalChallenges($user->gym_id)
+            ->map(fn ($c) => $this->challengeService->getChallengeData($c, $user))
+            ->values()
+            ->all();
 
         return response()->json([
-            'challenge' => $this->challengeService->getChallengeData($challenge, $user),
+            'challenge'          => $community
+                ? $this->challengeService->getChallengeData($community, $user)
+                : null,
+            'personal_challenges' => $personalChallenges,
         ]);
     }
 

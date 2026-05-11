@@ -101,8 +101,8 @@ async function handleLogin() {
   error.value   = ''
   loading.value = true
   try {
-    await auth.login(form.email, form.password)
-    router.push('/dashboard')
+    const dest = await auth.login(form.email, form.password)
+    router.push(dest)
   } catch (e) {
     error.value = e.response?.data?.message ?? e.message ?? 'Erro ao fazer login.'
   } finally {

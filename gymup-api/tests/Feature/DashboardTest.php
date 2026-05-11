@@ -257,10 +257,12 @@ class DashboardTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2025-01-08 12:00:00'));
 
         WorkoutSession::factory()->create([
-            'user_id'     => $user->id,
-            'gym_id'      => $gym->id,
-            'started_at'  => Carbon::parse('2025-01-06 10:00:00'),
-            'finished_at' => Carbon::parse('2025-01-06 10:30:00'),
+            'user_id'           => $user->id,
+            'gym_id'            => $gym->id,
+            'started_at'        => Carbon::parse('2025-01-06 10:00:00'),
+            'finished_at'       => Carbon::parse('2025-01-06 10:30:00'),
+            'points_granted'    => true,
+            'points_granted_at' => Carbon::parse('2025-01-06 10:30:00'),
         ]);
 
         $response = $this->getJson('/api/dashboard')->assertStatus(200);
@@ -268,10 +270,10 @@ class DashboardTest extends TestCase
         $weekly = $response->json('weekly_progress');
 
         $this->assertCount(7, $weekly);
-        $this->assertTrue($weekly[0]);  // Monday — trained
-        $this->assertFalse($weekly[1]); // Tuesday
-        $this->assertFalse($weekly[2]); // Wednesday
-        $this->assertFalse($weekly[6]); // Sunday
+        $this->assertFalse($weekly[0]['trained']);  // Sunday — not trained
+        $this->assertTrue($weekly[1]['trained']);   // Monday — trained
+        $this->assertFalse($weekly[2]['trained']);  // Tuesday
+        $this->assertFalse($weekly[6]['trained']);  // Saturday
 
         Carbon::setTestNow();
     }

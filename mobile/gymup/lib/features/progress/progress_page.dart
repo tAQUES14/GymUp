@@ -166,10 +166,22 @@ class _ProgressPageState extends State<ProgressPage> {
     final int treinosComPontos = (data['total_workouts_with_points'] as num?)?.toInt() ?? 0;
     final int treinosSemPontos = totalTreinos - treinosComPontos;
 
+    // weekly_progress é uma lista de objetos {day_of_week, trained, ...}.
+    // Monta um mapa por dow e extrai em ordem Seg→Dom (dow 1..6, 0).
+    final rawProgress = data['weekly_progress'] as List<dynamic>? ?? [];
+    final trainedByDow = <int, bool>{};
+    for (final e in rawProgress) {
+      if (e is Map<String, dynamic>) {
+        final trained = e['trained'];
+        // ignore: avoid_print
+        assert(() { if (trained is! bool && trained != null) { print('[DEBUG] weekly_progress.trained inesperado: ${trained.runtimeType} = $trained'); } return true; }());
+        trainedByDow[e['day_of_week'] as int? ?? -1] = trained == true;
+      }
+    }
+    // Exibição: Seg=1, Ter=2, Qua=3, Qui=4, Sex=5, Sáb=6, Dom=0
+    const weekDisplayOrder = [1, 2, 3, 4, 5, 6, 0];
     final List<int> weeklyDays =
-        (data['weekly_progress'] as List<dynamic>? ?? List.filled(7, false))
-            .map((e) => (e as bool?) == true ? 1 : 0)
-            .toList();
+        weekDisplayOrder.map((dow) => (trainedByDow[dow] ?? false) ? 1 : 0).toList();
 
     final pr   = summary['latest_pr']    as Map<String, dynamic>?;
     final best = summary['best_exercise'] as Map<String, dynamic>?;

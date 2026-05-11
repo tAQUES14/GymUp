@@ -20,7 +20,7 @@ class AdminDashboardTest extends TestCase
 
         $admin = User::factory()->create([
             'gym_id' => $gym->id,
-            'role' => 'admin'
+            'role' => 'gym_admin'
         ]);
 
         $student = User::factory()->create([
@@ -49,10 +49,8 @@ class AdminDashboardTest extends TestCase
         $response->assertStatus(200);
 
         $response->assertJsonStructure([
-            'total_students',
-            'total_points_distributed',
+            'total_users',
             'pending_redemptions',
-            'approved_redemptions',
             'top_students'
         ]);
     }

@@ -6,35 +6,10 @@ use App\Models\Exercise;
 use App\Models\GifFeedback;
 use Illuminate\Support\Facades\Cache;
 
-/**
- * Lightweight GIF suggestion engine.
- *
- * Scoring pipeline for each candidate (all floats, clamped to [0, 100]):
- *   base         = max(jaccard, similar_text)   — similar_text skipped when jaccard < 30
- *   + keywordBoost   — +8 per shared discriminating keyword
- *   + feedbackBoost  — +15 if an admin previously chose this GIF for this exercise
- *   + penalty        — −15 per cross-category mismatch word
- *
- * Confidence guard:
- *   Any penalty applied → confidence capped at 'medium' (never 'high'), even if the
- *   clamped score exceeds 80. Prevents semantically dubious 'high' labels.
- *
- * Cache:
- *   Results stored for 24 h under a key that includes ALGO_VERSION.
- *   Bumping ALGO_VERSION invalidates all existing cached results automatically.
- *   Call bust(Exercise) after a manual GIF selection to force fresh scoring.
- *
- * Fallback:
- *   When no candidate scores above 0 (or no folder exists), returns the most
- *   historically popular GIFs for the muscle group from the feedback log.
- */
+
 class GifSuggestionService
 {
-    /**
-     * Increment this string whenever the scoring logic changes in a way that
-     * would make cached results incorrect. Old cache entries become orphans
-     * (they expire naturally at TTL) without any manual flush needed.
-     */
+
     private const ALGO_VERSION = 'v4';
 
     /** Maps exercise.muscle_group to the GIF storage folder name. */
@@ -235,7 +210,7 @@ class GifSuggestionService
 
             $scored[] = [
                 'file'       => $relative,
-                'url'        => url('storage/exercises/' . $relative),
+                'url'        => Exercise::gifPathToUrl($relative),
                 'score'      => $score,
                 'confidence' => $this->confidenceLabel($score, hadPenalty: $penalty < 0.0),
                 'folder'     => $meta['folder'],
@@ -390,7 +365,7 @@ class GifSuggestionService
             ->get()
             ->map(fn ($row) => [
                 'file'       => $row->selected_gif,
-                'url'        => url('storage/exercises/' . $row->selected_gif),
+                'url'        => Exercise::gifPathToUrl($row->selected_gif),
                 'score'      => 0,
                 'confidence' => 'low',
                 'folder'     => $folder ?? dirname($row->selected_gif),

@@ -10,6 +10,8 @@ import '../../core/widgets/gymup_loading.dart';
 const _kBlue     = Color(0xFF2563EB);
 const _kBlueDark = Color(0xFF1D4ED8);
 const _kGreen    = Color(0xFF10B981);
+const _kAmber    = Color(0xFFF59E0B);
+const _kRed      = Color(0xFFEF4444);
 
 class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key});
@@ -20,6 +22,8 @@ class HistoryPage extends StatefulWidget {
 
 class _HistoryPageState extends State<HistoryPage> {
   List<Map<String, dynamic>>? _history;
+  // redemption_id → status ('pending' | 'approved' | 'rejected')
+  Map<int, String> _redemptionStatus = {};
   String? _error;
   bool _loading = true;
 
@@ -32,29 +36,63 @@ class _HistoryPageState extends State<HistoryPage> {
   Future<void> _loadData() async {
     setState(() { _loading = true; _error = null; });
     try {
-      final response = await ApiService().get('/points/history?per_page=50');
+      final api = ApiService();
+      final results = await Future.wait([
+        api.get('/points/history?per_page=50'),
+        api.get('/user/redemptions?per_page=50'),
+      ]);
 
-      if (response.statusCode == 401) throw Exception('401');
-      if (response.statusCode != 200) throw Exception('Erro ao carregar histórico');
+      final historyResp    = results[0];
+      final redemptResp    = results[1];
 
-      final body = jsonDecode(response.body);
+      if (historyResp.statusCode == 401 || redemptResp.statusCode == 401) {
+        throw Exception('401');
+      }
+      if (historyResp.statusCode != 200) {
+        throw Exception('Erro ao carregar histórico');
+      }
+
+      // Parse redemptions → build status map
+      final Map<int, String> statusMap = {};
+      if (redemptResp.statusCode == 200) {
+        final rb = jsonDecode(redemptResp.body);
+        final List<dynamic> rList =
+            rb is List ? rb : (rb['data'] as List<dynamic>? ?? []);
+        for (final r in rList) {
+          final id     = (r['id'] as num).toInt();
+          final status = r['status'] as String? ?? 'pending';
+          statusMap[id] = status;
+        }
+      }
+
+      // Parse history transactions
+      final body = jsonDecode(historyResp.body);
       final List<dynamic> items =
           body is List ? body : (body['data'] as List<dynamic>? ?? []);
 
       final history = items.map<Map<String, dynamic>>((item) {
-        final bool isEarn = (item['type'] as String?) == 'earn';
+        final bool isEarn   = (item['type'] as String?) == 'earn';
+        final category      = item['category'] as String?;
+        final referenceId   = (item['reference_id'] as num?)?.toInt();
+
         return {
-          'title': item['description'] as String? ?? 'Movimentação',
-          'points': (item['points'] as num?)?.toInt() ?? 0,
-          'date': DateTime.parse(item['created_at'] as String),
-          'isPositive': isEarn,
+          'title':        item['description'] as String? ?? 'Movimentação',
+          'points':       (item['points'] as num?)?.toInt() ?? 0,
+          'date':         DateTime.parse(item['created_at'] as String),
+          'isPositive':   isEarn,
+          'category':     category,
+          'reference_id': referenceId,
         };
       }).toList()
         ..sort((a, b) =>
             (b['date'] as DateTime).compareTo(a['date'] as DateTime));
 
       if (!mounted) return;
-      setState(() { _history = history; _loading = false; });
+      setState(() {
+        _history          = history;
+        _redemptionStatus = statusMap;
+        _loading          = false;
+      });
     } catch (e) {
       if (e.toString().contains('401') && mounted) {
         Navigator.pushReplacementNamed(context, '/login');
@@ -62,7 +100,7 @@ class _HistoryPageState extends State<HistoryPage> {
       }
       if (!mounted) return;
       setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
+        _error   = e.toString().replaceFirst('Exception: ', '');
         _loading = false;
       });
     }
@@ -108,11 +146,13 @@ class _HistoryPageState extends State<HistoryPage> {
                   color: AppColors.error.withValues(alpha: 0.08),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.wifi_off_rounded, color: AppColors.error, size: 28),
+                child: Icon(Icons.wifi_off_rounded,
+                    color: AppColors.error, size: 28),
               ),
               const SizedBox(height: 16),
               Text('Erro ao carregar',
-                  style: AppTypography.bodyLarge.copyWith(fontWeight: FontWeight.w700)),
+                  style: AppTypography.bodyLarge
+                      .copyWith(fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
               Text(_error!,
                   textAlign: TextAlign.center,
@@ -122,14 +162,17 @@ class _HistoryPageState extends State<HistoryPage> {
               GestureDetector(
                 onTap: _loadData,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 24, vertical: 12),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [_kBlue, _kBlueDark]),
+                    gradient: const LinearGradient(
+                        colors: [_kBlue, _kBlueDark]),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Text('Tentar novamente',
                       style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w600)),
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600)),
                 ),
               ),
             ],
@@ -153,7 +196,8 @@ class _HistoryPageState extends State<HistoryPage> {
                   color: _kBlue.withValues(alpha: 0.08),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.history_rounded, color: _kBlue, size: 28),
+                child: const Icon(Icons.history_rounded,
+                    color: _kBlue, size: 28),
               ),
               const SizedBox(height: 16),
               Text('Sem histórico',
@@ -186,7 +230,8 @@ class _HistoryPageState extends State<HistoryPage> {
         itemCount: history.length + 1,
         itemBuilder: (context, index) {
           if (index == 0) {
-            return _buildSummaryHeader(totalEarned, totalSpent, history.length);
+            return _buildSummaryHeader(
+                totalEarned, totalSpent, history.length);
           }
           return _buildTransactionItem(history[index - 1]);
         },
@@ -194,13 +239,12 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 
-  // ── Summary hero ─────────────────────────────────────────────────────────────
+  // ── Summary hero ──────────────────────────────────────────────────────────────
 
   Widget _buildSummaryHeader(int earned, int spent, int count) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Hero card
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -241,14 +285,14 @@ class _HistoryPageState extends State<HistoryPage> {
                         letterSpacing: -1,
                       )),
                   const Text('Movimentações',
-                      style: TextStyle(color: Colors.white70, fontSize: 13)),
+                      style:
+                          TextStyle(color: Colors.white70, fontSize: 13)),
                 ],
               ),
             ],
           ),
         ),
         const SizedBox(height: 12),
-        // Stats row
         Row(
           children: [
             Expanded(
@@ -273,7 +317,8 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 
-  Widget _statPill(String value, String label, Color color, IconData icon) {
+  Widget _statPill(
+      String value, String label, Color color, IconData icon) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
       decoration: BoxDecoration(
@@ -323,12 +368,29 @@ class _HistoryPageState extends State<HistoryPage> {
   // ── Transaction item ──────────────────────────────────────────────────────────
 
   Widget _buildTransactionItem(Map<String, dynamic> item) {
-    final isPositive = item['isPositive'] as bool;
-    final points     = item['points'] as int;
-    final date       = item['date'] as DateTime;
-    final formatted  = DateFormat('dd/MM/yyyy HH:mm').format(date);
-    final color      = isPositive ? _kGreen : AppColors.error;
-    final icon       = isPositive
+    final bool   isPositive  = item['isPositive'] as bool;
+    final int    points      = item['points'] as int;
+    final DateTime date      = item['date'] as DateTime;
+    final String formatted   = DateFormat('dd/MM/yyyy HH:mm').format(date);
+    final String? category   = item['category'] as String?;
+    final int? referenceId   = item['reference_id'] as int?;
+
+    // Resolve status for spend-redemption transactions
+    String? redemptionStatus;
+    if (category == 'redemption' && !isPositive && referenceId != null) {
+      redemptionStatus = _redemptionStatus[referenceId];
+    }
+
+    // Override title based on redemption status
+    String title = item['title'] as String;
+    if (redemptionStatus == 'approved') {
+      title = 'Resgate aprovado';
+    } else if (redemptionStatus == 'rejected') {
+      title = 'Resgate rejeitado';
+    }
+
+    final Color color = isPositive ? _kGreen : AppColors.error;
+    final IconData icon = isPositive
         ? Icons.arrow_upward_rounded
         : Icons.shopping_bag_rounded;
 
@@ -362,15 +424,31 @@ class _HistoryPageState extends State<HistoryPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(item['title'] as String,
+                  Text(title,
                       style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: Color(0xFF1E293B))),
                   const SizedBox(height: 3),
-                  Text(formatted,
-                      style: const TextStyle(
-                          fontSize: 12, color: Color(0xFF94A3B8))),
+                  if (redemptionStatus != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: Row(
+                        children: [
+                          Text(formatted,
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF94A3B8))),
+                          const SizedBox(width: 8),
+                          _RedemptionStatusChip(
+                              status: redemptionStatus),
+                        ],
+                      ),
+                    )
+                  else
+                    Text(formatted,
+                        style: const TextStyle(
+                            fontSize: 12, color: Color(0xFF94A3B8))),
                 ],
               ),
             ),
@@ -383,6 +461,35 @@ class _HistoryPageState extends State<HistoryPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Redemption Status Chip ────────────────────────────────────────────────────
+
+class _RedemptionStatusChip extends StatelessWidget {
+  final String status;
+  const _RedemptionStatusChip({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) = switch (status) {
+      'approved' => ('Aprovado ✓', _kGreen),
+      'rejected' => ('Rejeitado ✗', _kRed),
+      _          => ('Aguardando',  _kAmber),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+            color: color, fontSize: 10, fontWeight: FontWeight.w700),
       ),
     );
   }

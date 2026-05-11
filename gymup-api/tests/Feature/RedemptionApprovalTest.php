@@ -40,7 +40,7 @@ class RedemptionApprovalTest extends TestCase
 
         Sanctum::actingAs($student);
 
-        $response = $this->postJson("/api/redemptions/{$redemption->id}/approve");
+        $response = $this->postJson("/api/admin/redemptions/{$redemption->id}/approve");
 
         $response->assertStatus(403);
     }
@@ -51,7 +51,7 @@ class RedemptionApprovalTest extends TestCase
 
         $admin = User::factory()->create([
             'gym_id' => $gym->id,
-            'role' => 'admin',
+            'role' => 'super_admin',
             'points_balance' => 100
         ]);
 
@@ -71,7 +71,7 @@ class RedemptionApprovalTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $response = $this->postJson("/api/redemptions/{$redemption->id}/approve");
+        $response = $this->postJson("/api/admin/redemptions/{$redemption->id}/approve");
 
         $response->assertStatus(200);
 
@@ -87,8 +87,13 @@ class RedemptionApprovalTest extends TestCase
 
         $admin = User::factory()->create([
             'gym_id' => $gym->id,
-            'role' => 'admin',
-            'points_balance' => 100
+            'role' => 'super_admin',
+        ]);
+
+        $student = User::factory()->create([
+            'gym_id' => $gym->id,
+            'role' => 'student',
+            'points_balance' => 80, // already deducted at store()
         ]);
 
         $reward = Reward::factory()->create([
@@ -97,8 +102,9 @@ class RedemptionApprovalTest extends TestCase
             'stock' => 10
         ]);
 
+        // Redemption created directly (simulating store() already ran and deducted points)
         $redemption = Redemption::factory()->create([
-            'user_id' => $admin->id,
+            'user_id' => $student->id,
             'reward_id' => $reward->id,
             'gym_id' => $gym->id,
             'points_spent' => 20,
@@ -107,16 +113,18 @@ class RedemptionApprovalTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson("/api/redemptions/{$redemption->id}/approve");
+        $this->postJson("/api/admin/redemptions/{$redemption->id}/approve")
+            ->assertStatus(200);
 
-        $this->assertDatabaseHas('users', [
-            'id' => $admin->id,
-            'points_balance' => 80
-        ]);
-
+        // Approval decrements stock (points were already deducted at store)
         $this->assertDatabaseHas('rewards', [
             'id' => $reward->id,
             'stock' => 9
+        ]);
+
+        $this->assertDatabaseHas('redemptions', [
+            'id' => $redemption->id,
+            'status' => 'approved',
         ]);
     }
 
@@ -127,7 +135,7 @@ class RedemptionApprovalTest extends TestCase
 
     $adminGym1 = \App\Models\User::factory()->create([
         'gym_id' => $gym1->id,
-        'role' => 'admin',
+        'role' => 'super_admin',
         'points_balance' => 100
     ]);
 
@@ -150,7 +158,7 @@ class RedemptionApprovalTest extends TestCase
 
     \Laravel\Sanctum\Sanctum::actingAs($adminGym1);
 
-    $response = $this->postJson("/api/redemptions/{$redemptionGym2->id}/approve");
+    $response = $this->postJson("/api/admin/redemptions/{$redemptionGym2->id}/approve");
 
     $response->assertStatus(403);
 }

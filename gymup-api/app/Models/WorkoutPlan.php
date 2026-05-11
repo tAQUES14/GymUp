@@ -14,7 +14,7 @@ class WorkoutPlan extends Model
 
     public function days()
     {
-        return $this->hasMany(WorkoutPlanDay::class, 'plan_id')->orderBy('day_order');
+        return $this->hasMany(WorkoutPlanDay::class, 'plan_id')->orderBy('day_of_week');
     }
 
     public function gym()

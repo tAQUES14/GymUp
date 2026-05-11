@@ -20,7 +20,7 @@ class AdminReportsController extends Controller
         $period = $request->query('period', '30'); // 7 | 30 | 90
         $days   = in_array((int) $period, [7, 30, 90]) ? (int) $period : 30;
 
-        $gymId   = $admin->gym_id;
+        $gymId   = $admin->activeGymId();
         $start   = Carbon::today()->subDays($days - 1)->startOfDay();
         $end     = Carbon::now();
 

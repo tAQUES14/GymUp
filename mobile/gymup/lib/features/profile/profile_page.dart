@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/api_service.dart';
 import '../../core/theme/app_colors.dart';
@@ -100,6 +101,12 @@ class _ProfilePageState extends State<ProfilePage> {
         ? double.tryParse(data['height'].toString())
         : null;
     final resolvedHeight = profileHeight ?? goal?.height;
+
+    final gymName = gym?['name'] as String?;
+    if (gymName != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('gym_name', gymName);
+    }
 
     setState(() {
       _userData                = data;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../home/home_page.dart';
 import '../workouts/workouts_page.dart';
 import '../store/store_page.dart';
@@ -74,15 +75,33 @@ class _AppShellState extends State<AppShell> {
     ProfilePage(),
   ];
 
+  static const _kTabKey = 'last_tab_index';
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreTab();
+  }
+
+  Future<void> _restoreTab() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getInt(_kTabKey) ?? 0;
+    if (mounted && saved != _currentIndex) {
+      setState(() => _currentIndex = saved.clamp(0, _pages.length - 1));
+    }
+  }
+
   void _onTabTapped(int index) {
     if (_currentIndex == index) return;
     HapticFeedback.selectionClick();
     setState(() => _currentIndex = index);
+    SharedPreferences.getInstance().then((p) => p.setInt(_kTabKey, index));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       body: Column(
         children: [
           GlobalAppHeader(currentIndex: _currentIndex),

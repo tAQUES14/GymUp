@@ -26,19 +26,55 @@ class RecentActivity {
   }
 }
 
+/// Progresso de um dia da semana retornado pelo dashboard.
+///
+/// day_of_week: 0=Domingo, 1=Segunda, ..., 6=Sábado
+class WeeklyProgressDay {
+  final int dayOfWeek;
+  final bool isPlanDay;
+  final bool isRestDay;
+  final bool gymOpen;
+  final bool isObligatory;
+  final bool trained;
+  final bool trainedOnPlan;
+
+  const WeeklyProgressDay({
+    required this.dayOfWeek,
+    required this.isPlanDay,
+    required this.isRestDay,
+    required this.gymOpen,
+    required this.isObligatory,
+    required this.trained,
+    required this.trainedOnPlan,
+  });
+
+  factory WeeklyProgressDay.fromJson(Map<String, dynamic> json) {
+    return WeeklyProgressDay(
+      dayOfWeek:     (json['day_of_week'] as num).toInt(),
+      isPlanDay:     json['is_plan_day']    == true,
+      isRestDay:     json['is_rest_day']    != false,
+      gymOpen:       json['gym_open']       != false,
+      isObligatory:  json['is_obligatory']  == true,
+      trained:       json['trained']        == true,
+      trainedOnPlan: json['trained_on_plan'] == true,
+    );
+  }
+}
+
 class DashboardData {
   final String name;
   final int pointsBalance;
   final bool hasCompletedToday;
   final bool hasActiveSession;
   final bool hasCheckedInToday;
-  final List<bool> weeklyProgress;
+  /// Lista de 7 dias (0=Dom → 6=Sáb) com contexto completo.
+  final List<WeeklyProgressDay> weeklyProgress;
   final List<RecentActivity> recentActivities;
   final int streak;
   final int bestStreak;
-  final List<int> trainingDays;
   final int weeklyGoal;
   final int remainingWorkoutsThisWeek;
+  final int workoutsDoneThisWeek;
   final int totalCheckins;
   final int totalWorkouts;
   final int totalWorkoutsWithPoints;
@@ -53,9 +89,9 @@ class DashboardData {
     required this.recentActivities,
     required this.streak,
     required this.bestStreak,
-    required this.trainingDays,
     required this.weeklyGoal,
     required this.remainingWorkoutsThisWeek,
+    required this.workoutsDoneThisWeek,
     required this.totalCheckins,
     required this.totalWorkouts,
     required this.totalWorkoutsWithPoints,
@@ -63,30 +99,32 @@ class DashboardData {
 
   int get totalWorkoutsWithoutPoints => totalWorkouts - totalWorkoutsWithPoints;
 
+  /// Quantidade de treinos com pontos na semana atual.
+  int get onPlanWorkoutsDone => workoutsDoneThisWeek;
+
   factory DashboardData.fromJson(Map<String, dynamic> json) {
+    final rawProgress = json['weekly_progress'] as List<dynamic>? ?? [];
     return DashboardData(
-      name: json['name'] as String? ?? '',
-      pointsBalance: (json['points_balance'] as num).toInt(),
-      hasCompletedToday: json['has_completed_today'] as bool? ?? false,
-      hasActiveSession: json['has_active_session'] as bool? ?? false,
-      hasCheckedInToday: json['has_checked_in_today'] as bool? ?? false,
-      weeklyProgress: (json['weekly_progress'] as List<dynamic>)
-          .map((e) => e as bool)
+      name:             json['name'] as String? ?? '',
+      pointsBalance:    (json['points_balance'] as num).toInt(),
+      hasCompletedToday:    json['has_completed_today']  == true,
+      hasActiveSession:     json['has_active_session']   == true,
+      hasCheckedInToday:    json['has_checked_in_today'] == true,
+      weeklyProgress: rawProgress
+          .map((e) => WeeklyProgressDay.fromJson(e as Map<String, dynamic>))
           .toList(),
       recentActivities: (json['recent_activities'] as List<dynamic>)
           .map((e) => RecentActivity.fromJson(e as Map<String, dynamic>))
           .toList(),
-      streak: (json['streak'] as num?)?.toInt() ?? 0,
-      bestStreak: (json['best_streak'] as num?)?.toInt() ?? 0,
-      trainingDays: (json['training_days'] as List<dynamic>?)
-              ?.map((e) => (e as num).toInt())
-              .toList() ??
-          [],
-      weeklyGoal: (json['weekly_goal'] as num?)?.toInt() ?? 3,
+      streak:               (json['streak'] as num?)?.toInt() ?? 0,
+      bestStreak:           (json['best_streak'] as num?)?.toInt() ?? 0,
+      weeklyGoal:           (json['weekly_goal'] as num?)?.toInt() ?? 3,
       remainingWorkoutsThisWeek:
           (json['remaining_workouts_this_week'] as num?)?.toInt() ?? 0,
-      totalCheckins: (json['total_checkins'] as num?)?.toInt() ?? 0,
-      totalWorkouts: (json['total_workouts'] as num?)?.toInt() ?? 0,
+      workoutsDoneThisWeek:
+          (json['workouts_done_this_week'] as num?)?.toInt() ?? 0,
+      totalCheckins:    (json['total_checkins'] as num?)?.toInt() ?? 0,
+      totalWorkouts:    (json['total_workouts'] as num?)?.toInt() ?? 0,
       totalWorkoutsWithPoints:
           (json['total_workouts_with_points'] as num?)?.toInt() ?? 0,
     );
@@ -110,6 +148,7 @@ class WorkoutSessionData {
   final bool dailyPointsAlreadyGranted;
   final bool isValid;
   final bool countsForPoints;
+  /// true = sessão foi on-plan (contou para streak e meta semanal)
   final bool countsForStreak;
 
   const WorkoutSessionData({
@@ -134,24 +173,22 @@ class WorkoutSessionData {
   factory WorkoutSessionData.fromJson(Map<String, dynamic> json) {
     final requirements = json['requirements'] as Map<String, dynamic>? ?? {};
     return WorkoutSessionData(
-      id: (json['id'] as num).toInt(),
-      startedAt: json['started_at'] as String,
-      finishedAt: json['finished_at'] as String?,
-      isActive: json['is_active'] as bool? ?? true,
-      progress: (json['progress'] as num?)?.toInt() ?? 0,
-      elapsedSeconds: (json['elapsed_seconds'] as num?)?.toInt() ?? 0,
-      pointsGranted: json['points_granted'] as bool? ?? false,
-      pointsGrantedAt: json['points_granted_at'] as String?,
-      canEarnPoints: json['can_earn_points'] as bool? ?? false,
-      meetsConditions: json['meets_conditions'] as bool? ?? false,
-      minMinutes: (json['min_minutes'] as num?)?.toInt() ?? 10,
-      minProgress:
-          (requirements['min_progress_valid'] as num?)?.toInt() ?? 75,
-      dailyPointsAlreadyGranted:
-          json['daily_points_already_granted'] as bool? ?? false,
-      isValid: json['is_valid'] as bool? ?? false,
-      countsForPoints: json['counts_for_points'] as bool? ?? false,
-      countsForStreak: json['counts_for_streak'] as bool? ?? false,
+      id:           (json['id'] as num).toInt(),
+      startedAt:    json['started_at'] as String,
+      finishedAt:   json['finished_at'] as String?,
+      isActive:     json['is_active'] != false,
+      progress:     (json['progress'] as num?)?.toInt() ?? 0,
+      elapsedSeconds:     (json['elapsed_seconds'] as num?)?.toInt() ?? 0,
+      pointsGranted:      json['points_granted']    == true,
+      pointsGrantedAt:    json['points_granted_at'] as String?,
+      canEarnPoints:      json['can_earn_points']   == true,
+      meetsConditions:    json['meets_conditions']  == true,
+      minMinutes:         (json['min_minutes'] as num?)?.toInt() ?? 10,
+      minProgress:        (requirements['min_progress_valid'] as num?)?.toInt() ?? 75,
+      dailyPointsAlreadyGranted: json['daily_points_already_granted'] == true,
+      isValid:            json['is_valid']         == true,
+      countsForPoints:    json['counts_for_points'] == true,
+      countsForStreak:    json['counts_for_streak'] == true,
     );
   }
 }
@@ -245,52 +282,35 @@ class ExercisePRRecord {
   }
 }
 
-/// Resultado do POST /workout/finish — fonte de verdade para pontos e streak.
+/// Resultado do POST /workout/finish.
 class WorkoutFinishResult {
-  /// VALID | PARTIAL_CONFIRM | INVALID
   final String status;
   final String message;
   final int pointsGenerated;
+  /// true se o treino foi feito em um dia do plano (on-plan).
+  final bool isOnPlan;
   final int streakCurrent;
   final int bestStreak;
-
-  /// True quando este treino incrementou o streak diário.
   final bool streakJustIncreased;
-
   final int totalPoints;
   final bool checkinValidated;
-
-  /// True quando este treino foi o que completou a meta semanal pela primeira
-  /// vez nesta semana. Usado para exibir o modal comemorativo (uma vez/semana).
-  final bool weeklyGoalJustCompleted;
-
   final int remainingWorkoutsThisWeek;
   final WorkoutSessionData session;
-
-  /// Dados do desafio ativo após o treino. Null se não houver desafio.
   final Map<String, dynamic>? challengeProgress;
-
-  /// Motivational progress message generated by the backend when the user
-  /// improved their performance vs the previous session (e.g. "+2kg no Supino").
-  /// Null when no improvement was detected or no sets were recorded.
   final String? progressMessage;
-
-  /// List of PR achievement messages (e.g. "🔥 Novo recorde de carga: 65kg no Supino").
   final List<String> prMessages;
-
-  /// Total volume (sum of weight × reps) across all sets in this session.
   final int workoutVolume;
 
   const WorkoutFinishResult({
     required this.status,
     required this.message,
     required this.pointsGenerated,
+    required this.isOnPlan,
     required this.streakCurrent,
     required this.bestStreak,
     required this.streakJustIncreased,
     required this.totalPoints,
     required this.checkinValidated,
-    required this.weeklyGoalJustCompleted,
     required this.remainingWorkoutsThisWeek,
     required this.session,
     this.challengeProgress,
@@ -299,22 +319,24 @@ class WorkoutFinishResult {
     this.workoutVolume = 0,
   });
 
+  /// Mantido por compatibilidade — backend não envia mais este campo.
+  bool get weeklyGoalJustCompleted => false;
+
   bool get isValid => status == 'VALID';
   bool get isPartialConfirm => status == 'PARTIAL_CONFIRM';
   bool get isInvalid => status == 'INVALID';
 
   factory WorkoutFinishResult.fromJson(Map<String, dynamic> json) {
     return WorkoutFinishResult(
-      status: json['status'] as String? ?? 'INVALID',
-      message: json['message'] as String? ?? '',
-      pointsGenerated: (json['points_generated'] as num?)?.toInt() ?? 0,
-      streakCurrent: (json['streak_current'] as num?)?.toInt() ?? 0,
-      bestStreak: (json['best_streak'] as num?)?.toInt() ?? 0,
-      streakJustIncreased: json['streak_just_increased'] as bool? ?? false,
-      totalPoints: (json['total_points'] as num?)?.toInt() ?? 0,
-      checkinValidated: json['checkin_validated'] as bool? ?? false,
-      weeklyGoalJustCompleted:
-          json['weekly_goal_just_completed'] as bool? ?? false,
+      status:           json['status'] as String? ?? 'INVALID',
+      message:          json['message'] as String? ?? '',
+      pointsGenerated:  (json['points_generated'] as num?)?.toInt() ?? 0,
+      isOnPlan:         json['is_on_plan']          == true,
+      streakCurrent:    (json['streak_current'] as num?)?.toInt() ?? 0,
+      bestStreak:       (json['best_streak'] as num?)?.toInt() ?? 0,
+      streakJustIncreased:    json['streak_just_increased'] == true,
+      totalPoints:            (json['total_points'] as num?)?.toInt() ?? 0,
+      checkinValidated:       json['checkin_validated'] == true,
       remainingWorkoutsThisWeek:
           (json['remaining_workouts_this_week'] as num?)?.toInt() ?? 0,
       session: WorkoutSessionData.fromJson(
@@ -399,10 +421,6 @@ class WorkoutApiService {
   }
 
   /// POST /api/workout/finish
-  ///
-  /// Envia completion_percent, duration_seconds e confirm_partial.
-  /// Retorna [WorkoutFinishResult] com status, message, points_generated,
-  /// streak_current, total_points — a fonte de verdade.
   Future<WorkoutFinishResult> finishWorkout({
     required int completionPercent,
     required int durationSeconds,
@@ -410,8 +428,8 @@ class WorkoutApiService {
   }) async {
     final response = await _api.post('/workout/finish', {
       'completion_percent': completionPercent,
-      'duration_seconds': durationSeconds,
-      'confirm_partial': confirmPartial,
+      'duration_seconds':   durationSeconds,
+      'confirm_partial':    confirmPartial,
     });
 
     if (response.statusCode == 401) throw Exception('401');
@@ -427,9 +445,6 @@ class WorkoutApiService {
   }
 
   /// GET /api/exercises/{id}/last-sets
-  ///
-  /// Returns the enriched last-sets snapshot: sets, max_weight, volume,
-  /// estimated_1rm, workout_date. Returns null when no history exists.
   Future<ExerciseLastSets?> getLastSets(int exerciseId) async {
     final response = await _api.get('/exercises/$exerciseId/last-sets');
     if (response.statusCode == 401) throw Exception('401');
@@ -440,8 +455,6 @@ class WorkoutApiService {
   }
 
   /// GET /api/exercises/prs
-  ///
-  /// Returns all-time PRs for every exercise the user has trained.
   Future<List<ExercisePRRecord>> getAllPRs() async {
     final response = await _api.get('/exercises/prs');
     if (response.statusCode == 401) throw Exception('401');
@@ -454,9 +467,6 @@ class WorkoutApiService {
   }
 
   /// GET /api/exercises/{id}/workout-history
-  ///
-  /// Returns last 20 sessions containing this exercise, ordered chronologically,
-  /// with per-session metrics (max_weight, volume, estimated_1rm).
   Future<List<ExerciseHistoryPoint>> getExerciseWorkoutHistory(
       int exerciseId) async {
     final response =
@@ -466,15 +476,11 @@ class WorkoutApiService {
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     final list = data['history'] as List<dynamic>? ?? [];
     return list
-        .map((e) =>
-            ExerciseHistoryPoint.fromJson(e as Map<String, dynamic>))
+        .map((e) => ExerciseHistoryPoint.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
   /// POST /api/workout-sets
-  ///
-  /// Saves all sets for one exercise within a session. Idempotent — replaces
-  /// any previously saved sets for the same exercise+session.
   Future<void> saveWorkoutSets({
     required int sessionId,
     required int exerciseId,
@@ -482,16 +488,13 @@ class WorkoutApiService {
   }) async {
     final response = await _api.post('/workout-sets', {
       'workout_session_id': sessionId,
-      'exercise_id': exerciseId,
-      'sets': sets,
+      'exercise_id':        exerciseId,
+      'sets':               sets,
     });
     if (response.statusCode == 401) throw Exception('401');
-    // Non-critical: silently ignore other errors
   }
 
   /// GET /api/exercises/{id}/substitutions
-  ///
-  /// Returns list of substitute exercises (id, name, muscle_group, type, image_url).
   Future<List<Map<String, dynamic>>> getSubstitutions(int exerciseId) async {
     final response = await _api.get('/exercises/$exerciseId/substitutions');
     if (response.statusCode == 401) throw Exception('401');
@@ -514,7 +517,7 @@ class WorkoutApiService {
       throw Exception(data['message'] ?? 'Erro na sessão de treino.');
     }
 
-    final data = jsonDecode(body) as Map<String, dynamic>;
+    final data    = jsonDecode(body) as Map<String, dynamic>;
     final session = data['session'] as Map<String, dynamic>?;
     if (session == null || session['id'] == null) {
       throw Exception('Sessão inválida retornada pelo servidor.');

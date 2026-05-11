@@ -29,13 +29,12 @@ class WorkoutSessionFactory extends Factory
     /** Session that has already been finished. */
     public function finished(): static
     {
-        // afterCreating runs after the model is persisted with its real started_at
-        // (including any override passed to create()), so finished_at is always
-        // 30 min after the actual start — not after Carbon::now().
-        return $this->afterCreating(function (WorkoutSession $session) {
-            $session->update([
-                'finished_at' => $session->started_at->copy()->addMinutes(30),
-            ]);
+        return $this->state(function (array $attributes) {
+            $startedAt = $attributes['started_at'] ?? now()->subMinutes(45);
+            return [
+                'finished_at' => Carbon::parse($startedAt)->addMinutes(30),
+                'progress'    => 100,
+            ];
         });
     }
 

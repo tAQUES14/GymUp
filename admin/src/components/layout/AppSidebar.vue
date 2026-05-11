@@ -22,10 +22,16 @@
         <NavItem v-for="item in mainNav" :key="item.to" v-bind="item" />
       </div>
 
-      <!-- Gestão da Academia (gym_admin e trainer) -->
-      <div v-if="!auth.isSuperAdmin" class="mt-5 mb-1">
+      <!-- Gestão da Academia (gym_admin e trainer — não super_admin, não network_admin) -->
+      <div v-if="!auth.isSuperAdmin && auth.user?.role !== 'network_admin'" class="mt-5 mb-1">
         <p class="px-3 mb-2 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Gestão</p>
         <NavItem v-for="item in gymManagementNav" :key="item.to" v-bind="item" />
+      </div>
+
+      <!-- Painel da Rede (network_admin apenas) -->
+      <div v-if="auth.user?.role === 'network_admin'" class="mt-5 mb-1">
+        <p class="px-3 mb-2 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Rede</p>
+        <NavItem v-for="item in networkAdminNav" :key="item.to" v-bind="item" />
       </div>
 
       <!-- Sistema (super_admin apenas) -->
@@ -74,10 +80,11 @@ const router = useRouter()
 const userInitial = computed(() => auth.user?.name?.[0]?.toUpperCase() ?? 'A')
 const roleLabel   = computed(() => {
   const map = {
-    super_admin: 'Super Admin',
-    gym_admin:   'Admin da Academia',
-    trainer:     'Trainer',
-    user:        'Usuário',
+    super_admin:   'Super Admin',
+    network_admin: 'Admin da Rede',
+    gym_admin:     'Admin da Academia',
+    trainer:       'Trainer',
+    user:          'Usuário',
   }
   return map[auth.user?.role] ?? auth.user?.role ?? ''
 })
@@ -151,6 +158,31 @@ const icons = {
       d="M6.429 9.75L2.25 12l4.179 2.25m0-4.5l5.571 3 5.571-3m-11.142 0L2.25 7.5 12 2.25l9.75 5.25-4.179 2.25m0 0L21.75 12l-4.179 2.25m0 0l4.179 2.25L12 21.75 2.25 16.5l4.179-2.25m11.142 0l-5.571 3-5.571-3" />
   </svg>`,
 
+  invite: `<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+    <path stroke-linecap="round" stroke-linejoin="round"
+      d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
+  </svg>`,
+
+  checkin: `<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" />
+    <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75V16.5zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />
+  </svg>`,
+
+  roles: `<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+    <path stroke-linecap="round" stroke-linejoin="round"
+      d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+  </svg>`,
+
+  chains: `<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+    <path stroke-linecap="round" stroke-linejoin="round"
+      d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+  </svg>`,
+
+  network: `<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+    <path stroke-linecap="round" stroke-linejoin="round"
+      d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+  </svg>`,
+
   gifMapping: `<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
     <path stroke-linecap="round" stroke-linejoin="round"
       d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
@@ -167,36 +199,47 @@ const mainNav = computed(() => [
   },
 ])
 
-// Gestão da academia — gym_admin e trainer
+// Gestão da academia — gym_admin e trainer (não super_admin, não network_admin)
 const gymManagementNav = computed(() => {
   const items = [
-    { to: '/users',         label: 'Alunos',        icon: icons.users },
-    { to: '/workouts',      label: 'Treinos',        icon: icons.workouts },
-    { to: '/workout-plans', label: 'Planos',         icon: icons.plans },
-    { to: '/exercises',  label: 'Exercícios', icon: icons.exercises },
-    { to: '/challenges', label: 'Desafios',   icon: icons.challenges },
-    { to: '/achievements',  label: 'Conquistas',     icon: icons.achievements },
-    { to: '/ranking',       label: 'Ranking',        icon: icons.ranking },
-    { to: '/rewards',       label: 'Recompensas',    icon: icons.rewards },
-    { to: '/redemptions',   label: 'Resgates',       icon: icons.redemptions },
+    { to: '/users',         label: 'Alunos',      icon: icons.users        },
+    { to: '/workouts',      label: 'Treinos',      icon: icons.workouts     },
+    { to: '/workout-plans', label: 'Planos',       icon: icons.plans        },
+    { to: '/exercises',     label: 'Exercícios',   icon: icons.exercises    },
+    { to: '/challenges',    label: 'Desafios',     icon: icons.challenges   },
+    { to: '/achievements',  label: 'Conquistas',   icon: icons.achievements },
+    { to: '/ranking',       label: 'Ranking',      icon: icons.ranking      },
+    { to: '/rewards',       label: 'Recompensas',  icon: icons.rewards      },
+    { to: '/redemptions',   label: 'Resgates',     icon: icons.redemptions  },
   ]
 
-  // gym_admin também acessa Relatórios e Configurações da academia
+  // gym_admin também acessa Relatórios, Configurações, Check-in e Permissões
   if (auth.isGymAdmin) {
     items.push(
-      { to: '/reports',  label: 'Relatórios',    icon: icons.reports },
+      { to: '/reports',  label: 'Relatórios',    icon: icons.reports  },
       { to: '/settings', label: 'Configurações', icon: icons.settings },
+      { to: '/invite',   label: 'Convidar',      icon: icons.invite   },
+      { to: '/checkin',  label: 'Check-in',      icon: icons.checkin  },
+      { to: '/roles',    label: 'Permissões',    icon: icons.roles    },
     )
   }
 
   return items
 })
 
+// Rede — network_admin apenas
+const networkAdminNav = [
+  { to: '/network/dashboard', label: 'Painel da Rede', icon: icons.network },
+  { to: '/network/gyms',      label: 'Filiais',        icon: icons.gyms    },
+  { to: '/network/trainers',  label: 'Trainers',       icon: icons.users   },
+]
+
 // Sistema — super_admin apenas
 const superAdminNav = [
-  { to: '/gyms',     label: 'Academias',      icon: icons.gyms },
-  { to: '/reports',  label: 'Relatórios',     icon: icons.reports },
-  { to: '/settings', label: 'Configurações',  icon: icons.settings },
+  { to: '/gyms',     label: 'Academias',     icon: icons.gyms        },
+  { to: '/chains',   label: 'Redes',         icon: icons.chains      },
+  { to: '/reports',  label: 'Relatórios',    icon: icons.reports     },
+  { to: '/settings', label: 'Configurações', icon: icons.settings    },
 ]
 
 async function handleLogout() {

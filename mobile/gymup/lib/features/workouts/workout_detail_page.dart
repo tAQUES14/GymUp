@@ -48,7 +48,59 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     if (!mounted) return;
 
     if (data.hasActiveSession) {
-      Navigator.pushNamed(context, '/workout-step', arguments: widget.workout);
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('Treino em andamento', style: AppTypography.h3),
+          content: Text(
+            'Você tem um treino em andamento. Deseja continuar ou iniciar outro?',
+            style: AppTypography.bodyLarge,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'new'),
+              child: Text(
+                'Iniciar novo',
+                style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kBlue,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () => Navigator.pop(ctx, 'continue'),
+              child: const Text('Continuar'),
+            ),
+          ],
+        ),
+      );
+
+      if (!mounted) { setState(() => _isStarting = false); return; }
+
+      if (choice == 'continue') {
+        Navigator.pushNamed(context, '/workout-step', arguments: widget.workout);
+      } else if (choice == 'new') {
+        try {
+          await WorkoutApiService().finishWorkout(
+            completionPercent: 0,
+            durationSeconds: 0,
+            confirmPartial: true,
+          );
+          if (!mounted) { setState(() => _isStarting = false); return; }
+          await WorkoutApiService().startWorkout();
+          if (!mounted) { setState(() => _isStarting = false); return; }
+          Navigator.pushNamed(context, '/workout-step', arguments: widget.workout);
+        } catch (e) {
+          if (!mounted) { setState(() => _isStarting = false); return; }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(e.toString())),
+          );
+        }
+      }
+
       setState(() => _isStarting = false);
       return;
     }
@@ -128,6 +180,7 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     final workout = widget.workout;
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: AppColors.background,
       body: CustomScrollView(
         slivers: [

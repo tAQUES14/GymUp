@@ -74,22 +74,32 @@
 
           <!-- Actions -->
           <div class="flex items-center gap-2 flex-shrink-0">
-            <button @click="editOpen = true"
-              class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-slate-600
-                     border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
-              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" />
-              </svg>
-              Editar
-            </button>
-            <button @click="deleteConfirm = true"
-              class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-red-600
-                     border border-red-200 rounded-lg hover:bg-red-50 transition-colors">
-              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-              </svg>
-              Excluir
-            </button>
+            <!-- Visitor notice -->
+            <span v-if="user.is_visitor"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold
+                     bg-slate-100 text-slate-500"
+              :title="user.home_gym_name ? `Filial de origem: ${user.home_gym_name}` : undefined"
+            >
+              Visitante{{ user.home_gym_name ? ` · ${user.home_gym_name}` : '' }}
+            </span>
+            <template v-else>
+              <button @click="editOpen = true"
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-slate-600
+                       border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" />
+                </svg>
+                Editar
+              </button>
+              <button @click="deleteConfirm = true"
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-red-600
+                       border border-red-200 rounded-lg hover:bg-red-50 transition-colors">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                </svg>
+                Excluir
+              </button>
+            </template>
           </div>
         </div>
       </div>
@@ -180,72 +190,31 @@
 
       </template>
 
-      <!-- ── TAB: AGENDA ───────────────────────────────────────── -->
+      <!-- ── TAB: STREAK ───────────────────────────────────────── -->
       <template v-if="activeTab === 'schedule'">
         <div class="card px-5 py-5">
-          <div class="flex items-center justify-between mb-5">
-            <div>
-              <p class="text-sm font-bold text-slate-800">Dias de treino</p>
-              <p class="text-xs text-slate-400 mt-0.5">
-                Define em quais dias da semana este aluno deve treinar.
-                O streak só avança em dias marcados como treino.
+          <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-5">Streak diário</p>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div class="text-center p-4 bg-orange-50 rounded-xl">
+              <p class="text-3xl font-black" :class="user.current_streak > 0 ? 'text-orange-500' : 'text-slate-300'">
+                {{ user.current_streak > 0 ? `🔥 ${user.current_streak}` : '—' }}
               </p>
+              <p class="text-xs text-slate-500 mt-1">Streak atual</p>
             </div>
-            <!-- Streak info -->
-            <div class="flex items-center gap-3 flex-shrink-0">
-              <div class="text-center">
-                <p class="text-lg font-black" :class="user.current_streak > 0 ? 'text-orange-500' : 'text-slate-300'">
-                  {{ user.current_streak > 0 ? `🔥 ${user.current_streak}` : '—' }}
-                </p>
-                <p class="text-[10px] text-slate-400">Streak atual</p>
-              </div>
-              <div class="text-center" v-if="user.best_streak > 0">
-                <p class="text-lg font-black text-amber-500">🏆 {{ user.best_streak }}</p>
-                <p class="text-[10px] text-slate-400">Recorde</p>
-              </div>
+            <div class="text-center p-4 bg-amber-50 rounded-xl">
+              <p class="text-3xl font-black" :class="user.best_streak > 0 ? 'text-amber-500' : 'text-slate-300'">
+                {{ user.best_streak > 0 ? `🏆 ${user.best_streak}` : '—' }}
+              </p>
+              <p class="text-xs text-slate-500 mt-1">Recorde</p>
+            </div>
+            <div class="text-center p-4 bg-slate-50 rounded-xl">
+              <p class="text-3xl font-black text-slate-700">{{ user.workouts_total }}</p>
+              <p class="text-xs text-slate-500 mt-1">Treinos feitos</p>
             </div>
           </div>
-
-          <!-- Aviso de convenção de dias -->
-          <p class="text-[11px] text-slate-400 mb-3">
-            Convenção: 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
-          </p>
-
-          <!-- Day picker -->
-          <!-- Brazilian week order: Dom Seg Ter Qua Qui Sex Sáb -->
-          <div class="flex flex-wrap gap-2 mb-6">
-            <button
-              v-for="d in DAY_OPTIONS" :key="d.value"
-              @click="toggleDay(d.value)"
-              class="px-4 py-2 rounded-lg text-sm font-semibold border transition-colors"
-              :class="scheduleDays.includes(d.value)
-                ? 'bg-brand-600 text-white border-brand-600'
-                : 'bg-white text-slate-500 border-slate-200 hover:border-brand-300'"
-            >
-              {{ d.label }}
-            </button>
-          </div>
-
-          <div class="flex items-center gap-3">
-            <button
-              @click="saveSchedule"
-              :disabled="scheduleSaving"
-              class="inline-flex items-center gap-1.5 px-4 py-2 bg-brand-600 text-white
-                     text-sm font-semibold rounded-lg hover:bg-brand-700 transition-colors
-                     disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              <svg v-if="scheduleSaving" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
-              {{ scheduleSaving ? 'Salvando…' : 'Salvar agenda' }}
-            </button>
-            <p v-if="scheduleSaved" class="text-xs text-emerald-600 font-semibold">✓ Agenda salva</p>
-            <p v-if="scheduleError" class="text-xs text-red-500">{{ scheduleError }}</p>
-          </div>
-
-          <p class="text-[11px] text-slate-400 mt-4">
-            Ao salvar, o sistema não quebra o streak atual — a nova agenda vale a partir de hoje.
+          <p class="text-[11px] text-slate-400 mt-5">
+            O streak avança apenas em dias de treino do plano ativo. Dias de descanso pausam o contador — sem penalidade.
+            Sem plano atribuído, o streak fica congelado.
           </p>
         </div>
       </template>
@@ -478,50 +447,10 @@ const deleteConfirm = ref(false)
 const deleting      = ref(false)
 const deleteError   = ref('')
 
-// ── Training schedule state ─────────────────────────────────────────
-// Day convention: 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday,
-//                4=Thursday, 5=Friday, 6=Saturday
-const DAY_OPTIONS = [
-  { value: 0, label: 'Dom' },
-  { value: 1, label: 'Seg' },
-  { value: 2, label: 'Ter' },
-  { value: 3, label: 'Qua' },
-  { value: 4, label: 'Qui' },
-  { value: 5, label: 'Sex' },
-  { value: 6, label: 'Sáb' },
-]
-const scheduleDays  = ref([])
-const scheduleSaving = ref(false)
-const scheduleSaved  = ref(false)
-const scheduleError  = ref('')
-
-function toggleDay(day) {
-  const idx = scheduleDays.value.indexOf(day)
-  if (idx === -1) scheduleDays.value.push(day)
-  else scheduleDays.value.splice(idx, 1)
-  scheduleSaved.value = false
-}
-
-async function saveSchedule() {
-  scheduleSaving.value = true
-  scheduleSaved.value  = false
-  scheduleError.value  = ''
-  try {
-    await api.put(`/admin/users/${route.params.id}/training-schedule`, {
-      days: [...scheduleDays.value].sort((a, b) => a - b),
-    })
-    scheduleSaved.value = true
-    setTimeout(() => { scheduleSaved.value = false }, 3000)
-  } catch (e) {
-    scheduleError.value = e.response?.data?.message ?? 'Erro ao salvar agenda.'
-  } finally {
-    scheduleSaving.value = false
-  }
-}
 
 const tabs = computed(() => [
   { key: 'overview',    label: 'Visão Geral' },
-  { key: 'schedule',    label: 'Agenda' },
+  { key: 'schedule',    label: 'Streak' },
   { key: 'sessions',    label: 'Treinos',    count: user.value?.sessions?.length ?? 0 },
   { key: 'points',      label: 'Pontos',     count: user.value?.transactions?.length ?? 0 },
   { key: 'redemptions', label: 'Resgates',   count: user.value?.redemptions?.length ?? 0 },
@@ -556,8 +485,6 @@ async function load() {
   try {
     const { data } = await api.get(`/admin/users/${route.params.id}`)
     user.value = data
-    // Initialize schedule picker from the loaded user data
-    scheduleDays.value = Array.isArray(data.training_days) ? [...data.training_days] : []
   } catch {
     error.value = 'Não foi possível carregar o aluno.'
   } finally { loading.value = false }

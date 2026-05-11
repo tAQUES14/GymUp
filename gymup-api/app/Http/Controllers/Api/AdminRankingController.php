@@ -15,7 +15,7 @@ class AdminRankingController extends Controller
      */
     public function index(Request $request)
     {
-        $gymId  = $request->user()->gym_id;
+        $gymId  = $request->user()->activeGymId();
         $period = $request->query('period', 'all');
         $limit  = min((int) $request->query('limit', 50), 100);
 

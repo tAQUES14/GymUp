@@ -41,15 +41,28 @@ class Exercise extends Model
 
     public function getGifUrlAttribute(): ?string
     {
-        if (!$this->gif_file) {
+        return self::gifPathToUrl($this->gif_file);
+    }
+
+    /**
+     * Convert a relative gif_file path (e.g. "BÍCEPS e ANTEBRAÇO/Rosca direta.gif")
+     * to a fully-qualified, RFC-3986-safe URL.
+     *
+     * Percent-encodes every path segment so accented folder/file names and spaces
+     * produce a valid URI. Dart's Uri.parse() (used by Image.network) throws a
+     * FormatException on bare spaces / non-ASCII chars, silently showing the fallback
+     * icon.  rawurlencode encodes spaces as %20 (RFC 3986-safe).
+     *
+     * Used by getGifUrlAttribute(), AdminExerciseController::availableGifs(), and
+     * GifSuggestionService so all three always produce identical URLs.
+     */
+    public static function gifPathToUrl(?string $relative): ?string
+    {
+        if (!$relative) {
             return null;
         }
 
-        // Percent-encode every path segment so accented folder/file names and
-        // spaces produce a valid URI. Dart's Uri.parse() (used by Image.network)
-        // throws FormatException on bare spaces / non-ASCII, silently showing the
-        // fallback icon.  rawurlencode encodes spaces as %20 (RFC 3986-safe).
-        $encoded = implode('/', array_map('rawurlencode', explode('/', $this->gif_file)));
+        $encoded = implode('/', array_map('rawurlencode', explode('/', $relative)));
 
         return url('storage/exercises/' . $encoded);
     }

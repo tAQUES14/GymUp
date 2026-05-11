@@ -74,10 +74,10 @@ class WorkoutPlanCardioTest extends TestCase
         ]);
 
         $day = WorkoutPlanDay::create([
-            'plan_id'   => $plan->id,
-            'day_order' => 1,
-            'name'      => 'Cardio Day',
-            'rest_day'  => false,
+            'plan_id'     => $plan->id,
+            'day_of_week' => 1, // Segunda
+            'name'        => 'Cardio Day',
+            'rest_day'    => false,
         ]);
 
         $we = WorkoutExercise::create([
@@ -122,10 +122,10 @@ class WorkoutPlanCardioTest extends TestCase
         ]);
 
         $day = WorkoutPlanDay::create([
-            'plan_id'   => $plan->id,
-            'day_order' => 1,
-            'name'      => 'Push',
-            'rest_day'  => false,
+            'plan_id'     => $plan->id,
+            'day_of_week' => now()->dayOfWeek, // dia atual para o endpoint /today retornar
+            'name'        => 'Push',
+            'rest_day'    => false,
         ]);
 
         WorkoutExercise::create([
@@ -149,11 +149,10 @@ class WorkoutPlanCardioTest extends TestCase
         ]);
 
         UserWorkoutPlan::create([
-            'user_id'           => $user->id,
-            'plan_id'           => $plan->id,
-            'gym_id'            => $gym->id,
-            'current_day_index' => 1,
-            'started_at'        => now(),
+            'user_id'    => $user->id,
+            'plan_id'    => $plan->id,
+            'gym_id'     => $gym->id,
+            'started_at' => now(),
         ]);
 
         Sanctum::actingAs($user);
@@ -161,10 +160,10 @@ class WorkoutPlanCardioTest extends TestCase
         $response = $this->getJson('/api/workout-plan/today');
 
         $response->assertOk()
-            ->assertJsonPath('current_day.name', 'Push')
-            ->assertJsonPath('current_day.rest_day', false);
+            ->assertJsonPath('today.name', 'Push')
+            ->assertJsonPath('today.rest_day', false);
 
-        $exercises = $response->json('current_day.exercises');
+        $exercises = $response->json('today.exercises');
         $this->assertCount(2, $exercises);
 
         // Strength exercise
@@ -220,9 +219,10 @@ class WorkoutPlanCardioTest extends TestCase
         Sanctum::actingAs($admin);
 
         $response = $this->postJson("/api/admin/workout-plans/{$plan->id}/days", [
-            'name'     => 'Cardio Light',
-            'rest_day' => false,
-            'exercises' => [
+            'name'        => 'Cardio Light',
+            'day_of_week' => 1,
+            'rest_day'    => false,
+            'exercises'   => [
                 [
                     'exercise_id'      => $cardioEx->id,
                     'duration_minutes' => 30,

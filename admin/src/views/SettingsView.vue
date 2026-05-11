@@ -270,18 +270,20 @@ async function loadData() {
   loading.value   = true
   loadError.value = ''
   try {
-    const { data } = await api.get('/admin/settings')
-    gym.value = data.gym
+    const settingsRes = await api.get('/admin/settings')
 
-    if (data.gym) {
-      gymForm.name    = data.gym.name    ?? ''
-      gymForm.email   = data.gym.email   ?? ''
-      gymForm.phone   = data.gym.phone   ?? ''
-      gymForm.address = data.gym.address ?? ''
+    gym.value = settingsRes.data.gym
+
+    if (settingsRes.data.gym) {
+      gymForm.name    = settingsRes.data.gym.name    ?? ''
+      gymForm.email   = settingsRes.data.gym.email   ?? ''
+      gymForm.phone   = settingsRes.data.gym.phone   ?? ''
+      gymForm.address = settingsRes.data.gym.address ?? ''
     }
 
-    accountForm.name  = data.account.name  ?? ''
-    accountForm.email = data.account.email ?? ''
+    accountForm.name  = settingsRes.data.account.name  ?? ''
+    accountForm.email = settingsRes.data.account.email ?? ''
+
   } catch (e) {
     loadError.value = e.response?.data?.message ?? 'Erro ao carregar configurações.'
   } finally {

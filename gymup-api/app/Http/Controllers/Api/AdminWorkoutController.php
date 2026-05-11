@@ -16,7 +16,7 @@ class AdminWorkoutController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $gymId  = $request->user()->gym_id;
+        $gymId  = $request->user()->activeGymId();
         $search = trim($request->query('search', ''));
 
         $userIds = User::where('gym_id', $gymId)->pluck('id');
@@ -39,7 +39,7 @@ class AdminWorkoutController extends Controller
      */
     public function show(Request $request, int $id): JsonResponse
     {
-        $gymId   = $request->user()->gym_id;
+        $gymId   = $request->user()->activeGymId();
         $userIds = User::where('gym_id', $gymId)->pluck('id');
 
         $workout = CustomWorkout::whereIn('user_id', $userIds)
@@ -133,7 +133,7 @@ class AdminWorkoutController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
-        $gymId   = $request->user()->gym_id;
+        $gymId   = $request->user()->activeGymId();
         $userIds = User::where('gym_id', $gymId)->pluck('id');
 
         $workout = CustomWorkout::whereIn('user_id', $userIds)
@@ -174,7 +174,7 @@ class AdminWorkoutController extends Controller
      */
     public function destroy(Request $request, int $id): JsonResponse
     {
-        $gymId   = $request->user()->gym_id;
+        $gymId   = $request->user()->activeGymId();
         $userIds = User::where('gym_id', $gymId)->pluck('id');
 
         $workout = CustomWorkout::whereIn('user_id', $userIds)
@@ -193,7 +193,7 @@ class AdminWorkoutController extends Controller
      */
     public function assign(Request $request, int $id): JsonResponse
     {
-        $gymId   = $request->user()->gym_id;
+        $gymId   = $request->user()->activeGymId();
         $userIds = User::where('gym_id', $gymId)->pluck('id');
 
         $template = CustomWorkout::whereIn('user_id', $userIds)
@@ -259,7 +259,7 @@ class AdminWorkoutController extends Controller
      */
     public function removeAssignment(Request $request, int $templateId, int $assignmentId): JsonResponse
     {
-        $gymId   = $request->user()->gym_id;
+        $gymId   = $request->user()->activeGymId();
         $userIds = User::where('gym_id', $gymId)->pluck('id');
 
         // Garante que o template pertence à academia

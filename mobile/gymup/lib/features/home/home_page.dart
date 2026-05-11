@@ -9,6 +9,7 @@ import '../workouts/models/workout_model.dart';
 import '../workouts/models/workout_plan_model.dart';
 import '../workouts/workout_api_service.dart';
 import '../workouts/workout_plan_api_service.dart';
+import '../workouts/workout_plan_utils.dart';
 import 'widgets/active_challenge_card.dart';
 import 'widgets/home_header.dart';
 import 'widgets/daily_streak_card.dart';
@@ -36,6 +37,7 @@ class _HomePageState extends State<HomePage> {
   bool _isLoading  = true;
   bool _hasError   = false;
   bool _isStarting = false;
+  String? _errorMessage;
 
   int _loadSeq = 0;
 
@@ -48,7 +50,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _loadDashboard() async {
     final seq = ++_loadSeq;
 
-    setState(() { _isLoading = true; _hasError = false; });
+    setState(() { _isLoading = true; _hasError = false; _errorMessage = null; });
 
     try {
       final api     = WorkoutApiService();
@@ -88,40 +90,16 @@ class _HomePageState extends State<HomePage> {
         Navigator.pushReplacementNamed(context, '/login');
         return;
       }
-      setState(() { _hasError = true; _isLoading = false; });
+      setState(() { _hasError = true; _isLoading = false; _errorMessage = e.toString(); });
     }
   }
 
-  // Converts a plan day into the WorkoutModel used by the existing session UI.
-  // Mirrors the same logic in WorkoutsPage._startPlanWorkout.
-  WorkoutModel _workoutFromPlan(TodayWorkoutPlan plan) {
-    final exercises = plan.currentDay.exercises.map((pe) {
-      int parsedReps = 10;
-      if (pe.isCardio) {
-        parsedReps = pe.durationMinutes ?? 10;
-      } else if (pe.reps != null) {
-        final repsStr = pe.reps!.replaceAll(RegExp(r'[^0-9]'), '');
-        if (repsStr.isNotEmpty) parsedReps = int.tryParse(repsStr) ?? 10;
-      }
-      return ExerciseModel(
-        id:          pe.exerciseId,
-        name:        pe.name,
-        muscleGroup: pe.muscleGroup,
-        gifUrl:      pe.gifUrl,
-        defaultRest: pe.defaultRest,
-        sets:        pe.sets ?? 1,
-        reps:        parsedReps,
-        rest:        pe.isCardio ? 0 : pe.restSeconds,
-      );
-    }).toList();
+  // Delegates to shared utility (see workout_plan_utils.dart).
+  WorkoutModel _workoutFromPlan(TodayWorkoutPlan plan) => workoutFromPlan(plan);
 
-    return WorkoutModel(
-      id:                         plan.planId * 1000 + plan.currentDayIndex,
-      name:                       plan.currentDay.name,
-      description:                '${plan.planName} — Dia ${plan.currentDayIndex} de ${plan.totalDays}',
-      exercises:                  exercises,
-      betweenExerciseRestSeconds: plan.betweenExerciseRestSeconds,
-    );
+  static String _dowLabel(int dow) {
+    const labels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    return labels[dow.clamp(0, 6)];
   }
 
   void _pushWorkoutStep() {
@@ -184,14 +162,14 @@ class _HomePageState extends State<HomePage> {
               DailyStreakCard(
                 streak: data.streak,
                 bestStreak: data.bestStreak,
-                trainingDays: data.trainingDays,
+                planName: _todayPlan?.planName,
               ),
 
               const SizedBox(height: 16),
 
-              // ── Meta semanal (volume semanal) ─────────────────────────────
+              // ── Meta semanal ──────────────────────────────────────────────
               WeeklyGoalCard(
-                workoutsDone: data.weeklyProgress.where((d) => d).length,
+                workoutsDone: data.onPlanWorkoutsDone,
                 weeklyGoal: data.weeklyGoal,
               ),
 
@@ -206,18 +184,11 @@ class _HomePageState extends State<HomePage> {
                 _buildResumeBanner(),
               ],
 
-              // ── Check-in ──────────────────────────────────────────────────
-              if (!data.hasActiveSession && !data.hasCompletedToday) ...[
-                const SizedBox(height: 12),
-                _CheckInStatus(
-                  hasCheckedInToday: data.hasCheckedInToday,
-                  onTap: _handleStartWorkout,
-                ),
-              ],
-
               const SizedBox(height: 28),
 
               // ── Progresso semanal ─────────────────────────────────────────
+              _buildSectionTitle('Seu progresso na semana'),
+              const SizedBox(height: 12),
               WeeklyProgressBar(weeklyProgress: data.weeklyProgress),
 
               const SizedBox(height: 28),
@@ -269,9 +240,10 @@ class _HomePageState extends State<HomePage> {
     // Workout day from active plan
     if (_todayPlan != null) {
       return DailyWorkoutCard(
-        workoutName: _todayPlan!.currentDay.name,
-        duration:    'Dia ${_todayPlan!.currentDayIndex} de ${_todayPlan!.totalDays}',
-        level:       _todayPlan!.planName,
+        workoutName: _todayPlan!.today.name,
+        duration:    _todayPlan!.planName,
+        level:       '${_todayPlan!.today.exercises.length} exercícios',
+        dayLabel:    _dowLabel(_todayPlan!.today.dayOfWeek),
         onTap:       _isStarting ? null : _handleStartWorkout,
       );
     }
@@ -397,6 +369,14 @@ class _HomePageState extends State<HomePage> {
                 textAlign: TextAlign.center,
                 style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
               ),
+              if (_errorMessage != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.caption.copyWith(color: Colors.grey.shade500),
+                ),
+              ],
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -585,16 +565,14 @@ class _HomePageState extends State<HomePage> {
     if (_isStarting) return;
     final data = _dashboardData!;
 
+    // 1. Treino em andamento → retomar sem fricção
     if (data.hasActiveSession) {
       _pushWorkoutStep();
       return;
     }
 
-    if (!data.hasCheckedInToday && !data.hasCompletedToday) {
-      Navigator.of(context).pushNamed('/checkin').then((_) => _loadDashboard());
-      return;
-    }
-
+    // 2. Já completou treino hoje → confirmar treino extra ANTES de pedir check-in
+    //    (evita exigir QR para algo que não vai gerar pontos)
     if (data.hasCompletedToday) {
       final confirmed = await showDialog<bool>(
         context: context,
@@ -602,7 +580,7 @@ class _HomePageState extends State<HomePage> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text('Treino extra', style: AppTypography.h3),
           content: Text(
-            'Você já ganhou seus pontos hoje. Este treino não contará pontos.',
+            'Você já concluiu seu treino de hoje.\nDeseja fazer um treino extra? (não contará pontos)',
             style: AppTypography.bodyLarge,
           ),
           actions: [
@@ -625,6 +603,13 @@ class _HomePageState extends State<HomePage> {
       if (confirmed != true || !mounted) return;
     }
 
+    // 3. Não fez check-in hoje → QR obrigatório (uma vez por dia)
+    if (!data.hasCheckedInToday) {
+      Navigator.of(context).pushNamed('/checkin').then((_) => _loadDashboard());
+      return;
+    }
+
+    // 4. Check-in feito → iniciar treino diretamente
     setState(() => _isStarting = true);
     try {
       await WorkoutApiService().startWorkout();
@@ -666,14 +651,14 @@ class _RestDayHeroCard extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF7C3AED), Color(0xFF6D28D9)],
+          colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF7C3AED).withValues(alpha: 0.30),
+            color: Color(0xFF2563EB).withValues(alpha: 0.30),
             blurRadius: 20,
             offset: const Offset(0, 6),
           ),
@@ -704,7 +689,7 @@ class _RestDayHeroCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${plan.planName} · Dia ${plan.currentDayIndex} de ${plan.totalDays}',
+                  plan.planName,
                   style: AppTypography.caption.copyWith(
                     color: Colors.white.withValues(alpha: 0.80),
                   ),
@@ -718,71 +703,3 @@ class _RestDayHeroCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STATUS DE CHECK-IN (banner sutil, não bloqueia UI)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _CheckInStatus extends StatelessWidget {
-  final bool hasCheckedInToday;
-  final VoidCallback? onTap;
-
-  const _CheckInStatus({
-    required this.hasCheckedInToday,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (hasCheckedInToday) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: AppColors.accent.withValues(alpha: 0.07),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.accent.withValues(alpha: 0.20)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.check_circle_rounded, color: AppColors.accent, size: 18),
-            const SizedBox(width: 10),
-            Text(
-              'Check-in realizado — você já pode iniciar o treino.',
-              style: AppTypography.caption.copyWith(
-                color: AppColors.accent,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: _kBlue.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _kBlue.withValues(alpha: 0.18)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.location_on_rounded, color: _kBlue, size: 18),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Faça check-in na academia antes de iniciar.',
-                style: AppTypography.caption.copyWith(
-                  color: _kBlue,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const Icon(Icons.chevron_right_rounded, color: _kBlue, size: 18),
-          ],
-        ),
-      ),
-    );
-  }
-}

@@ -19,13 +19,14 @@ class ChallengeService
     // ──────────────────────────────────────────────────────────────────────────
 
     /**
-     * Retorna o desafio ativo da academia, se houver.
+     * Retorna o desafio comunitário ativo da academia (1 por vez).
      */
-    public function getActiveChallenge(int $gymId): ?GymChallenge
+    public function getActiveCommunityChallenge(int $gymId): ?GymChallenge
     {
         $today = now()->toDateString();
 
         return GymChallenge::where('gym_id', $gymId)
+            ->where('scope', 'community')
             ->where('status', 'active')
             ->where('starts_at', '<=', $today)
             ->where('ends_at', '>=', $today)
@@ -33,47 +34,64 @@ class ChallengeService
     }
 
     /**
-     * Chamado após um treino válido (points_granted = true).
-     * Atualiza progresso do aluno no desafio ativo da academia.
+     * Retorna todos os desafios pessoais ativos da academia (podem existir vários).
      */
-    public function processValidWorkout(User $user, WorkoutSession $session): ?array
+    public function getActivePersonalChallenges(int $gymId): \Illuminate\Database\Eloquent\Collection
     {
-        $challenge = $this->getActiveChallenge($user->gym_id);
+        $today = now()->toDateString();
 
-        if (!$challenge) {
-            return null;
-        }
+        return GymChallenge::where('gym_id', $gymId)
+            ->where('scope', 'personal')
+            ->where('status', 'active')
+            ->where('starts_at', '<=', $today)
+            ->where('ends_at', '>=', $today)
+            ->get();
+    }
 
-        // Sessão deve estar dentro do período do desafio
+    /**
+     * Alias para manter compatibilidade com código que usa getActiveChallenge().
+     * Retorna o desafio comunitário ativo.
+     */
+    public function getActiveChallenge(int $gymId): ?GymChallenge
+    {
+        return $this->getActiveCommunityChallenge($gymId);
+    }
+
+    /**
+     * Chamado após um treino válido (points_granted = true).
+     * Processa o desafio comunitário ativo e todos os desafios pessoais ativos do aluno.
+     *
+     * @return array{community: ?array{challenge: GymChallenge, simple_goal_just_completed: bool}, personal: list<array{challenge: GymChallenge, simple_goal_just_completed: bool}>}
+     */
+    public function processValidWorkout(User $user, WorkoutSession $session): array
+    {
         $sessionDate = $session->finished_at->toDateString();
-        if ($sessionDate < $challenge->starts_at->toDateString()
-            || $sessionDate > $challenge->ends_at->toDateString()) {
-            return null;
+
+        $communityResult = null;
+        $personalResults = [];
+
+        // Desafio comunitário ativo
+        $community = $this->getActiveCommunityChallenge($user->gym_id);
+        if ($community && $this->sessionInPeriod($sessionDate, $community)) {
+            $communityResult = $this->processChallengeForWorkout($community, $user, $session);
         }
 
-        $simpleGoalJustCompleted = false;
-
-        DB::transaction(function () use ($challenge, $user, $session, &$simpleGoalJustCompleted) {
-            $participant = $this->getOrCreateParticipant($challenge, $user);
-
-            if ($challenge->isCompetitive()) {
-                $this->processCompetitiveWorkout($challenge, $user, $session);
-            } else {
-                $simpleGoalJustCompleted = $this->processSimpleWorkout($challenge, $user, $participant);
+        // Desafios pessoais ativos (podem ser vários)
+        foreach ($this->getActivePersonalChallenges($user->gym_id) as $personal) {
+            if ($this->sessionInPeriod($sessionDate, $personal)) {
+                $personalResults[] = $this->processChallengeForWorkout($personal, $user, $session);
             }
-        });
-
-        // Finalizar semanas concluídas (lazy, fora da transaction principal)
-        $this->finalizeCompletedWeeks($challenge);
+        }
 
         return [
-            'challenge'                  => $challenge,
-            'simple_goal_just_completed' => $simpleGoalJustCompleted,
+            'community' => $communityResult,
+            'personal'  => $personalResults,
         ];
     }
 
     /**
      * Retorna os dados do desafio com o progresso do aluno autenticado.
+     * Funciona para qualquer escopo (community ou personal).
      */
     public function getChallengeData(GymChallenge $challenge, User $user): array
     {
@@ -210,7 +228,56 @@ class ChallengeService
             ->pluck('week_start');
 
         foreach ($weekStarts as $weekStart) {
-            $this->finalizeWeek($challenge, (string) $weekStart);
+            $this->finalizeWeek($challenge, Carbon::parse($weekStart)->toDateString());
+        }
+    }
+
+    /**
+     * Atribui o desafio a todos os alunos ativos da academia (role = 'user').
+     * Chamado ao criar um desafio para garantir que todos os alunos já existentes
+     * tenham um registro de participação desde o início.
+     * Seguro para executar múltiplas vezes (insertOrIgnore).
+     */
+    public function assignToAllStudents(GymChallenge $challenge): void
+    {
+        $studentIds = User::where('gym_id', $challenge->gym_id)
+            ->where('role', 'user')
+            ->pluck('id');
+
+        if ($studentIds->isEmpty()) {
+            return;
+        }
+
+        $now  = now();
+        $rows = $studentIds->map(fn ($id) => [
+            'challenge_id'            => $challenge->id,
+            'user_id'                 => $id,
+            'gym_id'                  => $challenge->gym_id,
+            'total_challenge_points'  => 0,
+            'workouts_this_challenge' => 0,
+            'goal_completed'          => false,
+            'reward_granted'          => false,
+            'created_at'              => $now,
+            'updated_at'              => $now,
+        ])->toArray();
+
+        ChallengeParticipant::insertOrIgnore($rows);
+    }
+
+    /**
+     * Atribui ao novo aluno o desafio comunitário ativo (se houver)
+     * e todos os desafios pessoais ativos da academia.
+     * Chamado no registro para garantir que o aluno entre nos desafios correntes.
+     */
+    public function assignActiveChallengeTo(User $user): void
+    {
+        $community = $this->getActiveCommunityChallenge($user->gym_id);
+        if ($community) {
+            $this->getOrCreateParticipant($community, $user);
+        }
+
+        foreach ($this->getActivePersonalChallenges($user->gym_id) as $personal) {
+            $this->getOrCreateParticipant($personal, $user);
         }
     }
 
@@ -232,6 +299,40 @@ class ChallengeService
     // ──────────────────────────────────────────────────────────────────────────
     // Private helpers
     // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Processa um único desafio (community ou personal) para um treino válido.
+     */
+    private function processChallengeForWorkout(
+        GymChallenge  $challenge,
+        User          $user,
+        WorkoutSession $session,
+    ): array {
+        $simpleGoalJustCompleted = false;
+
+        DB::transaction(function () use ($challenge, $user, $session, &$simpleGoalJustCompleted) {
+            $participant = $this->getOrCreateParticipant($challenge, $user);
+
+            if ($challenge->isCompetitive()) {
+                $this->processCompetitiveWorkout($challenge, $user, $session);
+            } else {
+                $simpleGoalJustCompleted = $this->processSimpleWorkout($challenge, $user, $participant);
+            }
+        });
+
+        $this->finalizeCompletedWeeks($challenge);
+
+        return [
+            'challenge'                  => $challenge,
+            'simple_goal_just_completed' => $simpleGoalJustCompleted,
+        ];
+    }
+
+    private function sessionInPeriod(string $sessionDate, GymChallenge $challenge): bool
+    {
+        return $sessionDate >= $challenge->starts_at->toDateString()
+            && $sessionDate <= $challenge->ends_at->toDateString();
+    }
 
     /**
      * Registra treino no ranking semanal do desafio competitivo.

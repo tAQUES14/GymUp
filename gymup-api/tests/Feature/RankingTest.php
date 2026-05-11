@@ -19,12 +19,12 @@ class RankingTest extends TestCase
 
         $user1 = User::factory()->create([
             'gym_id' => $gym->id,
-            'role' => 'student',
+            'role' => 'user',
         ]);
 
         $user2 = User::factory()->create([
             'gym_id' => $gym->id,
-            'role' => 'student',
+            'role' => 'user',
         ]);
 
         // Ranking é calculado por SUM(point_transactions), não por points_balance
@@ -62,13 +62,13 @@ class RankingTest extends TestCase
 
         $userGym1 = User::factory()->create([
             'gym_id' => $gym1->id,
-            'role' => 'student',
+            'role' => 'user',
             'points_balance' => 100,
         ]);
 
         User::factory()->create([
             'gym_id' => $gym2->id,
-            'role' => 'student',
+            'role' => 'user',
             'points_balance' => 999,
         ]);
 

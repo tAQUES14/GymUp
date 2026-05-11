@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:gymup/features/auth/auth_api_service.dart';
 
@@ -12,20 +13,72 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> {
-  final _formKey           = GlobalKey<FormState>();
-  final _nameController    = TextEditingController();
-  final _emailController   = TextEditingController();
+  final _formKey            = GlobalKey<FormState>();
+  final _nameController     = TextEditingController();
+  final _emailController    = TextEditingController();
   final _passwordController = TextEditingController();
+  final _inviteController   = TextEditingController();
 
-  bool _isLoading      = false;
+  bool _isLoading       = false;
   bool _obscurePassword = true;
+
+  // Invite code lookup state
+  bool    _inviteLookingUp = false;
+  String? _invitedGymName;
+  String? _inviteError;
+  Timer?  _inviteDebounce;
 
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _inviteController.dispose();
+    _inviteDebounce?.cancel();
     super.dispose();
+  }
+
+  void _onInviteChanged(String value) {
+    _inviteDebounce?.cancel();
+    final trimmed = value.trim();
+
+    if (trimmed.isEmpty) {
+      setState(() {
+        _invitedGymName  = null;
+        _inviteError     = null;
+        _inviteLookingUp = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _invitedGymName  = null;
+      _inviteError     = null;
+      _inviteLookingUp = true;
+    });
+
+    _inviteDebounce = Timer(const Duration(milliseconds: 500), () => _lookupInvite(trimmed));
+  }
+
+  Future<void> _lookupInvite(String code) async {
+    try {
+      final gym = await AuthApiService().getGymByInvite(code);
+      if (mounted) {
+        setState(() {
+          _invitedGymName  = gym['name'] as String;
+          _inviteError     = null;
+          _inviteLookingUp = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _invitedGymName  = null;
+          _inviteError     = 'Código inválido. Verifique e tente novamente.';
+          _inviteLookingUp = false;
+        });
+      }
+    }
   }
 
   Future<void> _register() async {
@@ -33,10 +86,12 @@ class _RegisterPageState extends State<RegisterPage> {
 
     setState(() => _isLoading = true);
     try {
+      final invite = _inviteController.text.trim();
       await AuthApiService().register(
-        name:     _nameController.text.trim(),
-        email:    _emailController.text.trim(),
-        password: _passwordController.text.trim(),
+        name:       _nameController.text.trim(),
+        email:      _emailController.text.trim(),
+        password:   _passwordController.text.trim(),
+        inviteCode: invite.isNotEmpty ? invite : null,
       );
       if (mounted) {
         Navigator.pushNamedAndRemoveUntil(
@@ -267,6 +322,115 @@ class _RegisterPageState extends State<RegisterPage> {
                               return null;
                             },
                           ),
+
+                          const SizedBox(height: 20),
+
+                          // ── Divisor ──────────────────────────────────
+                          Row(
+                            children: [
+                              const Expanded(child: Divider(color: Color(0xFFE2E8F0))),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                child: Text(
+                                  'Código de convite (opcional)',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade500,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              const Expanded(child: Divider(color: Color(0xFFE2E8F0))),
+                            ],
+                          ),
+
+                          const SizedBox(height: 14),
+
+                          // ── Código de convite ─────────────────────────
+                          TextFormField(
+                            controller: _inviteController,
+                            keyboardType: TextInputType.text,
+                            textCapitalization: TextCapitalization.characters,
+                            maxLength: 8,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              color: Color(0xFF1E293B),
+                              letterSpacing: 2,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            decoration: _inputDecoration(
+                              label: 'Código da academia',
+                              prefixIcon: Icons.tag_rounded,
+                              suffixIcon: _inviteLookingUp
+                                  ? const Padding(
+                                      padding: EdgeInsets.all(12),
+                                      child: SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Color(0xFF94A3B8),
+                                        ),
+                                      ),
+                                    )
+                                  : null,
+                            ).copyWith(counterText: ''),
+                            onChanged: _onInviteChanged,
+                          ),
+
+                          // ── Feedback do lookup ────────────────────────
+                          if (_invitedGymName != null) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF0FDF4),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                    color: const Color(0xFF86EFAC)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.check_circle_rounded,
+                                    size: 16,
+                                    color: Color(0xFF16A34A),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Você está se cadastrando na $_invitedGymName',
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: Color(0xFF15803D),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ] else if (_inviteError != null) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.error_outline_rounded,
+                                  size: 15,
+                                  color: Colors.red,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _inviteError!,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.red,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
 
                           const SizedBox(height: 24),
 

@@ -4,10 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/workout_model.dart';
+import '../../../core/api/api_service.dart';
 import '../../auth/auth_service.dart';
 
 class WorkoutAiService {
-  final String baseUrl = "http://127.0.0.1:8000/api";
+  String get baseUrl => ApiService.baseUrl;
 
   // 🔹 Geração continua local (mock IA)
   Future<WorkoutModel> gerarTreinoIA({

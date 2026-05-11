@@ -23,9 +23,10 @@ class DatabaseSeeder extends Seeder
         User::firstOrCreate(
             ['email' => 'test@example.com'],
             [
-                'name'   => 'Test User',
-                'gym_id' => Gym::first()->id,
-                'role'   => 'user',
+                'name'     => 'Test User',
+                'gym_id'   => Gym::first()->id,
+                'role'     => 'user',
+                'password' => bcrypt('test123'),
             ]
         );
 
@@ -52,5 +53,35 @@ class DatabaseSeeder extends Seeder
 
         // ── 7. Planos de treino sequenciais ───────────────────────────────────
         $this->call(WorkoutPlanSeeder::class);
+
+        // ── 8. Gym admin de teste ──────────────────────────────────────────────
+        User::firstOrCreate(
+            ['email' => 'gymadmin@gymup.app'],
+            [
+                'name'     => 'Gym Admin Teste',
+                'gym_id'   => Gym::first()->id,
+                'role'     => 'gym_admin',
+                'password' => bcrypt('gymadmin123'),
+            ]
+        );
+
+        // ── 9. Trainer de teste ───────────────────────────────────────────────
+        User::firstOrCreate(
+            ['email' => 'trainer@gymup.app'],
+            [
+                'name'     => 'Trainer Teste',
+                'gym_id'   => Gym::first()->id,
+                'role'     => 'trainer',
+                'password' => bcrypt('trainer123'),
+            ]
+        );
+
+        // ── 10. Roles e permissões ─────────────────────────────────────────────
+        // Deve rodar APÓS usuários existirem para vincular roles corretamente.
+        $this->call(RolesAndPermissionsSeeder::class);
+
+        // ── 11. Dados de teste para a feature de redes (opcional) ─────────────
+        // Para ativar: php artisan db:seed --class=NetworkTestSeeder
+        // $this->call(NetworkTestSeeder::class);
     }
 }

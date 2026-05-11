@@ -753,7 +753,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
     if (type == 'simple') {
       final current = (cp['my_workouts'] as num?)?.toInt() ?? 0;
       final goal = (cp['goal_workouts'] as num?)?.toInt() ?? 0;
-      final justDone = cp['simple_goal_just_completed'] as bool? ?? false;
+      final justDone = cp['simple_goal_just_completed'] == true;
       if (justDone) return 'Desafio concluido! $current / $goal treinos';
       return '+1 treino no desafio\n$current / $goal treinos';
     }
@@ -1437,34 +1437,73 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
       child: Column(
         children: [
           // ── GIF full-width + número badge ────────────────────────────────
-          Stack(
-            children: [
-              ExerciseGifPanel(exercise: exercise, height: 200, paused: true),
-              // Número do exercício
-              Positioned(
-                top: 0,
-                left: 0,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: const BoxDecoration(
-                    color: _kBlue,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(20),
-                      bottomRight: Radius.circular(12),
+          GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ExerciseDetailPage(exercise: exercise),
+              ),
+            ),
+            child: Stack(
+              children: [
+                ExerciseGifPanel(exercise: exercise, height: 200, paused: true),
+                // Número do exercício
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: const BoxDecoration(
+                      color: _kBlue,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(20),
+                        bottomRight: Radius.circular(12),
+                      ),
                     ),
-                  ),
-                  child: Text(
-                    '${_currentExerciseIndex + 1} / $totalExercises',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 12,
-                      height: 1.0,
+                    child: Text(
+                      '${_currentExerciseIndex + 1} / $totalExercises',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                        height: 1.0,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+                // Badge "toque para detalhes"
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.40),
+                      borderRadius: const BorderRadius.only(
+                        topRight: Radius.circular(20),
+                        bottomLeft: Radius.circular(12),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.info_outline_rounded, color: Colors.white, size: 12),
+                        SizedBox(width: 4),
+                        Text(
+                          'Detalhes',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                            height: 1.0,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
 
           // ── Nome + músculo + ícone de progresso ──────────────────────────

@@ -304,11 +304,15 @@ class WorkoutPlanSeeder extends Seeder
         ]);
 
         foreach ($days as $dayOrder => $dayData) {
+            // Mapeia índice 0-based para dia da semana começando na segunda:
+            // 0→1(Seg), 1→2(Ter), 2→3(Qua), 3→4(Qui), 4→5(Sex), 5→6(Sáb), 6→0(Dom)
+            $dow = ($dayOrder + 1) % 7;
+
             $day = WorkoutPlanDay::create([
-                'plan_id'   => $plan->id,
-                'day_order' => $dayOrder + 1,
-                'name'      => $dayData['name'],
-                'rest_day'  => $dayData['rest_day'],
+                'plan_id'     => $plan->id,
+                'day_of_week' => $dow,
+                'name'        => $dayData['name'],
+                'rest_day'    => $dayData['rest_day'],
             ]);
 
             foreach ($dayData['exercises'] as $exOrder => $exData) {

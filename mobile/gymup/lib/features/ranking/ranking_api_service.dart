@@ -7,6 +7,12 @@ class RankingItem {
   final String name;
   final int points;
   final int streak;
+  /// Percentual de crescimento em relação à semana anterior.
+  /// Não nulo apenas quando period=progress.
+  /// 999 significa crescimento infinito (sem pontos na semana anterior).
+  final int? growthPct;
+  /// Nome da academia — presente apenas quando scope=chain.
+  final String? gymName;
 
   const RankingItem({
     required this.position,
@@ -14,15 +20,19 @@ class RankingItem {
     required this.name,
     required this.points,
     required this.streak,
+    this.growthPct,
+    this.gymName,
   });
 
   factory RankingItem.fromJson(Map<String, dynamic> json) {
     return RankingItem(
-      position: (json['position'] as num).toInt(),
-      userId: (json['user_id'] as num).toInt(),
-      name: json['name'] as String,
-      points: (json['points'] as num).toInt(),
-      streak: (json['streak'] as num?)?.toInt() ?? 0,
+      position:  (json['position'] as num).toInt(),
+      userId:    (json['user_id'] as num).toInt(),
+      name:      json['name'] as String,
+      points:    (json['points'] as num).toInt(),
+      streak:    (json['streak'] as num?)?.toInt() ?? 0,
+      growthPct: (json['growth_pct'] as num?)?.toInt(),
+      gymName:   json['gym_name'] as String?,
     );
   }
 }
@@ -30,15 +40,15 @@ class RankingItem {
 class RankingApiService {
   final _api = ApiService();
 
-  /// Busca o ranking do período informado.
+  /// Busca o ranking do período e escopo informados.
   ///
-  /// [period] deve ser: 'weekly', 'monthly', 'quarterly' ou 'all'.
-  ///
-  /// Lança:
-  /// - [Exception('401')] → token expirado
-  /// - [Exception(mensagem)] → qualquer outro erro da API
-  Future<List<RankingItem>> getRanking({String period = 'all'}) async {
-    final response = await _api.get('/ranking?period=$period');
+  /// [period]: 'all', 'weekly', 'monthly', 'quarterly', 'progress'.
+  /// [scope]: 'gym' (apenas a academia do usuário) ou 'chain' (toda a rede).
+  Future<List<RankingItem>> getRanking({
+    String period = 'all',
+    String scope  = 'gym',
+  }) async {
+    final response = await _api.get('/ranking?period=$period&scope=$scope');
 
     if (response.statusCode == 401) {
       throw Exception('401');

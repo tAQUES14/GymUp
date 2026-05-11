@@ -1,9 +1,21 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-static const String baseUrl = 'http://localhost:8000/api';
+  /// URL base da API.
+  ///
+  /// No Android emulator, `localhost` aponta para o próprio dispositivo —
+  /// o host da máquina é acessado via `10.0.2.2`.
+  /// iOS simulator e web mapeiam `localhost` corretamente.
+  static String get baseUrl {
+    if (!kIsWeb && Platform.isAndroid) {
+      return 'http://10.0.2.2:8000/api';
+    }
+    return 'http://localhost:8000/api';
+  }
 
   Future<String?> _getToken() async {
     final prefs = await SharedPreferences.getInstance();

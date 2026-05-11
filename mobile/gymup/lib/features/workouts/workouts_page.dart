@@ -7,9 +7,9 @@ import 'models/workout_model.dart';
 import 'models/workout_plan_model.dart';
 import 'workout_api_service.dart';
 import 'workout_plan_api_service.dart';
+import 'workout_plan_utils.dart';
 
 const _kBlue  = Color(0xFF2563EB);
-const _kSlate = Color(0xFF64748B);
 
 class WorkoutsPage extends StatefulWidget {
   const WorkoutsPage({super.key});
@@ -70,8 +70,6 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
   // ── Conteúdo ─────────────────────────────────────────────────────────────
 
   Widget _buildContent() {
-    final first = _workouts.isNotEmpty ? _workouts.first : null;
-
     return RefreshIndicator(
       onRefresh: _loadAll,
       color: _kBlue,
@@ -82,118 +80,139 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
 
-            // ── Plano ativo ────────────────────────────────────────────────
-            if (_todayPlan != null) ...[
-              if (_todayPlan!.isRestDay)
-                _RestDayCard(plan: _todayPlan!)
-              else
-                _PlanWorkoutCard(
-                  plan: _todayPlan!,
-                  onStart: () => _startPlanWorkout(_todayPlan!),
-                ),
-              const SizedBox(height: 16),
+            // ── SEÇÃO 1: Treino de hoje (plano ou fallback) ────────────────
+            _buildTodaySection(),
 
-              // Sequência visual dos dias do plano
-              _DaySequenceStrip(plan: _todayPlan!),
-            ],
+            const SizedBox(height: 28),
 
-            // ── Sem plano: fallback com treinos avulsos ─────────────────────
-            if (_todayPlan == null) ...[
-              DailyWorkoutCard(
-                workoutName: first?.name ?? 'Nenhum treino cadastrado',
-                duration: first != null ? '${first.duration ?? 0} min' : '--',
-                level:    first?.level ?? '--',
-                onTap: first != null
-                    ? () => Navigator.pushNamed(context, '/workout-detail', arguments: first)
-                    : null,
-              ),
-              const SizedBox(height: 28),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Meus Treinos',
-                    style: AppTypography.h3.copyWith(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  if (_workouts.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _kBlue.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '${_workouts.length}',
-                        style: AppTypography.caption.copyWith(
-                          color: _kBlue,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              if (_workouts.isEmpty)
-                _buildEmpty()
-              else
-                ..._workouts.map((w) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _WorkoutCard(
-                    workout: w,
-                    onTap: () => Navigator.pushNamed(
-                      context,
-                      '/workout-detail',
-                      arguments: w,
-                    ),
-                  ),
-                )),
-            ],
+            // ── SEÇÃO 2: Outros treinos disponíveis ───────────────────────
+            _buildOtherWorkoutsSection(),
           ],
         ),
       ),
     );
   }
 
-  void _startPlanWorkout(TodayWorkoutPlan plan) {
-    final day = plan.currentDay;
-
-    // Convert WorkoutPlanExerciseModel → ExerciseModel
-    final exercises = day.exercises.map((pe) {
-      // Parse reps as int: "10-12" → 10, "30s" → 30, "12" → 12
-      // For cardio, use durationMinutes as reps proxy for the existing session UI
-      int parsedReps = 10;
-      if (pe.isCardio) {
-        parsedReps = pe.durationMinutes ?? 10;
-      } else if (pe.reps != null) {
-        final repsStr = pe.reps!.replaceAll(RegExp(r'[^0-9]'), '');
-        if (repsStr.isNotEmpty) parsedReps = int.tryParse(repsStr) ?? 10;
-      }
-
-      return ExerciseModel(
-        id:          pe.exerciseId,
-        name:        pe.name,
-        muscleGroup: pe.muscleGroup,
-        gifUrl:      pe.gifUrl,
-        defaultRest: pe.defaultRest,
-        sets:        pe.sets ?? 1,
-        reps:        parsedReps,
-        rest:        pe.isCardio ? 0 : pe.restSeconds,
+  Widget _buildTodaySection() {
+    if (_todayPlan == null) {
+      // Sem plano: mostrar primeiro treino avulso como destaque
+      final first = _workouts.isNotEmpty ? _workouts.first : null;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DailyWorkoutCard(
+            workoutName: first?.name ?? 'Nenhum treino cadastrado',
+            duration: first != null ? '${first.duration ?? 0} min' : '--',
+            level:    first?.level ?? '--',
+            onTap: first != null
+                ? () => Navigator.pushNamed(context, '/workout-detail', arguments: first)
+                : null,
+          ),
+        ],
       );
-    }).toList();
+    }
 
-    final workout = WorkoutModel(
-      id:                          plan.planId * 1000 + plan.currentDayIndex,
-      name:                        day.name,
-      description:                 '${plan.planName} — Dia ${plan.currentDayIndex} de ${plan.totalDays}',
-      exercises:                   exercises,
-      betweenExerciseRestSeconds:  plan.betweenExerciseRestSeconds,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Card do plano (treino ou descanso)
+        if (_todayPlan!.isRestDay)
+          _RestDayCard(plan: _todayPlan!)
+        else
+          _PlanWorkoutCard(
+            plan: _todayPlan!,
+            onStart: () => _startPlanWorkout(_todayPlan!),
+          ),
+        const SizedBox(height: 16),
+
+        // Visão semanal do plano
+        _DaySequenceStrip(plan: _todayPlan!),
+      ],
     );
+  }
 
-    Navigator.pushNamed(context, '/workout-detail', arguments: workout);
+  Widget _buildOtherWorkoutsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              _todayPlan != null ? 'Outros treinos' : 'Meus Treinos',
+              style: AppTypography.h3.copyWith(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Row(
+              children: [
+                if (_workouts.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _kBlue.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '${_workouts.length}',
+                      style: AppTypography.caption.copyWith(
+                        color: _kBlue,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () => Navigator.pushNamed(context, '/workout-generated')
+                      .then((_) => _loadAll()),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _kBlue,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.add_rounded, size: 14, color: Colors.white),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Criar',
+                          style: AppTypography.caption.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (_workouts.isEmpty)
+          _buildEmpty()
+        else
+          ..._workouts.map((w) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _WorkoutCard(
+              workout: w,
+              onTap: () => Navigator.pushNamed(
+                context,
+                '/workout-detail',
+                arguments: w,
+              ),
+            ),
+          )),
+      ],
+    );
+  }
+
+  void _startPlanWorkout(TodayWorkoutPlan plan) {
+    Navigator.pushNamed(context, '/workout-detail', arguments: workoutFromPlan(plan));
   }
 
   // ── Estado vazio ─────────────────────────────────────────────────────────
@@ -225,14 +244,31 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
           ),
           const SizedBox(height: 16),
           Text(
-            'Nenhum treino ainda',
+            'Você ainda não tem outros treinos',
             style: AppTypography.bodyLarge.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 6),
           Text(
-            'Peça ao seu personal para criar\num treino personalizado.',
+            'Crie um treino personalizado para complementar seu plano.',
             textAlign: TextAlign.center,
             style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => Navigator.pushNamed(context, '/workout-generated')
+                  .then((_) => _loadAll()),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Criar meu treino'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kBlue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+            ),
           ),
         ],
       ),
@@ -300,14 +336,14 @@ class _RestDayCard extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF7C3AED), Color(0xFF6D28D9)],
+          colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF7C3AED).withValues(alpha: 0.30),
+            color: Color(0xFF2563EB).withValues(alpha: 0.30),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -338,7 +374,7 @@ class _RestDayCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${plan.planName} · Dia ${plan.currentDayIndex} de ${plan.totalDays}',
+                  plan.planName,
                   style: AppTypography.caption.copyWith(
                     color: Colors.white.withValues(alpha: 0.80),
                   ),
@@ -360,9 +396,14 @@ class _PlanWorkoutCard extends StatelessWidget {
 
   const _PlanWorkoutCard({required this.plan, required this.onStart});
 
+  static String _dowLabel(int dow) {
+    const labels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    return labels[dow.clamp(0, 6)];
+  }
+
   @override
   Widget build(BuildContext context) {
-    final exercises     = plan.currentDay.exercises;
+    final exercises     = plan.today.exercises;
     final strengthCount = exercises.where((e) => !e.isCardio).length;
     final cardioCount   = exercises.where((e) => e.isCardio).length;
     final hasSuperset   = exercises.any((e) => e.isSuperset);
@@ -389,6 +430,33 @@ class _PlanWorkoutCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Rótulo do dia
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.calendar_today_rounded, color: Colors.white, size: 11),
+                const SizedBox(width: 5),
+                Text(
+                  'HOJE · ${_dowLabel(plan.today.dayOfWeek).toUpperCase()}',
+                  style: AppTypography.caption.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 10,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
           // Header row
           Row(
             children: [
@@ -399,7 +467,7 @@ class _PlanWorkoutCard extends StatelessWidget {
                   color: Colors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Icon(Icons.calendar_today_rounded, color: Colors.white, size: 26),
+                child: const Icon(Icons.fitness_center_rounded, color: Colors.white, size: 26),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -407,7 +475,7 @@ class _PlanWorkoutCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      plan.currentDay.name,
+                      plan.today.name,
                       style: AppTypography.bodyLarge.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
@@ -417,7 +485,7 @@ class _PlanWorkoutCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'Dia ${plan.currentDayIndex} de ${plan.totalDays} · ${plan.planName}',
+                      plan.planName,
                       style: AppTypography.caption.copyWith(
                         color: Colors.white.withValues(alpha: 0.80),
                       ),
@@ -463,6 +531,68 @@ class _PlanWorkoutCard extends StatelessWidget {
                   label: 'Circuito',
                 ),
             ],
+          ),
+
+          const SizedBox(height: 14),
+
+          // Lista de exercícios (até 5, resto resumido)
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+            child: Column(
+              children: [
+                ...exercises.take(5).map((e) {
+                  final detail = e.isCardio
+                      ? '${e.durationMinutes ?? '--'} min'
+                      : '${e.sets ?? '--'}x${e.reps ?? '--'}';
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Icon(
+                          e.isCardio
+                              ? Icons.directions_run_rounded
+                              : Icons.fitness_center_rounded,
+                          size: 13,
+                          color: Colors.white.withValues(alpha: 0.70),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            e.name,
+                            style: AppTypography.caption.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Text(
+                          detail,
+                          style: AppTypography.caption.copyWith(
+                            color: Colors.white.withValues(alpha: 0.70),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                if (exercises.length > 5) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '+ ${exercises.length - 5} exercício${exercises.length - 5 == 1 ? '' : 's'}',
+                    style: AppTypography.caption.copyWith(
+                      color: Colors.white.withValues(alpha: 0.60),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
 
           const SizedBox(height: 16),
@@ -588,21 +718,24 @@ class _WorkoutCard extends StatelessWidget {
   }
 }
 
-// ─── Tira de sequência de dias ─────────────────────────────────────────────────
+// ─── Visão semanal do plano ────────────────────────────────────────────────────
 //
-// Mostra todos os dias do plano em ordem, destacando o dia atual.
-// Dias de descanso têm ícone de lua. O dia ativo tem borda azul.
-//
-// A API retorna currentDay + totalDays mas não a lista completa de dias.
-// Para não fazer um request extra, mostramos chips numerados com o nome
-// abreviado e indicamos qual é o dia ativo.
+// Mostra os 7 dias da semana (Seg→Dom) com base no weekOverview do plano.
+// Dias de treino do plano têm borda azul; dias de descanso têm ícone de lua.
+// O dia de hoje é destacado.
 class _DaySequenceStrip extends StatelessWidget {
   final TodayWorkoutPlan plan;
 
   const _DaySequenceStrip({required this.plan});
 
+  // Exibição Seg→Dom: dow 1,2,3,4,5,6,0
+  static const _displayOrder = [1, 2, 3, 4, 5, 6, 0];
+  static const _labels       = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+
   @override
   Widget build(BuildContext context) {
+    final todayDow = DateTime.now().weekday % 7; // Dart Mon=1..Sun=7 → Sun=0..Sat=6
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -619,47 +752,35 @@ class _DaySequenceStrip extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(
-                'Sequência do plano',
-                style: AppTypography.caption.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                'Dia ${plan.currentDayIndex} de ${plan.totalDays}',
-                style: AppTypography.caption.copyWith(
-                  color: _kBlue,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
+          Text(
+            'Seu progresso na semana',
+            style: AppTypography.caption.copyWith(
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+            ),
           ),
           const SizedBox(height: 12),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
-              children: List.generate(plan.totalDays, (i) {
-                final dayNumber = i + 1;
-                final isCurrent = dayNumber == plan.currentDayIndex;
-                final isPast    = dayNumber < plan.currentDayIndex;
-
-                // Use allDays metadata when available for real names/rest flags
-                final summary = (i < plan.allDays.length) ? plan.allDays[i] : null;
-                final label   = summary?.name ?? (isCurrent ? plan.currentDay.name : 'Dia $dayNumber');
-                final isRest  = summary?.restDay ?? (isCurrent && plan.isRestDay);
+              children: List.generate(7, (i) {
+                final dow       = _displayOrder[i];
+                final summary   = plan.weekOverview[dow];
+                final isToday   = dow == todayDow;
+                final isRest    = summary?.restDay ?? true;
+                final hasWorkout = summary?.hasWorkout ?? false;
+                final label     = summary?.name ?? _labels[i];
 
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: _DayChip(
-                    dayNumber: dayNumber,
-                    isCurrent: isCurrent,
-                    isPast:    isPast,
+                    dayNumber: i + 1,
+                    isCurrent: isToday,
+                    isPast:    false,
                     label:     label,
                     isRestDay: isRest,
+                    hasWorkout: hasWorkout,
+                    shortLabel: _labels[i],
                   ),
                 );
               }),
@@ -677,6 +798,8 @@ class _DayChip extends StatelessWidget {
   final bool   isPast;
   final String label;
   final bool   isRestDay;
+  final bool   hasWorkout;
+  final String shortLabel;
 
   const _DayChip({
     required this.dayNumber,
@@ -684,25 +807,29 @@ class _DayChip extends StatelessWidget {
     required this.isPast,
     required this.label,
     required this.isRestDay,
+    this.hasWorkout = false,
+    this.shortLabel = '',
   });
 
   @override
   Widget build(BuildContext context) {
     final Color bg = isCurrent
         ? _kBlue
-        : isPast
-            ? const Color(0xFFE2E8F0)
+        : hasWorkout && !isRestDay
+            ? _kBlue.withValues(alpha: 0.08)
             : Colors.white;
 
     final Color border = isCurrent
         ? _kBlue
-        : const Color(0xFFE2E8F0);
+        : hasWorkout && !isRestDay
+            ? _kBlue.withValues(alpha: 0.30)
+            : const Color(0xFFE2E8F0);
 
     final Color textColor = isCurrent
         ? Colors.white
-        : isPast
-            ? _kSlate
-            : AppColors.textPrimary;
+        : hasWorkout && !isRestDay
+            ? _kBlue
+            : AppColors.textSecondary;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -717,18 +844,10 @@ class _DayChip extends StatelessWidget {
           if (isRestDay)
             Icon(Icons.bedtime_rounded, size: 12, color: textColor)
           else
-            Text(
-              '$dayNumber',
-              style: AppTypography.caption.copyWith(
-                color: textColor,
-                fontWeight: FontWeight.w800,
-                fontSize: 11,
-              ),
-            ),
+            Icon(Icons.fitness_center_rounded, size: 12, color: textColor),
           const SizedBox(width: 5),
           Text(
-            // Abbreviate long names to fit
-            label.length > 10 ? '${label.substring(0, 9)}…' : label,
+            shortLabel.isNotEmpty ? shortLabel : (label.length > 10 ? '${label.substring(0, 9)}…' : label),
             style: AppTypography.caption.copyWith(
               color: textColor,
               fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,

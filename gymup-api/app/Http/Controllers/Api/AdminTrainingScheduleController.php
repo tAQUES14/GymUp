@@ -8,14 +8,11 @@ use App\Models\UserTrainingSchedule;
 use Illuminate\Http\Request;
 
 /**
- * Trainer/gym_admin endpoint to manage a student's weekly training schedule.
+ * Endpoint legado de agenda manual do aluno.
  *
- * Day convention (matches Carbon::dayOfWeek):
- *   0 = Sunday, 1 = Monday, 2 = Tuesday, 3 = Wednesday,
- *   4 = Thursday, 5 = Friday, 6 = Saturday
- *
- * Setting last_schedule_change prevents StreakService from reinterpreting
- * days before the change when checking for missed training days.
+ * DEPRECATED: A agenda manual não influencia mais streak nem pontos.
+ * O streak é calculado com base no plano de treino (WorkoutPlan).
+ * Este controller é mantido apenas para leitura histórica e compatibilidade.
  */
 class AdminTrainingScheduleController extends Controller
 {
@@ -30,7 +27,7 @@ class AdminTrainingScheduleController extends Controller
         $admin = $request->user();
 
         $user = User::where('id', $userId)
-            ->where('gym_id', $admin->gym_id)
+            ->where('gym_id', $admin->activeGymId())
             ->firstOrFail();
 
         $days = UserTrainingSchedule::where('user_id', $user->id)
@@ -47,11 +44,8 @@ class AdminTrainingScheduleController extends Controller
     /**
      * PUT /api/admin/users/{id}/training-schedule
      *
-     * Replaces the student's entire training schedule.
-     * Body: { "days": [1, 2, 4, 5] }
-     *
-     * Records last_schedule_change so the streak system only checks
-     * for missed training days from this date forward.
+     * Mantido por compatibilidade. Salva os dias mas não afeta o streak.
+     * O streak é calculado com base no plano de treino do aluno.
      */
     public function update(Request $request, int $userId)
     {
@@ -63,7 +57,7 @@ class AdminTrainingScheduleController extends Controller
         $admin = $request->user();
 
         $user = User::where('id', $userId)
-            ->where('gym_id', $admin->gym_id)
+            ->where('gym_id', $admin->activeGymId())
             ->firstOrFail();
 
         $days = array_values(array_unique($request->days));
@@ -77,11 +71,6 @@ class AdminTrainingScheduleController extends Controller
                 'day_of_week' => $day,
             ]);
         }
-
-        // Record the date of this change so StreakService does not
-        // retroactively check days before the schedule was updated.
-        $user->last_schedule_change = now()->toDateString();
-        $user->save();
 
         return response()->json([
             'message'       => 'Agenda de treinos atualizada.',

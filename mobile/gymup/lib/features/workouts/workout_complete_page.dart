@@ -1,4 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
+import 'workout_share_card.dart';
 
 const _kBlue     = Color(0xFF2563EB);
 const _kBlueDark = Color(0xFF1D4ED8);
@@ -47,6 +55,11 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage>
   late final Animation<double> _scaleAnim;
   late final Animation<double> _fadeAnim;
 
+  final GlobalKey _repaintKey = GlobalKey();
+  String _userName = '';
+  String _gymName  = '';
+  bool _shareLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -64,6 +77,62 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage>
       ),
     );
     _controller.forward();
+
+    _loadCachedUserData();
+  }
+
+  Future<void> _loadCachedUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _userName = prefs.getString('user_name') ?? '';
+      _gymName  = prefs.getString('gym_name')  ?? '';
+    });
+  }
+
+  Future<void> _shareCard() async {
+    setState(() => _shareLoading = true);
+    try {
+      final boundary = _repaintKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      if (boundary == null || !mounted) return;
+      final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      final ByteData? byteData =
+          await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null || !mounted) return;
+      final Uint8List imageBytes = byteData.buffer.asUint8List();
+
+      final tempDir = Directory.systemTemp;
+      final file =
+          await File('${tempDir.path}/gymup_workout.png').writeAsBytes(imageBytes);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Treino concluído no GymUp! 💪',
+      );
+    } finally {
+      if (mounted) setState(() => _shareLoading = false);
+    }
+  }
+
+  void _showShareBottomSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _ShareBottomSheet(
+        repaintKey: _repaintKey,
+        shareCard: WorkoutShareCard(
+          userName:        _userName,
+          gymName:         _gymName,
+          pontosGerados:   widget.pontosGerados,
+          streak:          widget.streak,
+          duracaoMinutos:  widget.duracaoMinutos,
+          setsConcluidos:  widget.setsConcluidos,
+        ),
+        onShare: _shareCard,
+        isLoading: _shareLoading,
+      ),
+    );
   }
 
   @override
@@ -385,6 +454,35 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage>
 
                 const Spacer(flex: 3),
 
+                // Share button — only when points were earned
+                if (widget.pontosGerados > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: _kBlue,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          elevation: 0,
+                        ),
+                        onPressed: _showShareBottomSheet,
+                        icon: const Icon(Icons.share_rounded, size: 20),
+                        label: const Text(
+                          'Compartilhar treino',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
                 // CTA
                 SizedBox(
                   width: double.infinity,
@@ -457,4 +555,135 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage>
         height: 52,
         color: Colors.white.withValues(alpha: 0.25),
       );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ShareBottomSheet extends StatefulWidget {
+  final GlobalKey repaintKey;
+  final WorkoutShareCard shareCard;
+  final VoidCallback onShare;
+  final bool isLoading;
+
+  const _ShareBottomSheet({
+    required this.repaintKey,
+    required this.shareCard,
+    required this.onShare,
+    required this.isLoading,
+  });
+
+  @override
+  State<_ShareBottomSheet> createState() => _ShareBottomSheetState();
+}
+
+class _ShareBottomSheetState extends State<_ShareBottomSheet> {
+  bool _sharing = false;
+
+  Future<void> _handleShare() async {
+    setState(() => _sharing = true);
+    widget.onShare();
+    await Future.delayed(const Duration(seconds: 2));
+    if (mounted) setState(() => _sharing = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF0F172A),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Drag handle
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.20),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          const Text(
+            'Compartilhar treino',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Card preview wrapped for capture
+          RepaintBoundary(
+            key: widget.repaintKey,
+            child: widget.shareCard,
+          ),
+
+          const SizedBox(height: 24),
+
+          // Actions
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white60,
+                    side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    'Agora não',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _kBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 0,
+                  ),
+                  onPressed: _sharing ? null : _handleShare,
+                  icon: _sharing
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(Icons.share_rounded, size: 18),
+                  label: Text(
+                    _sharing ? 'Preparando...' : 'Compartilhar',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }

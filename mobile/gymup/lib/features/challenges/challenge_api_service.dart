@@ -54,7 +54,7 @@ class ChallengeData {
       goalWorkouts:      (json['goal_workouts'] as num?)?.toInt(),
       rewardPoints:      (json['reward_points'] as num?)?.toInt(),
       myWorkouts:        (json['my_workouts'] as num?)?.toInt(),
-      goalCompleted:     json['goal_completed'] as bool?,
+      goalCompleted:     json['goal_completed'] is bool ? json['goal_completed'] as bool : null,
       minWeeklyWorkouts: (json['min_weekly_workouts'] as num?)?.toInt(),
       maxWeeklyWorkouts: (json['max_weekly_workouts'] as num?)?.toInt(),
       myWorkoutsThisWeek:(json['my_workouts_this_week'] as num?)?.toInt(),
@@ -91,7 +91,7 @@ class ChallengeRankingEntry {
       userName:     json['user_name'] as String,
       totalPoints:  (json['total_points'] as num?)?.toInt(),
       workouts:     (json['workouts'] as num?)?.toInt(),
-      goalCompleted: json['goal_completed'] as bool?,
+      goalCompleted: json['goal_completed'] is bool ? json['goal_completed'] as bool : null,
     );
   }
 }

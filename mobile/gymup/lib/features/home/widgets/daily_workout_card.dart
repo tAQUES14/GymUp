@@ -8,6 +8,7 @@ class DailyWorkoutCard extends StatelessWidget {
   final String workoutName;
   final String duration;
   final String level;
+  final String? dayLabel;
   final VoidCallback? onTap;
 
   const DailyWorkoutCard({
@@ -15,6 +16,7 @@ class DailyWorkoutCard extends StatelessWidget {
     this.workoutName = 'Nenhum treino cadastrado',
     this.duration = '--',
     this.level = '--',
+    this.dayLabel,
     this.onTap,
   });
 
@@ -71,7 +73,7 @@ class DailyWorkoutCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 5),
                   Text(
-                    'TREINO DE HOJE',
+                    dayLabel != null ? 'HOJE · ${dayLabel!.toUpperCase()}' : 'TREINO DE HOJE',
                     style: AppTypography.caption.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,

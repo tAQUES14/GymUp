@@ -39,9 +39,14 @@ class WorkoutController extends Controller
                 }
             }
 
+            $checkinGymId = Checkin::where('user_id', $user->id)
+                ->where('checkin_date', now()->toDateString())
+                ->value('gym_id');
+
             return WorkoutSession::create([
                 'user_id'        => $user->id,
                 'gym_id'         => $user->gym_id,
+                'checkin_gym_id' => $checkinGymId,
                 'started_at'     => now(),
                 'progress'       => 0,
                 'points_granted' => false,

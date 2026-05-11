@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 class AppColors {
   // Primary Brand Colors
-  static const Color primary = Color(0xFF6C63FF); // Modern Purple
-  static const Color primaryDark = Color(0xFF5A52D5);
-  static const Color primaryLight = Color(0xFF8F89FF);
+  static const Color primary = Color(0xFF2563EB); // Brand Blue
+  static const Color primaryDark = Color(0xFF1D4ED8);
+  static const Color primaryLight = Color(0xFF3B82F6);
 
   // Secondary/Accent
   static const Color accent = Color(0xFF00C853); // Success Green

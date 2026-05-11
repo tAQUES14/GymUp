@@ -22,7 +22,7 @@ _RS _styleFor(String titulo) {
   final t = titulo.toLowerCase();
   if (t.contains('camiseta') || t.contains('roupa')) {
     return const _RS(Icons.checkroom_rounded,
-        [Color(0xFF9B8FFF), Color(0xFF6C63FF)]);
+        [Color(0xFF60A5FA), Color(0xFF2563EB)]);
   }
   if (t.contains('squeeze') || t.contains('garrafa')) {
     return const _RS(Icons.water_drop_rounded,
@@ -37,7 +37,7 @@ _RS _styleFor(String titulo) {
         [Color(0xFFEF9A9A), Color(0xFFE53935)]);
   }
   return const _RS(Icons.card_giftcard_rounded,
-      [Color(0xFF9B8FFF), Color(0xFF6C63FF)]);
+      [Color(0xFF60A5FA), Color(0xFF2563EB)]);
 }
 
 class RewardDetailsPage extends StatefulWidget {

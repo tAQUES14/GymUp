@@ -8,10 +8,7 @@ use Illuminate\Support\Facades\DB;
 
 class WorkoutSetService
 {
-    /**
-     * Save (upsert) all sets for a given exercise within a session.
-     * Replaces any previously saved sets for the same exercise in this session.
-     */
+    // substitui os sets anteriores do mesmo exercício na sessão
     public function saveSets(int $sessionId, int $exerciseId, array $sets): void
     {
         DB::transaction(function () use ($sessionId, $exerciseId, $sets) {
@@ -31,10 +28,6 @@ class WorkoutSetService
         });
     }
 
-    /**
-     * Return the sets from the user's most recent finished session
-     * that included this exercise. Returns [] if no history exists.
-     */
     public function getLastSets(int $exerciseId, int $userId): array
     {
         $sessionId = DB::table('workout_sets')
@@ -61,11 +54,7 @@ class WorkoutSetService
             ->all();
     }
 
-    /**
-     * Compare the current session's sets against the previous session for each
-     * exercise. Returns a motivational progress message for the biggest improvement,
-     * or null if nothing improved.
-     */
+    // retorna mensagem do maior ganho em relação à sessão anterior, ou null
     public function detectProgress(int $userId, int $currentSessionId): ?string
     {
         $exerciseIds = WorkoutSet::where('workout_session_id', $currentSessionId)
@@ -84,7 +73,6 @@ class WorkoutSetService
                 ->where('exercise_id', $exerciseId)
                 ->get();
 
-            // Find previous session (not the current one) that recorded sets for this exercise
             $prevSessionId = DB::table('workout_sets')
                 ->join('workout_sessions', 'workout_sets.workout_session_id', '=', 'workout_sessions.id')
                 ->where('workout_sessions.user_id', $userId)

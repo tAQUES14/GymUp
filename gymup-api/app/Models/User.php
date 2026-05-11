@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -12,11 +13,16 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
+    /** Cache de permissões em memória — declarado como propriedade de classe para
+     *  evitar que o Eloquent o trate como atributo e tente persisti-lo. */
+    private $_permissionsCache = null;
+
     protected $fillable = [
         'name',
         'email',
         'password',
         'gym_id',
+        'active_gym_id',
         'role',
         'points_balance',
         'height',
@@ -28,15 +34,17 @@ class User extends Authenticatable
         'current_week_goal',
         'current_streak',
         'best_streak',
+        'consistency_bonus_days',
         'last_workout_date',
         'last_schedule_change',
     ];
 
     protected $casts = [
-        'week_goal_completed' => 'boolean',
-        'current_week_start'  => 'date',
-        'last_workout_date'    => 'date',
-        'last_schedule_change' => 'date',
+        'week_goal_completed'    => 'boolean',
+        'current_week_start'     => 'date',
+        'last_workout_date'      => 'date',
+        'last_schedule_change'   => 'date',
+        'consistency_bonus_days' => 'integer',
     ];
 
     protected $hidden = [
@@ -44,7 +52,59 @@ class User extends Authenticatable
         'remember_token',
     ];
 
-    // ── Role helpers ──────────────────────────────────────────────────────────
+    // ── RBAC: Roles & Permissions ─────────────────────────────────────────────
+
+    public function roles(): BelongsToMany
+    {
+        return $this->belongsToMany(Role::class, 'user_roles');
+    }
+
+    /**
+     * Retorna todas as permissões do usuário (via roles),
+     * com cache em memória para evitar N+1 na mesma requisição.
+     */
+    public function getPermissions(): \Illuminate\Support\Collection
+    {
+        if ($this->_permissionsCache !== null) {
+            return $this->_permissionsCache;
+        }
+
+        try {
+            $this->_permissionsCache = $this->roles()
+                ->with('permissions')
+                ->get()
+                ->flatMap(fn ($role) => $role->permissions->pluck('name'))
+                ->unique()
+                ->values();
+        } catch (\Exception) {
+            // Tabelas RBAC ainda não existem (migração pendente) — permissões vazias.
+            $this->_permissionsCache = collect();
+        }
+
+        return $this->_permissionsCache;
+    }
+
+    public function hasPermission(string $permission): bool
+    {
+        // super_admin bypass — acesso total
+        if ($this->role === 'super_admin') {
+            return true;
+        }
+
+        return $this->getPermissions()->contains($permission);
+    }
+
+    public function hasRole(string $roleName): bool
+    {
+        // Verifica tanto o campo legado quanto a tabela user_roles
+        if ($this->role === $roleName) {
+            return true;
+        }
+
+        return $this->roles()->where('name', $roleName)->exists();
+    }
+
+    // ── Role helpers (legado — mantidos para compatibilidade) ─────────────────
 
     public function isSuperAdmin(): bool
     {
@@ -61,6 +121,24 @@ class User extends Authenticatable
         return $this->role === 'trainer';
     }
 
+    /**
+     * Gym_id efetivo para filtros de contexto.
+     * Trainers e gym_admins com active_gym_id definido usam a filial ativa;
+     * demais usuários (e super_admin com acesso global) usam gym_id do banco.
+     */
+    public function activeGymId(): int
+    {
+        if (! $this->isSuperAdmin() && $this->active_gym_id !== null) {
+            return (int) $this->active_gym_id;
+        }
+        return (int) $this->gym_id;
+    }
+
+    public function isNetworkAdmin(): bool
+    {
+        return $this->role === 'network_admin';
+    }
+
     public function isUser(): bool
     {
         return $this->role === 'user';
@@ -69,12 +147,19 @@ class User extends Authenticatable
     /** Retorna true para qualquer role com acesso ao painel administrativo. */
     public function canAccessAdminPanel(): bool
     {
-        return in_array($this->role, ['super_admin', 'gym_admin', 'trainer'], true);
+        return in_array($this->role, ['super_admin', 'network_admin', 'gym_admin', 'trainer'], true);
     }
 
     public function gym()
     {
         return $this->belongsTo(Gym::class);
+    }
+
+    /** Academias às quais este trainer/gym_admin pertence (via trainer_gyms). */
+    public function gyms()
+    {
+        return $this->belongsToMany(Gym::class, 'trainer_gyms', 'trainer_id', 'gym_id')
+            ->withPivot('is_primary');
     }
 
     public function checkins()

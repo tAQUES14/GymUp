@@ -25,7 +25,7 @@ class Achievement {
       progress:     (json['progress'] as num).toInt(),
       target:       (json['target'] as num).toInt(),
       pointsReward: (json['pointsReward'] as num).toInt(),
-      unlocked:     json['unlocked'] as bool,
+      unlocked:     json['unlocked'] == true,
     );
   }
 

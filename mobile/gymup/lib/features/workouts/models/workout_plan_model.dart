@@ -1,3 +1,4 @@
+/// Exercício dentro de um dia do plano.
 class WorkoutPlanExerciseModel {
   final int id;
   final int exerciseId;
@@ -20,6 +21,12 @@ class WorkoutPlanExerciseModel {
   final int? drops;
   final int exerciseOrder;
   final int defaultRest;
+  final String? description;
+  final String? primaryMuscle;
+  final List<String> secondaryMuscles;
+  final List<String> executionSteps;
+  final List<String> commonMistakes;
+  final List<String> tips;
 
   const WorkoutPlanExerciseModel({
     required this.id,
@@ -41,6 +48,12 @@ class WorkoutPlanExerciseModel {
     this.drops,
     required this.exerciseOrder,
     required this.defaultRest,
+    this.description,
+    this.primaryMuscle,
+    this.secondaryMuscles = const [],
+    this.executionSteps = const [],
+    this.commonMistakes = const [],
+    this.tips = const [],
   });
 
   bool get isCardio    => type == 'cardio';
@@ -53,6 +66,12 @@ class WorkoutPlanExerciseModel {
   bool get isNormal    => technique == 'normal';
 
   factory WorkoutPlanExerciseModel.fromJson(Map<String, dynamic> json) {
+    List<String> strList(dynamic v) {
+      if (v == null) return const [];
+      if (v is List) return v.map((e) => e.toString()).toList();
+      return const [];
+    }
+
     return WorkoutPlanExerciseModel(
       id:              (json['id'] as num).toInt(),
       exerciseId:      (json['exercise_id'] as num).toInt(),
@@ -73,22 +92,30 @@ class WorkoutPlanExerciseModel {
       drops:           (json['drops'] as num?)?.toInt(),
       exerciseOrder:   (json['exercise_order'] as num?)?.toInt() ?? 1,
       defaultRest:     (json['default_rest'] as num?)?.toInt() ?? 60,
+      description:     json['description'] as String?,
+      primaryMuscle:   json['primary_muscle'] as String?,
+      secondaryMuscles: strList(json['secondary_muscles']),
+      executionSteps:  strList(json['execution_steps']),
+      commonMistakes:  strList(json['common_mistakes']),
+      tips:            strList(json['tips']),
     );
   }
 }
 
+/// Dia do plano de treino (baseado em calendário).
 class WorkoutPlanDayModel {
-  final int id;
-  final int planId;
-  final int dayOrder;
+  final int? id;
+  final int? planId;
+  /// 0=Domingo, 1=Segunda, ..., 6=Sábado
+  final int dayOfWeek;
   final String name;
   final bool restDay;
   final List<WorkoutPlanExerciseModel> exercises;
 
   const WorkoutPlanDayModel({
-    required this.id,
-    required this.planId,
-    required this.dayOrder,
+    this.id,
+    this.planId,
+    required this.dayOfWeek,
     required this.name,
     required this.restDay,
     required this.exercises,
@@ -97,75 +124,88 @@ class WorkoutPlanDayModel {
   factory WorkoutPlanDayModel.fromJson(Map<String, dynamic> json) {
     final rawExercises = json['exercises'] as List<dynamic>? ?? [];
     return WorkoutPlanDayModel(
-      id:        (json['id'] as num).toInt(),
-      planId:    (json['plan_id'] as num).toInt(),
-      dayOrder:  (json['day_order'] as num?)?.toInt() ?? 1,
-      name:      json['name'] as String? ?? '',
-      restDay:   json['rest_day'] as bool? ?? false,
-      exercises: rawExercises
+      id:          (json['id'] as num?)?.toInt(),
+      planId:      (json['plan_id'] as num?)?.toInt(),
+      dayOfWeek:   (json['day_of_week'] as num?)?.toInt() ?? DateTime.now().weekday % 7,
+      name:        json['name'] as String? ?? '',
+      restDay:     json['rest_day'] == true,
+      exercises:   rawExercises
           .map((e) => WorkoutPlanExerciseModel.fromJson(e as Map<String, dynamic>))
           .toList(),
     );
   }
 }
 
-/// Compact summary of a plan day used for the sequence strip.
-/// Does not include exercises — only metadata for display.
-class PlanDaySummary {
-  final int    dayOrder;
+/// Resumo de um dia da semana no plano (para o overview semanal).
+class WeekDaySummary {
+  /// 0=Domingo, 1=Segunda, ..., 6=Sábado
+  final int dayOfWeek;
+  final bool hasWorkout;
+  final bool restDay;
   final String name;
-  final bool   restDay;
 
-  const PlanDaySummary({
-    required this.dayOrder,
-    required this.name,
+  const WeekDaySummary({
+    required this.dayOfWeek,
+    required this.hasWorkout,
     required this.restDay,
+    required this.name,
   });
 
-  factory PlanDaySummary.fromJson(Map<String, dynamic> json) {
-    return PlanDaySummary(
-      dayOrder: (json['day_order'] as num?)?.toInt() ?? 1,
-      name:     json['name'] as String? ?? '',
-      restDay:  json['rest_day'] as bool? ?? false,
+  factory WeekDaySummary.fromJson(Map<String, dynamic> json) {
+    return WeekDaySummary(
+      dayOfWeek:  (json['day_of_week'] as num).toInt(),
+      hasWorkout: json['has_workout'] == true,
+      restDay:    json['rest_day']   != false,
+      name:       json['name'] as String? ?? 'Descanso',
     );
   }
 }
 
+/// Plano de treino do dia atual.
 class TodayWorkoutPlan {
   final int planId;
   final String planName;
-  final int currentDayIndex;
-  final int totalDays;
   final int betweenExerciseRestSeconds;
-  final WorkoutPlanDayModel currentDay;
-  final List<PlanDaySummary> allDays;
+  /// Treino/descanso de hoje (day_of_week = hoje).
+  final WorkoutPlanDayModel today;
+  /// Resumo dos 7 dias da semana (0=Dom → 6=Sáb), keyed por day_of_week.
+  final Map<int, WeekDaySummary> weekOverview;
 
   const TodayWorkoutPlan({
     required this.planId,
     required this.planName,
-    required this.currentDayIndex,
-    required this.totalDays,
     this.betweenExerciseRestSeconds = 180,
-    required this.currentDay,
-    this.allDays = const [],
+    required this.today,
+    this.weekOverview = const {},
   });
 
-  bool get isRestDay => currentDay.restDay;
+  bool get isRestDay => today.restDay;
 
   factory TodayWorkoutPlan.fromJson(Map<String, dynamic> json) {
-    final rawDays = json['all_days'] as List<dynamic>? ?? [];
+    // week_overview pode vir como lista ou como mapa keyed por string
+    final rawOverview = json['week_overview'];
+    final Map<int, WeekDaySummary> overview = {};
+
+    if (rawOverview is Map) {
+      rawOverview.forEach((key, value) {
+        final dow = int.tryParse(key.toString()) ?? 0;
+        overview[dow] = WeekDaySummary.fromJson(value as Map<String, dynamic>);
+      });
+    } else if (rawOverview is List) {
+      for (final item in rawOverview) {
+        final s = WeekDaySummary.fromJson(item as Map<String, dynamic>);
+        overview[s.dayOfWeek] = s;
+      }
+    }
+
     return TodayWorkoutPlan(
       planId:                       (json['plan_id'] as num).toInt(),
       planName:                     json['plan_name'] as String? ?? '',
-      currentDayIndex:              (json['current_day_index'] as num?)?.toInt() ?? 1,
-      totalDays:                    (json['total_days'] as num?)?.toInt() ?? 1,
       betweenExerciseRestSeconds:   (json['between_exercise_rest_seconds'] as num?)?.toInt() ?? 180,
-      currentDay:                   WorkoutPlanDayModel.fromJson(
-                                      json['current_day'] as Map<String, dynamic>,
+      today:                        WorkoutPlanDayModel.fromJson(
+                                      json['today'] as Map<String, dynamic>,
                                     ),
-      allDays: rawDays
-          .map((d) => PlanDaySummary.fromJson(d as Map<String, dynamic>))
-          .toList(),
+      weekOverview: overview,
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/gymup_loading.dart';
+import '../auth/auth_api_service.dart';
 import 'ranking_api_service.dart';
 import 'ranking_periodo.dart';
 
@@ -19,11 +20,13 @@ class RankingPage extends StatefulWidget {
 }
 
 class _RankingPageState extends State<RankingPage> {
-  final _service = RankingApiService();
-  RankingPeriodo _periodo = RankingPeriodo.semanal;
+  final _service    = RankingApiService();
+  RankingPeriodo _periodo = RankingPeriodo.all;
+  RankingEscopo  _escopo  = RankingEscopo.gym;
   List<RankingItem> _ranking = [];
-  int? _currentUserId;
-  bool _isLoading = false;
+  int?  _currentUserId;
+  bool  _hasChain  = false;
+  bool  _isLoading = false;
   String? _error;
   Future<void>? _activeFetch;
 
@@ -31,8 +34,28 @@ class _RankingPageState extends State<RankingPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _carregarRanking();
+      if (mounted) {
+        _carregarInfoRede();
+        _carregarRanking();
+      }
     });
+  }
+
+  /// Determina se o usuário pertence a uma rede de academias.
+  /// Lê do SharedPreferences (populado pelo getMe); se ausente, chama o
+  /// endpoint /me uma vez para preencher o cache.
+  Future<void> _carregarInfoRede() async {
+    final prefs = await SharedPreferences.getInstance();
+    var chainId = prefs.getInt('gym_chain_id');
+
+    if (chainId == null && prefs.getString('auth_token') != null) {
+      try {
+        await AuthApiService().getMe(); // popula 'gym_chain_id' no SharedPreferences
+        chainId = prefs.getInt('gym_chain_id');
+      } catch (_) {}
+    }
+
+    if (mounted) setState(() => _hasChain = chainId != null);
   }
 
   Future<void> _carregarRanking() async {
@@ -53,11 +76,21 @@ class _RankingPageState extends State<RankingPage> {
     _activeFetch!.whenComplete(() => _activeFetch = null);
   }
 
+  void _trocarEscopo(RankingEscopo novo) {
+    if (_escopo == novo || _activeFetch != null) return;
+    setState(() { _escopo = novo; _isLoading = true; _error = null; });
+    _activeFetch = _executarFetch();
+    _activeFetch!.whenComplete(() => _activeFetch = null);
+  }
+
   Future<void> _executarFetch() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       _currentUserId = prefs.getInt('user_id');
-      final items = await _service.getRanking(period: _periodo.param);
+      final items = await _service.getRanking(
+        period: _periodo.param,
+        scope:  _escopo.param,
+      );
       if (mounted) {
         setState(() { _ranking = items; _isLoading = false; });
       }
@@ -108,6 +141,10 @@ class _RankingPageState extends State<RankingPage> {
                   children: [
                     _buildHeroBanner(),
                     const SizedBox(height: 16),
+                    if (_hasChain) ...[
+                      _buildScopeSelector(),
+                      const SizedBox(height: 10),
+                    ],
                     _buildPeriodSelector(),
                     const SizedBox(height: 16),
                   ],
@@ -274,7 +311,9 @@ class _RankingPageState extends State<RankingPage> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Acumule pontos com check-ins e treinos.',
+                  _escopo == RankingEscopo.chain
+                      ? 'Alunos de toda a sua rede.'
+                      : 'Acumule pontos com check-ins e treinos.',
                   style: AppTypography.caption.copyWith(
                     color: Colors.white.withValues(alpha: 0.80),
                   ),
@@ -283,6 +322,51 @@ class _RankingPageState extends State<RankingPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildScopeSelector() {
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _kBlue.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        children: RankingEscopo.values.map((escopo) {
+          final isSelected = _escopo == escopo;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => _trocarEscopo(escopo),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected ? _kBlue : Colors.transparent,
+                  borderRadius: BorderRadius.circular(7),
+                  boxShadow: isSelected
+                      ? [BoxShadow(
+                          color: _kBlue.withValues(alpha: 0.20),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        )]
+                      : null,
+                ),
+                child: Text(
+                  escopo.label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : _kBlue,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -320,7 +404,7 @@ class _RankingPageState extends State<RankingPage> {
                   style: TextStyle(
                     color: isSelected ? Colors.white : const Color(0xFF64748B),
                     fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                    fontSize: 13,
+                    fontSize: 11,
                   ),
                 ),
               ),
@@ -455,36 +539,75 @@ class _PodiumSlot extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
+        if (item.gymName != null) ...[
+          const SizedBox(height: 1),
+          Text(
+            item.gymName!,
+            style: const TextStyle(fontSize: 9, color: Color(0xFF94A3B8)),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
         const SizedBox(height: 2),
         Text(
           '${item.points} pts',
           style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 8),
-        Container(
-          height: podiumHeight,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.10),
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(10),
-              topRight: Radius.circular(10),
+        if (item.growthPct != null) ...[
+          const SizedBox(height: 2),
+          Text(
+            item.growthPct == 999 ? 'Novo' : _growthLabel(item.growthPct!),
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: _growthColor(item.growthPct!),
             ),
-            border: Border(
-              top: BorderSide(color: color, width: 2),
-              left: BorderSide(color: color.withValues(alpha: 0.25)),
-              right: BorderSide(color: color.withValues(alpha: 0.25)),
-            ),
+            textAlign: TextAlign.center,
           ),
-          child: Center(
-            child: Text(
-              '#${item.position}',
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.w800,
-                fontSize: 20,
+        ],
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(10),
+            topRight: Radius.circular(10),
+          ),
+          child: Stack(
+            children: [
+              Container(
+                height: podiumHeight,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.10),
+                  border: Border(
+                    left: BorderSide(color: color.withValues(alpha: 0.25)),
+                    right: BorderSide(color: color.withValues(alpha: 0.25)),
+                  ),
+                ),
               ),
-            ),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  height: 2,
+                  color: color,
+                ),
+              ),
+              SizedBox(
+                height: podiumHeight,
+                child: Center(
+                  child: Text(
+                    '#${item.position}',
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 20,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -560,30 +683,64 @@ class _RankingListItem extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                if (isMe)
+                if (item.gymName != null)
+                  Text(
+                    item.gymName!,
+                    style: const TextStyle(
+                        fontSize: 11, color: Color(0xFF94A3B8)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  )
+                else if (isMe)
                   const Text('Você',
                       style: TextStyle(fontSize: 11, color: _kBlue)),
               ],
             ),
           ),
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: _kGold.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              '${item.points} pts',
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: _kGold,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _kGold.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${item.points} pts',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _kGold,
+                  ),
+                ),
               ),
-            ),
+              if (item.growthPct != null) ...[
+                const SizedBox(height: 3),
+                Text(
+                  item.growthPct == 999 ? 'Novo' : _growthLabel(item.growthPct!),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: _growthColor(item.growthPct!),
+                  ),
+                ),
+              ],
+            ],
           ),
         ],
       ),
     );
   }
+}
+
+// ── Helpers de crescimento ────────────────────────────────────────────────────
+
+String _growthLabel(int pct) => pct >= 0 ? '+$pct%' : '$pct%';
+
+Color _growthColor(int pct) {
+  if (pct > 0) return const Color(0xFF10B981);  // emerald
+  if (pct < 0) return const Color(0xFFEF4444);  // red
+  return const Color(0xFF94A3B8);                // slate
 }

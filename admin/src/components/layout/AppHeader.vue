@@ -16,6 +16,9 @@
     <!-- Date -->
     <span class="text-xs text-slate-400 hidden sm:block">{{ currentDate }}</span>
 
+    <!-- Gym Switcher (trainer com múltiplas filiais) -->
+    <GymSwitcher />
+
     <!-- Divider -->
     <div class="w-px h-5 bg-slate-200" />
 
@@ -34,28 +37,47 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth.js'
+import GymSwitcher from './GymSwitcher.vue'
 
 const auth  = useAuthStore()
 const route = useRoute()
 
 const pageTitles = {
-  '/dashboard':   'Dashboard',
-  '/users':       'Alunos',
-  '/workouts':    'Treinos',
-  '/challenges':  'Desafios',
-  '/achievements':'Conquistas',
-  '/ranking':     'Ranking',
-  '/rewards':     'Recompensas',
-  '/gyms':        'Academias',
-  '/reports':     'Relatórios',
-  '/settings':    'Configurações',
+  '/dashboard':          'Dashboard',
+  '/users':              'Alunos',
+  '/workouts':           'Treinos',
+  '/workout-plans':      'Planos de Treino',
+  '/exercises':          'Exercícios',
+  '/challenges':         'Desafios',
+  '/achievements':       'Conquistas',
+  '/ranking':            'Ranking',
+  '/rewards':            'Recompensas',
+  '/redemptions':        'Resgates',
+  '/invite':             'Convidar Alunos',
+  '/checkin':            'Check-in & QR Code',
+  '/roles':              'Permissões',
+  '/gyms':               'Academias',
+  '/reports':            'Relatórios',
+  '/settings':           'Configurações',
+  '/chains':             'Redes',
+  '/network/dashboard':  'Painel da Rede',
+  '/network/gyms':       'Filiais da Rede',
+  '/network/trainers':   'Trainers da Rede',
 }
 
 const pageTitle = computed(() => {
-  // match /users/:id → "Perfil do Aluno"
   if (route.path.startsWith('/users/')) return 'Perfil do Aluno'
+  if (route.path === '/chains/new') return 'Nova Rede'
+  if (route.path.match(/^\/chains\/\d+\/edit$/)) return 'Editar Rede'
+  if (route.path.match(/^\/chains\/\d+$/)) return 'Detalhes da Rede'
+  if (route.path === '/network/gyms/new') return 'Nova Filial'
+  if (route.path.match(/^\/network\/gyms\/\d+\/edit$/)) return 'Editar Filial'
+  if (route.path.startsWith('/workouts/')) return 'Detalhe do Treino'
+  if (route.path.startsWith('/workout-plans/')) return 'Detalhe do Plano'
+  if (route.path.startsWith('/challenges/')) return 'Detalhe do Desafio'
   return pageTitles[route.path] ?? 'Admin'
 })
+
 const userInitial = computed(() => auth.user?.name?.[0]?.toUpperCase() ?? 'A')
 
 const currentDate = computed(() => {

@@ -247,7 +247,7 @@ class AdminExerciseController extends Controller
 
                 $gifs[] = [
                     'path'        => $relative,
-                    'url'         => url('storage/exercises/' . $relative),
+                    'url'         => Exercise::gifPathToUrl($relative),
                     'folder'      => $folder,
                     'filename'    => pathinfo($filename, PATHINFO_FILENAME),
                     'usage_count' => $usageMap[$relative] ?? 0,

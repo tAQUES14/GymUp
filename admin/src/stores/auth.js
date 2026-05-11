@@ -10,13 +10,21 @@ export const useAuthStore = defineStore('auth', () => {
   const isSuperAdmin    = computed(() => user.value?.role === 'super_admin')
   const isGymAdmin      = computed(() => user.value?.role === 'gym_admin')
   const isTrainer       = computed(() => user.value?.role === 'trainer')
+  const isStaff         = computed(() => isAuthenticated.value && !isSuperAdmin.value && !isGymAdmin.value)
+
+  function hasPermission(permission) {
+    if (!user.value) return false
+    if (user.value.role === 'super_admin') return true
+    if (user.value.role === 'gym_admin') return true
+    return (user.value.permissions ?? []).includes(permission)
+  }
 
   async function login(email, password) {
     const { data } = await api.post('/login', { email, password })
 
-    const allowedRoles = ['super_admin', 'gym_admin', 'trainer']
+    const allowedRoles = ['super_admin', 'network_admin', 'gym_admin', 'trainer']
     if (!allowedRoles.includes(data.user?.role)) {
-      throw new Error('Acesso negado. Somente administradores e trainers podem acessar este painel.')
+      throw new Error('Acesso negado. Este painel é restrito a administradores e treinadores. Para uso pessoal, baixe o app GymUp.')
     }
 
     token.value = data.token
@@ -24,6 +32,16 @@ export const useAuthStore = defineStore('auth', () => {
 
     localStorage.setItem('admin_token', data.token)
     localStorage.setItem('admin_user', JSON.stringify(data.user))
+
+    await refreshMe()
+
+    return loginRedirect(user.value?.role)
+  }
+
+  function loginRedirect(role) {
+    if (role === 'network_admin') return '/network/dashboard'
+    if (role === 'super_admin')   return '/chains'
+    return '/dashboard'
   }
 
   async function logout() {
@@ -38,5 +56,28 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('admin_user')
   }
 
-  return { token, user, isAuthenticated, isSuperAdmin, isGymAdmin, isTrainer, login, logout }
+  async function refreshMe() {
+    try {
+      const { data } = await api.get('/me')
+      user.value = data
+      localStorage.setItem('admin_user', JSON.stringify(data))
+    } catch {
+      // ignora erros silenciosamente
+    }
+  }
+
+  return {
+    token,
+    user,
+    isAuthenticated,
+    isSuperAdmin,
+    isGymAdmin,
+    isTrainer,
+    isStaff,
+    hasPermission,
+    login,
+    logout,
+    refreshMe,
+    loginRedirect,
+  }
 })

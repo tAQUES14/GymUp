@@ -1,15 +1,9 @@
 class QrService {
-  static const String validQrPrefix = "GYMUP-ACADEMIA-";
-
   bool isValidQr(String? code) {
     if (code == null) return false;
-    // Simple validation: check if it starts with the expected prefix
-    // In a real app, you might validate a signed token or check against a list of valid IDs
-    return code.startsWith(validQrPrefix);
-  }
-  
-  String? extractGymId(String code) {
-    if (!isValidQr(code)) return null;
-    return code.replaceAll(validQrPrefix, "");
+    final trimmed = code.trim();
+    // Aceita qualquer token não vazio com pelo menos 8 caracteres.
+    // A validação real (correspondência com o qr_token da academia) é feita pelo backend.
+    return trimmed.length >= 8;
   }
 }

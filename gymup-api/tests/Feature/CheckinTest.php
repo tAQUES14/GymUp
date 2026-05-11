@@ -27,7 +27,7 @@ class CheckinTest extends TestCase
         $response->assertStatus(200);
 
         $response2 = $this->postJson('/api/checkin');
-        $response2->assertStatus(400);
+        $response2->assertStatus(409);
     }
 
     public function test_checkin_does_not_give_points()

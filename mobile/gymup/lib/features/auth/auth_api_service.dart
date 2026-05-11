@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/api/api_service.dart';
 
 class AuthApiService {
-  static const String baseUrl = 'http://localhost:8000/api';
+  static String get baseUrl => ApiService.baseUrl;
 
   Future<Map<String, dynamic>> login({
     required String email,
@@ -35,18 +36,24 @@ class AuthApiService {
     required String name,
     required String email,
     required String password,
+    String? inviteCode,
   }) async {
+    final body = <String, dynamic>{
+      'name': name,
+      'email': email,
+      'password': password,
+    };
+    if (inviteCode != null && inviteCode.isNotEmpty) {
+      body['invite_code'] = inviteCode.trim().toUpperCase();
+    }
+
     final response = await http.post(
       Uri.parse('$baseUrl/register'),
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      body: jsonEncode({
-        'name': name,
-        'email': email,
-        'password': password,
-      }),
+      body: jsonEncode(body),
     );
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -97,7 +104,41 @@ class AuthApiService {
       throw Exception(data['message'] ?? 'Erro ao buscar usuário');
     }
 
-    return jsonDecode(response.body) as Map<String, dynamic>;
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+    // Persiste chain_id para que o toggle de rede no ranking funcione sem
+    // depender de uma chamada extra.
+    final chainId = data['gym_chain_id'];
+    if (chainId != null) {
+      await prefs.setInt('gym_chain_id', (chainId as num).toInt());
+    } else {
+      await prefs.remove('gym_chain_id');
+    }
+
+    return data;
+  }
+
+  /// Resolve um código de convite para o nome da academia.
+  /// Retorna `{ 'id': int, 'name': String }` ou lança Exception se inválido.
+  Future<Map<String, dynamic>> getGymByInvite(String code) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/gym/by-invite/${Uri.encodeComponent(code.trim().toUpperCase())}'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    );
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+    if (response.statusCode == 404) {
+      throw Exception(data['message'] ?? 'Código inválido');
+    }
+    if (response.statusCode != 200) {
+      throw Exception(data['message'] ?? 'Erro ao verificar código');
+    }
+
+    return data;
   }
 
   /// Solicita o envio do link de recuperação de senha.
@@ -166,6 +207,8 @@ class AuthApiService {
     final user = data['user'] as Map<String, dynamic>?;
     if (user != null) {
       await prefs.setInt('user_id', (user['id'] as num).toInt());
+      final name = user['name'] as String?;
+      if (name != null) await prefs.setString('user_name', name);
     }
   }
 }

@@ -9,13 +9,12 @@ class RedemptionPolicy
 {
     public function approve(User $user, Redemption $redemption): bool
     {
-        return $user->role === 'admin'
-            && $user->gym_id === $redemption->gym_id
+        return $user->hasPermission('manage_redemptions')
             && $redemption->status === 'pending';
     }
 
     public function viewAny(User $user): bool
     {
-        return $user->role === 'admin';
+        return $user->hasPermission('manage_redemptions');
     }
 }

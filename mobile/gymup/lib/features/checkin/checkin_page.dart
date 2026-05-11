@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
+import '../workouts/models/workout_model.dart';
+import '../workouts/models/workout_plan_model.dart';
 import '../workouts/workout_api_service.dart';
+import '../workouts/workout_plan_api_service.dart';
+import '../workouts/workout_plan_utils.dart';
 import 'checkin_api_service.dart';
 import 'qr_service.dart';
 
@@ -84,7 +88,7 @@ class _CheckinPageState extends State<CheckinPage> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Escaneie o QR Code da academia ou\ndigite o código abaixo.',
+                    'Escaneie o QR Code da academia\nou cole o código abaixo.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.82),
@@ -154,7 +158,7 @@ class _CheckinPageState extends State<CheckinPage> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Dica: Use "GYMUP-ACADEMIA-01"',
+                    'Cole o código gerado na página da academia.',
                     style: TextStyle(
                       fontSize: 13,
                       color: _kBlue.withValues(alpha: 0.85),
@@ -226,42 +230,45 @@ class _CheckinPageState extends State<CheckinPage> {
     setState(() => _isProcessing = true);
 
     try {
-      // Busca o primeiro treino real do usuário no backend.
-      // Nunca usa WorkoutsMock — IDs negativos causariam chamadas inválidas
-      // como /api/exercises/-1/weight/last durante a execução.
-      final workouts = await _workoutService.getWorkouts();
+      // Busca plano e treinos avulsos em paralelo.
+      // O check-in é válido se o usuário tem plano OU treinos avulsos.
+      final results = await Future.wait([
+        WorkoutPlanApiService().getTodayWorkout().catchError((_) => null),
+        _workoutService.getWorkouts().catchError((_) => <WorkoutModel>[]),
+      ]);
 
       if (!mounted) return;
 
-      if (workouts.isEmpty) {
+      final plan     = results[0] as TodayWorkoutPlan?;
+      final workouts = results[1] as List<WorkoutModel>;
+
+      // Sem plano nem treinos avulsos → bloqueia
+      if (plan == null && workouts.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Nenhum treino cadastrado. Cadastre um treino antes de fazer check-in.',
+              'Nenhum plano de treino ativo. Solicite ao seu personal.',
             ),
           ),
         );
         return;
       }
 
-      final workout = workouts.first;
-
-      // Garantia extra: IDs negativos não chegam à execução.
-      assert(
-        workout.id > 0,
-        'BUG: workout com ID inválido (${workout.id}) retornado pelo backend.',
-      );
+      // Determina o treino a executar após o check-in.
+      // Prioridade: plano do dia (se não for descanso) → treino avulso → null
+      final workout = _resolveWorkout(plan, workouts);
 
       // QR válido → registra check-in (idempotente: 409 = já feito hoje, OK).
-      await _checkinService.doCheckIn();
+      await _checkinService.doCheckIn(qrToken: code);
 
       if (!mounted) return;
 
-      // Inicia sessão de treino. Pontos serão concedidos apenas após
-      // o treino ser concluído com tempo e progresso suficientes.
-      final session = await _workoutService.startWorkout();
-
-      if (!mounted) return;
+      // Inicia sessão apenas se houver treino real para executar.
+      WorkoutSessionData? session;
+      if (workout != null) {
+        session = await _workoutService.startWorkout();
+        if (!mounted) return;
+      }
 
       await showDialog<void>(
         context: context,
@@ -292,9 +299,7 @@ class _CheckinPageState extends State<CheckinPage> {
               ),
               const SizedBox(height: 16),
               Text(
-                session.dailyPointsAlreadyGranted
-                    ? 'Você já ganhou seus pontos hoje. Este treino extra não gera pontos, mas você pode treinar normalmente.'
-                    : 'Conclua o treino para ganhar seus pontos!',
+                _checkinMessage(plan, session),
                 textAlign: TextAlign.center,
                 style: AppTypography.bodyLarge,
               ),
@@ -304,29 +309,28 @@ class _CheckinPageState extends State<CheckinPage> {
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text(
-                'Agora não',
+                workout != null ? 'Agora não' : 'OK',
                 style: AppTypography.button.copyWith(
                   color: AppColors.textSecondary,
                 ),
               ),
             ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _kBlue,
-                foregroundColor: Colors.white,
+            if (workout != null)
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _kBlue,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  Navigator.pushReplacementNamed(
+                    context,
+                    '/workout-step',
+                    arguments: workout,
+                  );
+                },
+                child: const Text('Iniciar Treino'),
               ),
-              onPressed: () {
-                Navigator.pop(ctx);
-                // Substitui a página de checkin pelo treino,
-                // mantendo WorkoutDetailPage na pilha para o usuário voltar.
-                Navigator.pushReplacementNamed(
-                  context,
-                  '/workout-step',
-                  arguments: workout,
-                );
-              },
-              child: const Text('Iniciar Treino'),
-            ),
           ],
         ),
       );
@@ -340,23 +344,42 @@ class _CheckinPageState extends State<CheckinPage> {
         return;
       }
 
-      // 409 = sessão já ativa → tenta carregar treino e ir direto para execução.
+      if (msg == '403') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('QR Code inválido para esta academia.'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          ),
+        );
+        return;
+      }
+
+      // 409 = sessão já ativa → usa plano/treino e vai para execução.
       if (msg == '409') {
-        // Mesmo no caso de sessão ativa, precisamos de um treino real.
         try {
-          final workouts = await _workoutService.getWorkouts();
+          final results = await Future.wait([
+            WorkoutPlanApiService().getTodayWorkout().catchError((_) => null),
+            _workoutService.getWorkouts().catchError((_) => <WorkoutModel>[]),
+          ]);
           if (!mounted) return;
-          if (workouts.isNotEmpty) {
+
+          final plan     = results[0] as TodayWorkoutPlan?;
+          final workouts = results[1] as List<WorkoutModel>;
+          final workout  = _resolveWorkout(plan, workouts);
+
+          if (workout != null) {
             Navigator.pushReplacementNamed(
               context,
               '/workout-step',
-              arguments: workouts.first,
+              arguments: workout,
             );
             return;
           }
         } catch (_) {}
 
-        // Se não conseguiu carregar o treino, volta para a home.
         if (mounted) Navigator.pop(context);
         return;
       }
@@ -375,6 +398,35 @@ class _CheckinPageState extends State<CheckinPage> {
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
+  }
+
+  /// Resolve qual WorkoutModel executar após o check-in.
+  ///
+  /// Prioridade:
+  ///   1. Plano do dia (se não for descanso e tiver exercícios)
+  ///   2. Primeiro treino avulso disponível
+  ///   3. null  → check-in registrado mas sem treino para iniciar (ex: dia de descanso)
+  WorkoutModel? _resolveWorkout(TodayWorkoutPlan? plan, List<WorkoutModel> workouts) {
+    if (plan != null && !plan.isRestDay && plan.today.exercises.isNotEmpty) {
+      return _workoutFromPlan(plan);
+    }
+    if (workouts.isNotEmpty) return workouts.first;
+    return null;
+  }
+
+  /// Delegates to shared utility (see workout_plan_utils.dart).
+  WorkoutModel _workoutFromPlan(TodayWorkoutPlan plan) => workoutFromPlan(plan);
+
+  String _checkinMessage(TodayWorkoutPlan? plan, WorkoutSessionData? session) {
+    if (session == null) {
+      if (plan != null && plan.isRestDay) {
+        return 'Check-in registrado! Hoje é dia de descanso no seu plano. Bom descanso!';
+      }
+      return 'Check-in registrado!';
+    }
+    return session.dailyPointsAlreadyGranted
+        ? 'Você já ganhou seus pontos hoje. Este treino extra não gera pontos, mas você pode treinar normalmente.'
+        : 'Conclua o treino para ganhar seus pontos!';
   }
 
   @override

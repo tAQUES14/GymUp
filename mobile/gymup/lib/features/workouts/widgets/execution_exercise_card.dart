@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/gymup_card.dart';
+import '../exercise_detail_page.dart';
 import '../exercise_history_page.dart';
 import '../models/workout_model.dart';
 import 'exercise_image_widget.dart';
@@ -50,7 +51,16 @@ class _ExecutionExerciseCardState extends State<ExecutionExerciseCard> {
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  ExerciseImageWidget(exercise: widget.exercise, size: 60),
+                  GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            ExerciseDetailPage(exercise: widget.exercise),
+                      ),
+                    ),
+                    child: ExerciseImageWidget(exercise: widget.exercise, size: 60),
+                  ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
@@ -88,26 +98,43 @@ class _ExecutionExerciseCardState extends State<ExecutionExerciseCard> {
                   onSetCompleted: widget.onSetCompleted,
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: TextButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ExerciseHistoryPage(
-                              exercise: widget.exercise,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextButton.icon(
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  ExerciseDetailPage(exercise: widget.exercise),
                             ),
                           ),
-                        );
-                      },
-                      icon: const Icon(Icons.bar_chart, size: 18),
-                      label: const Text('Histórico & Evolução'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.primary,
+                          icon: const Icon(Icons.play_circle_outline_rounded,
+                              size: 18),
+                          label: const Text('Ver execução'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                          ),
+                        ),
                       ),
-                    ),
+                      Expanded(
+                        child: TextButton.icon(
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  ExerciseHistoryPage(exercise: widget.exercise),
+                            ),
+                          ),
+                          icon: const Icon(Icons.bar_chart, size: 18),
+                          label: const Text('Evolução'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 8),

@@ -75,11 +75,16 @@
 
             <!-- Step icon / number -->
             <div v-if="day.rest_day" class="text-xl leading-none flex-shrink-0">🌙</div>
-            <div v-else
-              class="w-7 h-7 rounded-full bg-brand-50 flex items-center justify-center
-                     text-xs font-bold text-brand-600 flex-shrink-0">
-              {{ day.day_order }}
-            </div>
+            <!-- Day-of-week selector (calendar-based) -->
+            <select v-else
+              :value="day.day_of_week"
+              @change="changeDayOfWeek(day, Number($event.target.value))"
+              title="Dia da semana"
+              class="text-xs font-bold text-brand-600 bg-brand-50 rounded-full
+                     px-2 py-1 border-0 cursor-pointer hover:bg-brand-100
+                     focus:outline-none focus:ring-1 focus:ring-brand-400 flex-shrink-0">
+              <option v-for="(lbl, i) in DOW_LABELS" :key="i" :value="i">{{ lbl }}</option>
+            </select>
 
             <!-- Name -->
             <span class="flex-1 font-semibold text-sm text-slate-900">{{ day.name }}</span>
@@ -462,7 +467,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '../services/api.js'
 import WorkoutModal from '../components/workouts/WorkoutModal.vue'
@@ -470,6 +475,23 @@ import WorkoutModal from '../components/workouts/WorkoutModal.vue'
 const route  = useRoute()
 const router = useRouter()
 const planId = route.params.id
+
+// ── Day-of-week helpers ────────────────────────────────────────────────────────
+const DOW_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+const dowLabel   = (dow) => (dow != null && dow >= 0 && dow <= 6) ? DOW_LABELS[dow] : '?'
+
+/** day_of_week values already used by this plan (so we never duplicate). */
+const usedDows = computed(() =>
+  new Set((plan.value?.days ?? []).map(d => d.day_of_week).filter(d => d != null))
+)
+
+/** Returns the first unused day_of_week Mon→Sun, or null if all 7 are taken. */
+function getNextAvailableDow() {
+  for (const d of [1, 2, 3, 4, 5, 6, 0]) { // Mon first
+    if (!usedDows.value.has(d)) return d
+  }
+  return null
+}
 
 // ── Plan ──────────────────────────────────────────────────────────────────────
 const plan    = ref(null)
@@ -710,11 +732,15 @@ function onDayDrop(idx) {
     dayDragOverIdx.value = null
     return
   }
-  const days = [...plan.value.days]
-  const [moved] = days.splice(dayDraggingIdx.value, 1)
-  days.splice(idx, 0, moved)
-  days.forEach((d, i) => { d.day_order = i + 1 })
-  plan.value.days = days
+  // Swap day_of_week between the two dragged days (calendar semantics)
+  const days    = [...plan.value.days]
+  const fromDay = days[dayDraggingIdx.value]
+  const toDay   = days[idx]
+  const fromDow = fromDay.day_of_week
+  fromDay.day_of_week = toDay.day_of_week
+  toDay.day_of_week   = fromDow
+
+  plan.value.days      = days
   dayDraggingIdx.value = null
   dayDragOverIdx.value = null
   persistDayReorder(days)
@@ -723,8 +749,8 @@ function onDayDrop(idx) {
 async function persistDayReorder(days) {
   reordering.value = true
   try {
-    await api.patch(`/admin/workout-plans/${planId}/days/reorder`, {
-      days: days.map(d => ({ id: d.id, day_order: d.day_order })),
+    await api.patch(`/admin/workout-plans/${planId}/days/reassign`, {
+      days: days.map(d => ({ id: d.id, day_of_week: d.day_of_week })),
     })
   } catch { await loadPlan() }
   finally { reordering.value = false }
@@ -752,8 +778,17 @@ function openWorkoutModal() {
 async function onWorkoutModalSaved(workout) {
   addStepError.value = ''
   addingStep.value   = true
+  const dow = getNextAvailableDow()
+  if (dow === null) {
+    addStepError.value = 'Todos os 7 dias já estão configurados no plano.'
+    addingStep.value   = false
+    return
+  }
   try {
-    await api.post(`/admin/workout-plans/${planId}/days/from-template`, { workout_id: workout.id })
+    await api.post(`/admin/workout-plans/${planId}/days/from-template`, {
+      workout_id:  workout.id,
+      day_of_week: dow,
+    })
     await loadPlan()
   } catch (e) {
     addStepError.value = e.response?.data?.message ?? 'Erro ao adicionar treino ao plano.'
@@ -761,9 +796,18 @@ async function onWorkoutModalSaved(workout) {
 }
 
 async function addRestInstant() {
+  const dow = getNextAvailableDow()
+  if (dow === null) {
+    addStepError.value = 'Todos os 7 dias já estão configurados no plano.'
+    return
+  }
   addingStep.value = true
   try {
-    await api.post(`/admin/workout-plans/${planId}/days`, { name: 'Descanso', rest_day: true })
+    await api.post(`/admin/workout-plans/${planId}/days`, {
+      name:        'Descanso',
+      rest_day:    true,
+      day_of_week: dow,
+    })
     await loadPlan()
     closeAddPopover()
   } catch (e) {
@@ -788,8 +832,17 @@ async function startTemplateAdd() {
 
 async function addFromTemplate(tpl) {
   addingStep.value = true; addStepError.value = ''
+  const dow = getNextAvailableDow()
+  if (dow === null) {
+    addStepError.value = 'Todos os 7 dias já estão configurados no plano.'
+    addingStep.value   = false
+    return
+  }
   try {
-    await api.post(`/admin/workout-plans/${planId}/days/from-template`, { workout_id: tpl.id })
+    await api.post(`/admin/workout-plans/${planId}/days/from-template`, {
+      workout_id:  tpl.id,
+      day_of_week: dow,
+    })
     await loadPlan()
     closeAddPopover()
   } catch (e) {
@@ -832,12 +885,33 @@ async function assignToUser(user) {
   assignSuccess.value = ''
   assignError.value   = ''
   try {
-    await api.post(`/admin/users/${user.id}/assign-plan`, { plan_id: Number(planId) })
-    assignSuccess.value = `Plano atribuído a ${user.name} com sucesso.`
+    const res = await api.post(`/admin/users/${user.id}/assign-plan`, { plan_id: Number(planId) })
+    // Backend retorna `pending: true` quando o plano só entra em vigor na próxima semana.
+    const isPending = res.data?.pending === true
+    assignSuccess.value = isPending
+      ? `Plano agendado para ${user.name}. Entrará em vigor na próxima semana.`
+      : `Plano atribuído a ${user.name} com sucesso.`
     userResults.value = []; userSearch.value = ''
   } catch (e) {
     assignError.value = e.response?.data?.message ?? 'Erro ao atribuir plano.'
   } finally { assigning.value = null }
+}
+
+// ── Change day_of_week inline ─────────────────────────────────────────────────
+async function changeDayOfWeek(day, newDow) {
+  if (day.day_of_week === newDow) return
+  const conflict = (plan.value?.days ?? []).some(d => d.id !== day.id && d.day_of_week === newDow)
+  if (conflict) {
+    dayErrors[day.id] = `Já existe um treino para ${dowLabel(newDow)}.`
+    return
+  }
+  try {
+    await api.put(`/admin/workout-plans/${planId}/days/${day.id}`, { day_of_week: newDow })
+    day.day_of_week = newDow
+    dayErrors[day.id] = ''
+  } catch (e) {
+    dayErrors[day.id] = e.response?.data?.message ?? 'Erro ao alterar dia.'
+  }
 }
 
 // ── Outside click: close popover ──────────────────────────────────────────────

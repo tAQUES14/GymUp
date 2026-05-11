@@ -30,6 +30,14 @@ class FixExerciseGifMappings extends Command
         // Was linked to "Elevação frontal com halteres.gif" — wrong plane of movement.
         // Lateral raise 01 is the standard dumbbell lateral raise.
         'Elevação lateral com halteres' => 'DELTÓIDES/Elevação lateral 01.gif',
+
+        // Auto-linker maps this to "Bulgaro com barra.gif" (wrong — it's a leg exercise).
+        // The correct GIF is the military press in DELTÓIDES.
+        'Press Militar com Barra' => 'DELTÓIDES/Military press 3.gif',
+
+        // Auto-linker maps this to "Supino inclinado.gif" (wrong angle).
+        // Correct GIF is the barbell decline bench press.
+        'Supino Declinado' => 'PEITORAL/barbell-decline-bench-press.gif',
     ];
 
     /**
@@ -73,6 +81,8 @@ class FixExerciseGifMappings extends Command
         // ── Tríceps ──────────────────────────────────────────────────────────
         'Kickback com halter'        => 'TRÍCEPS/dumbbell-tricep-kickback.gif',
         'Tríceps testa com barra ez' => 'TRÍCEPS/Triceps testa 01.gif',
+        'Fundos (Dips)'              => 'TRÍCEPS/bench-tricep-dips.gif',
+        'Skull Crusher'              => 'TRÍCEPS/Triceps testa 01.gif',
     ];
 
     /**

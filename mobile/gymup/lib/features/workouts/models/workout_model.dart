@@ -143,7 +143,7 @@ class ExerciseModel {
       reps: repsCount,
       rest: restSeconds,
       carga: (map['carga'] ?? 0).toDouble(),
-      isCompleted: map['isCompleted'] as bool? ?? false,
+      isCompleted: map['isCompleted'] == true,
       workoutSets: workoutSets,
     );
   }

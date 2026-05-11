@@ -16,16 +16,16 @@ class WorkoutPlanController extends Controller
     /**
      * GET /api/workout-plan/today
      *
-     * Returns the current day of the user's assigned workout plan.
-     * 404 if no plan assigned.
-     * If current day is a rest day, returns rest_day=true with empty exercises.
+     * Retorna o treino do dia atual baseado no day_of_week do plano.
+     * Se não houver plano atribuído → 404.
+     * Se for dia de descanso → retorna rest_day=true com exercises=[].
      */
     public function today(Request $request): JsonResponse
     {
         $user = $request->user();
-        $plan = $this->planService->getCurrentPlanForUser($user);
+        $plan = $this->planService->getTodayPlanForUser($user);
 
-        if (!$plan) {
+        if (! $plan) {
             return response()->json([
                 'message' => 'Nenhum plano de treino atribuído.',
             ], 404);
@@ -37,7 +37,7 @@ class WorkoutPlanController extends Controller
     /**
      * GET /api/workout-plan/current
      *
-     * Same as today — returns current day of the assigned plan with full info.
+     * Alias de today — mantido para compatibilidade de rota.
      */
     public function current(Request $request): JsonResponse
     {

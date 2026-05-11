@@ -8,117 +8,173 @@ use App\Models\UserWorkoutPlan;
 use App\Models\WorkoutExercise;
 use App\Models\WorkoutPlan;
 use App\Models\WorkoutPlanDay;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
+// plano sempre determinado por day_of_week (0=Dom…6=Sáb), não por posição sequencial
 class WorkoutPlanService
 {
     public function __construct(private ExerciseOverrideService $overrideService)
     {
     }
 
-    /**
-     * Get the current plan state for a user.
-     * Returns null if no plan is assigned.
-     */
-    public function getCurrentPlanForUser(User $user): ?array
+    public function getTodayPlanForUser(User $user): ?array
     {
-        $userPlan = UserWorkoutPlan::where('user_id', $user->id)->first();
+        $userPlan = UserWorkoutPlan::active()->where('user_id', $user->id)->first();
 
-        if (!$userPlan) {
+        if (! $userPlan) {
             return null;
         }
 
-        $plan = WorkoutPlan::with(['days' => function ($q) {
-            $q->orderBy('day_order');
-        }])->find($userPlan->plan_id);
+        $plan = WorkoutPlan::find($userPlan->plan_id);
 
-        if (!$plan) {
+        if (! $plan) {
             return null;
         }
 
-        $totalDays = $plan->days->count();
+        $todayDow = now()->dayOfWeek; // 0=Dom, 6=Sáb
 
-        if ($totalDays === 0) {
-            return null;
+        $today = WorkoutPlanDay::where('plan_id', $plan->id)
+            ->where('day_of_week', $todayDow)
+            ->first();
+
+        // Carrega exercícios apenas se não for dia de descanso
+        if ($today && ! $today->rest_day) {
+            $today->load(['exercises.exercise']);
+
+            $exerciseIds = $today->exercises
+                ->pluck('exercise_id')
+                ->filter()
+                ->values()
+                ->all();
+
+            $overrides = $this->overrideService->loadOverridesForUser($user->id, $exerciseIds);
+            $formattedDay = $this->formatDayForResponse($today, $overrides);
+        } else {
+            $formattedDay = $this->buildRestDayPayload($today, $todayDow);
         }
-
-        // Clamp current_day_index to valid range
-        $dayIndex = max(1, min($userPlan->current_day_index, $totalDays));
-
-        // days are ordered by day_order; use collection index (1-based)
-        $currentDay = $plan->days->values()->get($dayIndex - 1);
-
-        if (!$currentDay) {
-            return null;
-        }
-
-        // Eager load exercises with their exercise model
-        $currentDay->load(['exercises.exercise']);
-
-        // Batch-load overrides for all exercises in this day (one query)
-        $exerciseIds = $currentDay->exercises
-            ->pluck('exercise_id')
-            ->filter()
-            ->values()
-            ->all();
-
-        $overrides = $this->overrideService->loadOverridesForUser($user->id, $exerciseIds);
-
-        // Compact summary of every day — used by Flutter to render the
-        // day-sequence strip without a second request.
-        $allDays = $plan->days->values()->map(fn ($d, $i) => [
-            'day_order' => $d->day_order,
-            'name'      => $d->name,
-            'rest_day'  => $d->rest_day,
-        ])->values()->all();
 
         return [
-            'plan_id'                        => $plan->id,
-            'plan_name'                      => $plan->name,
-            'current_day_index'              => $dayIndex,
-            'total_days'                     => $totalDays,
-            'between_exercise_rest_seconds'  => $plan->between_exercise_rest_seconds ?? 180,
-            'current_day'                    => $this->formatDayForResponse($currentDay, $overrides),
-            'all_days'                       => $allDays,
+            'plan_id'                       => $plan->id,
+            'plan_name'                     => $plan->name,
+            'between_exercise_rest_seconds' => $plan->between_exercise_rest_seconds ?? 180,
+            'today'                         => $formattedDay,
+            'week_overview'                 => $this->buildWeekOverview($plan),
         ];
     }
 
-    /**
-     * Advance the user's plan to the next day after a valid workout is completed.
-     * Wraps around to day 1 when end of plan is reached.
-     */
-    public function advancePlanAfterWorkout(User $user): void
+    public function isOnPlanDay(User $user, Carbon $date): bool
     {
-        $userPlan = UserWorkoutPlan::where('user_id', $user->id)->first();
+        $userPlan = UserWorkoutPlan::active()->where('user_id', $user->id)->first();
 
-        if (!$userPlan) {
-            return;
+        if (! $userPlan) {
+            return false;
         }
 
-        $totalDays = WorkoutPlanDay::where('plan_id', $userPlan->plan_id)->count();
+        return WorkoutPlanDay::where('plan_id', $userPlan->plan_id)
+            ->where('day_of_week', $date->dayOfWeek)
+            ->where('rest_day', false)
+            ->exists();
+    }
 
-        if ($totalDays === 0) {
-            return;
+    // retorna: workout_day | rest_day | no_day | no_plan
+    public function getPlanDayContext(User $user, Carbon $date): string
+    {
+        $userPlan = UserWorkoutPlan::active()->where('user_id', $user->id)->first();
+
+        if (! $userPlan) {
+            return 'no_plan';
         }
 
-        $nextIndex = $userPlan->current_day_index + 1;
+        $day = WorkoutPlanDay::where('plan_id', $userPlan->plan_id)
+            ->where('day_of_week', $date->dayOfWeek)
+            ->first();
 
-        if ($nextIndex > $totalDays) {
-            $nextIndex = 1;
+        if ($day === null) {
+            return 'no_day';
         }
 
-        $userPlan->current_day_index = $nextIndex;
-        $userPlan->save();
+        return $day->rest_day ? 'rest_day' : 'workout_day';
+    }
+
+    public function getWeekOverviewForUser(User $user): array
+    {
+        $userPlan = UserWorkoutPlan::active()->where('user_id', $user->id)->first();
+
+        if (! $userPlan) {
+            return $this->emptyWeekOverview();
+        }
+
+        $plan = WorkoutPlan::find($userPlan->plan_id);
+
+        return $plan ? $this->buildWeekOverview($plan) : $this->emptyWeekOverview();
+    }
+
+    // se já tem plano ativo, o novo entra na próxima segunda (preserva streak em curso)
+    public function assignPlanToUser(int $userId, int $planId, int $gymId): UserWorkoutPlan
+    {
+        $hasActivePlan = UserWorkoutPlan::active()->where('user_id', $userId)->exists();
+
+        // Novo plano começa imediatamente se não há plano ativo;
+        // caso contrário, entra em vigor na próxima segunda-feira.
+        $effectiveFrom = $hasActivePlan
+            ? Carbon::now()->next(Carbon::MONDAY)->toDateString()
+            : now()->toDateString();
+
+        return UserWorkoutPlan::updateOrCreate(
+            ['user_id' => $userId],
+            [
+                'plan_id'        => $planId,
+                'gym_id'         => $gymId,
+                'started_at'     => now(),
+                'effective_from' => $effectiveFrom,
+            ]
+        );
     }
 
     /**
-     * Format a WorkoutPlanDay with its exercises for the API response.
-     * Accepts a pre-loaded overrides collection to avoid N+1.
+     * Cria um dia do plano a partir de um template (CustomWorkout).
+     * O dia resultante é independente — mudanças no template não afetam o plano.
+     *
+     * @param  int  $dow  day_of_week (0=Dom … 6=Sáb) — obrigatório para garantir
+     *                    que o dia seja imediatamente visível nas queries do endpoint.
+     */
+    public function addDayFromTemplate(WorkoutPlan $plan, int $workoutId, int $dow): WorkoutPlanDay
+    {
+        $workout = CustomWorkout::with('exercises')
+            ->where('is_template', true)
+            ->findOrFail($workoutId);
+
+        return DB::transaction(function () use ($plan, $workout, $dow) {
+            $day = WorkoutPlanDay::create([
+                'plan_id'     => $plan->id,
+                'day_of_week' => $dow,
+                'name'        => $workout->name,
+                'rest_day'    => false,
+            ]);
+
+            foreach ($workout->exercises as $index => $exercise) {
+                WorkoutExercise::create([
+                    'plan_day_id'    => $day->id,
+                    'exercise_id'    => $exercise->id,
+                    'sets'           => $exercise->pivot->sets,
+                    'reps'           => (string) $exercise->pivot->reps,
+                    'rest_seconds'   => $exercise->pivot->rest,
+                    'exercise_order' => $index + 1,
+                    'technique'      => 'normal',
+                ]);
+            }
+
+            return $day;
+        });
+    }
+
+    /**
+     * Formata um WorkoutPlanDay com exercícios para a resposta da API.
      */
     public function formatDayForResponse(WorkoutPlanDay $day, $overrides = null): array
     {
-        // Ensure exercises and their exercise relation are loaded
-        if (!$day->relationLoaded('exercises')) {
+        if (! $day->relationLoaded('exercises')) {
             $day->load(['exercises.exercise']);
         }
 
@@ -128,7 +184,7 @@ class WorkoutPlanService
             $ex       = $we->exercise;
             $override = $ex ? $overrides->get($ex->id) : null;
 
-            if (!$ex) {
+            if (! $ex) {
                 return [
                     'id'               => $we->id,
                     'exercise_id'      => $we->exercise_id,
@@ -162,7 +218,7 @@ class WorkoutPlanService
                 $this->overrideService->resolveForApi($ex, $override),
                 [
                     'id'               => $we->id,
-                    'exercise_id'      => $ex->id,   // required by WorkoutPlanExerciseModel
+                    'exercise_id'      => $ex->id,
                     'sets'             => $we->sets,
                     'reps'             => $we->reps,
                     'rest_seconds'     => $we->rest_seconds,
@@ -178,67 +234,64 @@ class WorkoutPlanService
         })->values()->all();
 
         return [
-            'id'        => $day->id,
-            'plan_id'   => $day->plan_id,
-            'day_order' => $day->day_order,
-            'name'      => $day->name,
-            'rest_day'  => $day->rest_day,
-            'exercises' => $exercises,
+            'id'          => $day->id,
+            'plan_id'     => $day->plan_id,
+            'day_of_week' => $day->day_of_week,
+            'name'        => $day->name,
+            'rest_day'    => (bool) $day->rest_day,
+            'exercises'   => $exercises,
         ];
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // Helpers privados
+    // ──────────────────────────────────────────────────────────────────────────
+
     /**
-     * Create a WorkoutPlanDay by copying exercises from a CustomWorkout template.
-     * The resulting day is fully independent — future changes to the template have no effect.
+     * Constrói o resumo semanal de um plano (7 slots, 0=Dom a 6=Sáb).
      */
-    public function addDayFromTemplate(WorkoutPlan $plan, int $workoutId): WorkoutPlanDay
+    private function buildWeekOverview(WorkoutPlan $plan): array
     {
-        $workout = CustomWorkout::with('exercises')
-            ->where('is_template', true)
-            ->findOrFail($workoutId);
+        $days = WorkoutPlanDay::where('plan_id', $plan->id)->get()->keyBy('day_of_week');
 
-        $maxOrder = WorkoutPlanDay::where('plan_id', $plan->id)->max('day_order') ?? 0;
+        $overview = [];
+        for ($dow = 0; $dow <= 6; $dow++) {
+            $day           = $days->get($dow);
+            $hasWorkout    = $day !== null && ! $day->rest_day;
+            $overview[$dow] = [
+                'day_of_week' => $dow,
+                'has_workout' => $hasWorkout,
+                'rest_day'    => ! $hasWorkout,
+                'name'        => $day?->name ?? 'Descanso',
+            ];
+        }
 
-        return DB::transaction(function () use ($plan, $workout, $maxOrder) {
-            $day = WorkoutPlanDay::create([
-                'plan_id'   => $plan->id,
-                'day_order' => $maxOrder + 1,
-                'name'      => $workout->name,
-                'rest_day'  => false,
-            ]);
-
-            foreach ($workout->exercises as $index => $exercise) {
-                WorkoutExercise::create([
-                    'plan_day_id'    => $day->id,
-                    'exercise_id'    => $exercise->id,
-                    'sets'           => $exercise->pivot->sets,
-                    'reps'           => (string) $exercise->pivot->reps,
-                    'rest_seconds'   => $exercise->pivot->rest,
-                    'exercise_order' => $index + 1,
-                    'technique'      => 'normal',
-                ]);
-            }
-
-            return $day;
-        });
+        return $overview;
     }
 
-    /**
-     * Assign or reassign a plan to a user.
-     * Resets to day 1.
-     */
-    public function assignPlanToUser(int $userId, int $planId, int $gymId): UserWorkoutPlan
+    private function buildRestDayPayload(?WorkoutPlanDay $day, int $dow): array
     {
-        $userPlan = UserWorkoutPlan::updateOrCreate(
-            ['user_id' => $userId],
-            [
-                'plan_id'           => $planId,
-                'gym_id'            => $gymId,
-                'current_day_index' => 1,
-                'started_at'        => now(),
-            ]
-        );
+        return [
+            'id'          => $day?->id,
+            'plan_id'     => $day?->plan_id,
+            'day_of_week' => $dow,
+            'name'        => $day?->name ?? 'Descanso',
+            'rest_day'    => true,
+            'exercises'   => [],
+        ];
+    }
 
-        return $userPlan;
+    private function emptyWeekOverview(): array
+    {
+        $overview = [];
+        for ($dow = 0; $dow <= 6; $dow++) {
+            $overview[$dow] = [
+                'day_of_week' => $dow,
+                'has_workout' => false,
+                'rest_day'    => true,
+                'name'        => 'Descanso',
+            ];
+        }
+        return $overview;
     }
 }

@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 
 class WorkoutPlanDay extends Model
 {
-    protected $fillable = ['plan_id', 'day_order', 'name', 'rest_day'];
+    protected $fillable = ['plan_id', 'day_of_week', 'name', 'rest_day'];
 
     protected $casts = [
-        'rest_day' => 'boolean',
+        'rest_day'    => 'boolean',
+        'day_of_week' => 'integer',
     ];
 
     public function plan()

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\GymChallenge;
 use App\Services\ChallengeService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class AdminChallengeController extends Controller
 {
@@ -18,7 +19,7 @@ class AdminChallengeController extends Controller
      */
     public function index(Request $request)
     {
-        $challenges = GymChallenge::where('gym_id', $request->user()->gym_id)
+        $challenges = GymChallenge::where('gym_id', $request->user()->activeGymId())
             ->withCount('participants')
             ->orderByDesc('starts_at')
             ->get();
@@ -34,7 +35,7 @@ class AdminChallengeController extends Controller
     public function show(Request $request, int $id)
     {
         $challenge = GymChallenge::where('id', $id)
-            ->where('gym_id', $request->user()->gym_id)
+            ->where('gym_id', $request->user()->activeGymId())
             ->withCount('participants')
             ->firstOrFail();
 
@@ -69,7 +70,7 @@ class AdminChallengeController extends Controller
     public function destroy(Request $request, int $id)
     {
         $challenge = GymChallenge::where('id', $id)
-            ->where('gym_id', $request->user()->gym_id)
+            ->where('gym_id', $request->user()->activeGymId())
             ->firstOrFail();
 
         if ($challenge->starts_at->isPast()) {
@@ -95,6 +96,7 @@ class AdminChallengeController extends Controller
 
         $data = $request->validate([
             'type'        => 'required|in:competitive,simple',
+            'scope'       => 'nullable|in:community,personal',
             'name'        => 'required|string|max:255',
             'description' => 'nullable|string',
             'starts_at'   => 'required|date|after_or_equal:today',
@@ -115,24 +117,37 @@ class AdminChallengeController extends Controller
             'reward_points' => 'nullable|integer|min:0',
         ]);
 
-        // Valida regra: apenas um desafio ativo por vez
-        $conflict = GymChallenge::where('gym_id', $user->gym_id)
-            ->where('status', 'active')
-            ->where('starts_at', '<=', $data['ends_at'])
-            ->where('ends_at', '>=', $data['starts_at'])
-            ->exists();
+        $scope = $data['scope'] ?? 'community';
 
-        if ($conflict) {
-            return response()->json([
-                'message' => 'Já existe um desafio ativo nesse período. Finalize-o antes de criar um novo.',
-            ], 422);
+        // Desafios comunitários: apenas 1 ativo por vez no mesmo período
+        if ($scope === 'community') {
+            $conflict = GymChallenge::where('gym_id', $user->activeGymId())
+                ->where('scope', 'community')
+                ->where('status', 'active')
+                ->where('starts_at', '<=', $data['ends_at'])
+                ->where('ends_at', '>=', $data['starts_at'])
+                ->exists();
+
+            if ($conflict) {
+                return response()->json([
+                    'message' => 'Já existe um desafio comunitário ativo nesse período. Finalize-o antes de criar um novo.',
+                ], 422);
+            }
         }
 
-        $challenge = GymChallenge::create(array_merge($data, [
-            'gym_id'      => $user->gym_id,
-            'status'      => 'active',
-            'reward_type' => $data['reward_type'] ?? 'points',
-        ]));
+        $challenge = DB::transaction(function () use ($data, $user, $scope) {
+            $challenge = GymChallenge::create(array_merge($data, [
+                'gym_id'      => $user->activeGymId(),
+                'scope'       => $scope,
+                'status'      => 'active',
+                'reward_type' => $data['reward_type'] ?? 'points',
+            ]));
+
+            // Atribui o desafio a todos os alunos já cadastrados na academia
+            $this->challengeService->assignToAllStudents($challenge);
+
+            return $challenge;
+        });
 
         return response()->json(['challenge' => $challenge], 201);
     }
@@ -145,7 +160,7 @@ class AdminChallengeController extends Controller
     public function update(Request $request, int $id)
     {
         $challenge = GymChallenge::where('id', $id)
-            ->where('gym_id', $request->user()->gym_id)
+            ->where('gym_id', $request->user()->activeGymId())
             ->firstOrFail();
 
         if ($challenge->starts_at->isPast()) {
@@ -182,7 +197,7 @@ class AdminChallengeController extends Controller
     public function finish(Request $request, int $id)
     {
         $challenge = GymChallenge::where('id', $id)
-            ->where('gym_id', $request->user()->gym_id)
+            ->where('gym_id', $request->user()->activeGymId())
             ->where('status', 'active')
             ->firstOrFail();
 

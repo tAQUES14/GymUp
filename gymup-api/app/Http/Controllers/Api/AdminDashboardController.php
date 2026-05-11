@@ -80,7 +80,7 @@ class AdminDashboardController extends Controller
 
     private function gymDashboard($admin): JsonResponse
     {
-        $gymId = $admin->gym_id;
+        $gymId = $admin->activeGymId();
         $today = Carbon::today();
 
         $userIds = User::where('gym_id', $gymId)

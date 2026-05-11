@@ -21,7 +21,7 @@ class AdminRedemptionsListTest extends TestCase
 
         $admin = User::factory()->create([
             'gym_id' => $gym1->id,
-            'role' => 'admin',
+            'role' => 'super_admin',
             'points_balance' => 100,
         ]);
 

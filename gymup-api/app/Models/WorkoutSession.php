@@ -12,6 +12,7 @@ class WorkoutSession extends Model
     protected $fillable = [
         'user_id',
         'gym_id',
+        'checkin_gym_id',
         'started_at',
         'finished_at',
         'progress',

@@ -25,11 +25,12 @@ class AdminSettingsController extends Controller
                 'role'  => $admin->role,
             ],
             'gym' => $gym ? [
-                'id'      => $gym->id,
-                'name'    => $gym->name,
-                'email'   => $gym->email,
-                'phone'   => $gym->phone,
-                'address' => $gym->address,
+                'id'          => $gym->id,
+                'name'        => $gym->name,
+                'email'       => $gym->email,
+                'phone'       => $gym->phone,
+                'address'     => $gym->address,
+                'invite_code' => $gym->invite_code,
             ] : null,
         ]);
     }

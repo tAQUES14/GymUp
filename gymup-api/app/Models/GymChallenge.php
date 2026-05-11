@@ -12,6 +12,7 @@ class GymChallenge extends Model
     protected $fillable = [
         'gym_id',
         'type',
+        'scope',
         'name',
         'description',
         'starts_at',
@@ -55,6 +56,16 @@ class GymChallenge extends Model
     public function isSimple(): bool
     {
         return $this->type === 'simple';
+    }
+
+    public function isPersonal(): bool
+    {
+        return $this->scope === 'personal';
+    }
+
+    public function isCommunity(): bool
+    {
+        return $this->scope !== 'personal';
     }
 
     /** True se o desafio está ativo e dentro do período configurado. */

@@ -13,8 +13,16 @@
           {{ initials }}
         </div>
         <div class="min-w-0">
-          <p class="text-sm font-semibold text-slate-800 truncate leading-tight">{{ user.name }}</p>
-          <p class="text-[11px] text-slate-400 truncate leading-tight mt-0.5">{{ user.email }}</p>
+          <div class="flex items-center gap-1.5">
+            <p class="text-sm font-semibold text-slate-800 truncate leading-tight">{{ user.name }}</p>
+            <span v-if="user.is_visitor"
+              class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 shrink-0"
+              :title="user.home_gym_name ? `Filial: ${user.home_gym_name}` : 'Visitante de outra filial'"
+            >Visitante</span>
+          </div>
+          <p class="text-[11px] text-slate-400 truncate leading-tight mt-0.5">
+            {{ user.is_visitor && user.home_gym_name ? user.home_gym_name : user.email }}
+          </p>
         </div>
       </div>
     </td>

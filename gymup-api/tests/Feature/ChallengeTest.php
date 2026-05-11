@@ -34,7 +34,7 @@ class ChallengeTest extends TestCase
 
     private function createAdminUser(Gym $gym): User
     {
-        $admin = User::factory()->create(['gym_id' => $gym->id, 'role' => 'admin']);
+        $admin = User::factory()->create(['gym_id' => $gym->id, 'role' => 'super_admin']);
         Sanctum::actingAs($admin);
 
         return $admin;
@@ -1046,6 +1046,350 @@ class ChallengeTest extends TestCase
         $this->assertNotNull($position);
         $this->assertIsInt($position);
         $this->assertGreaterThanOrEqual(1, $position);
+
+        Carbon::setTestNow();
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Auto-atribuição
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /** @test */
+    public function creating_challenge_assigns_participants_to_all_existing_students()
+    {
+        [$gym, $user1] = $this->createAuthUser();
+        $user2 = User::factory()->create(['gym_id' => $gym->id, 'role' => 'user']);
+
+        $admin = $this->createAdminUser($gym);
+        Sanctum::actingAs($admin);
+
+        $response = $this->postJson('/api/admin/challenges', [
+            'type'          => 'simple',
+            'name'          => 'Desafio Geral',
+            'starts_at'     => now()->toDateString(),
+            'ends_at'       => now()->addDays(30)->toDateString(),
+            'goal_workouts' => 5,
+            'reward_points' => 100,
+        ]);
+
+        $response->assertStatus(201);
+        $challengeId = $response->json('challenge.id');
+
+        $this->assertDatabaseHas('challenge_participants', ['challenge_id' => $challengeId, 'user_id' => $user1->id]);
+        $this->assertDatabaseHas('challenge_participants', ['challenge_id' => $challengeId, 'user_id' => $user2->id]);
+        // Admin não deve ser atribuído
+        $this->assertDatabaseMissing('challenge_participants', ['challenge_id' => $challengeId, 'user_id' => $admin->id]);
+    }
+
+    /** @test */
+    public function new_student_is_assigned_to_active_challenge_on_register()
+    {
+        $gym = Gym::factory()->create();
+        $this->createSimpleChallenge($gym, ['starts_at' => now()->toDateString()]);
+
+        $response = $this->postJson('/api/register', [
+            'name'     => 'Novo Aluno',
+            'email'    => 'novo@gymup.com',
+            'password' => 'secret123',
+            'gym_id'   => $gym->id,
+        ]);
+
+        $response->assertStatus(200);
+        $userId = $response->json('user.id');
+
+        $this->assertDatabaseHas('challenge_participants', [
+            'gym_id'  => $gym->id,
+            'user_id' => $userId,
+        ]);
+    }
+
+    /** @test */
+    public function new_student_has_zero_progress_when_assigned()
+    {
+        $gym = Gym::factory()->create();
+        $challenge = $this->createSimpleChallenge($gym, [
+            'starts_at'     => now()->toDateString(),
+            'goal_workouts' => 5,
+        ]);
+
+        $this->postJson('/api/register', [
+            'name'     => 'Aluno Zero',
+            'email'    => 'zero@gymup.com',
+            'password' => 'secret123',
+            'gym_id'   => $gym->id,
+        ]);
+
+        $participant = \App\Models\ChallengeParticipant::where('challenge_id', $challenge->id)->first();
+
+        $this->assertNotNull($participant);
+        $this->assertEquals(0, $participant->workouts_this_challenge);
+        $this->assertFalse($participant->goal_completed);
+        $this->assertFalse($participant->reward_granted);
+    }
+
+    /** @test */
+    public function reward_is_granted_when_student_completes_challenge_goal()
+    {
+        Carbon::setTestNow(Carbon::now());
+        [$gym, $user] = $this->createAuthUser();
+
+        $challenge = $this->createSimpleChallenge($gym, [
+            'goal_workouts' => 2,
+            'reward_points' => 150,
+            'reward_type'   => 'points',
+        ]);
+
+        $this->grantValidWorkout($user, $gym, now());
+        $this->grantValidWorkout($user, $gym, now()->addDays(1));
+
+        $participant = \App\Models\ChallengeParticipant::where('challenge_id', $challenge->id)
+            ->where('user_id', $user->id)
+            ->first();
+
+        $this->assertTrue($participant->goal_completed);
+        $this->assertTrue($participant->reward_granted);
+        $user->refresh();
+        $this->assertEquals(150, $user->points_balance);
+
+        Carbon::setTestNow();
+    }
+
+    /** @test */
+    public function reward_is_not_duplicated_on_extra_workouts()
+    {
+        Carbon::setTestNow(Carbon::now());
+        [$gym, $user] = $this->createAuthUser();
+
+        $this->createSimpleChallenge($gym, [
+            'goal_workouts' => 1,
+            'reward_points' => 100,
+            'reward_type'   => 'points',
+        ]);
+
+        $this->grantValidWorkout($user, $gym, now());
+        $this->grantValidWorkout($user, $gym, now()->addDays(1));
+        $this->grantValidWorkout($user, $gym, now()->addDays(2));
+
+        $user->refresh();
+        $this->assertEquals(100, $user->points_balance);
+
+        Carbon::setTestNow();
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Desafios pessoais — múltiplos simultâneos
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private function createPersonalChallenge(Gym $gym, array $attrs = []): GymChallenge
+    {
+        return GymChallenge::create(array_merge([
+            'gym_id'        => $gym->id,
+            'type'          => 'simple',
+            'scope'         => 'personal',
+            'name'          => 'Desafio Pessoal',
+            'starts_at'     => now()->toDateString(),
+            'ends_at'       => now()->addDays(30)->toDateString(),
+            'status'        => 'active',
+            'goal_workouts' => 5,
+            'reward_points' => 100,
+            'reward_type'   => 'points',
+        ], $attrs));
+    }
+
+    /** @test */
+    public function multiple_personal_challenges_can_be_active_simultaneously()
+    {
+        [$gym, $user] = $this->createAuthUser();
+        $admin = $this->createAdminUser($gym);
+        Sanctum::actingAs($admin);
+
+        // Dois pessoais criados no mesmo período — não deve dar conflito
+        $r1 = $this->postJson('/api/admin/challenges', [
+            'type'          => 'simple',
+            'scope'         => 'personal',
+            'name'          => 'Pessoal 1',
+            'starts_at'     => now()->toDateString(),
+            'ends_at'       => now()->addDays(30)->toDateString(),
+            'goal_workouts' => 3,
+        ]);
+        $r2 = $this->postJson('/api/admin/challenges', [
+            'type'          => 'simple',
+            'scope'         => 'personal',
+            'name'          => 'Pessoal 2',
+            'starts_at'     => now()->toDateString(),
+            'ends_at'       => now()->addDays(30)->toDateString(),
+            'goal_workouts' => 5,
+        ]);
+
+        $r1->assertStatus(201);
+        $r2->assertStatus(201);
+    }
+
+    /** @test */
+    public function personal_challenge_does_not_conflict_with_community_challenge()
+    {
+        [$gym, $user] = $this->createAuthUser();
+        $admin = $this->createAdminUser($gym);
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/admin/challenges', [
+            'type'          => 'simple',
+            'scope'         => 'community',
+            'name'          => 'Comunitário',
+            'starts_at'     => now()->toDateString(),
+            'ends_at'       => now()->addDays(30)->toDateString(),
+            'goal_workouts' => 10,
+        ])->assertStatus(201);
+
+        // Personal no mesmo período não deve gerar conflito
+        $this->postJson('/api/admin/challenges', [
+            'type'          => 'simple',
+            'scope'         => 'personal',
+            'name'          => 'Pessoal',
+            'starts_at'     => now()->toDateString(),
+            'ends_at'       => now()->addDays(30)->toDateString(),
+            'goal_workouts' => 3,
+        ])->assertStatus(201);
+    }
+
+    /** @test */
+    public function creating_personal_challenge_assigns_all_students()
+    {
+        [$gym, $user1] = $this->createAuthUser();
+        $user2 = User::factory()->create(['gym_id' => $gym->id, 'role' => 'user']);
+
+        $admin = $this->createAdminUser($gym);
+        Sanctum::actingAs($admin);
+
+        $response = $this->postJson('/api/admin/challenges', [
+            'type'          => 'simple',
+            'scope'         => 'personal',
+            'name'          => 'Pessoal',
+            'starts_at'     => now()->toDateString(),
+            'ends_at'       => now()->addDays(30)->toDateString(),
+            'goal_workouts' => 3,
+        ]);
+
+        $response->assertStatus(201);
+        $id = $response->json('challenge.id');
+
+        $this->assertDatabaseHas('challenge_participants', ['challenge_id' => $id, 'user_id' => $user1->id]);
+        $this->assertDatabaseHas('challenge_participants', ['challenge_id' => $id, 'user_id' => $user2->id]);
+    }
+
+    /** @test */
+    public function new_student_receives_all_active_personal_challenges_on_register()
+    {
+        $gym = Gym::factory()->create();
+        $p1  = $this->createPersonalChallenge($gym, ['name' => 'P1']);
+        $p2  = $this->createPersonalChallenge($gym, ['name' => 'P2']);
+
+        $response = $this->postJson('/api/register', [
+            'name'     => 'Novo',
+            'email'    => 'novo2@gymup.com',
+            'password' => 'secret123',
+            'gym_id'   => $gym->id,
+        ]);
+
+        $response->assertStatus(200);
+        $userId = $response->json('user.id');
+
+        $this->assertDatabaseHas('challenge_participants', ['challenge_id' => $p1->id, 'user_id' => $userId]);
+        $this->assertDatabaseHas('challenge_participants', ['challenge_id' => $p2->id, 'user_id' => $userId]);
+    }
+
+    /** @test */
+    public function workout_updates_progress_in_all_active_personal_challenges()
+    {
+        Carbon::setTestNow(Carbon::now());
+        [$gym, $user] = $this->createAuthUser();
+
+        $p1 = $this->createPersonalChallenge($gym, ['name' => 'P1', 'goal_workouts' => 3]);
+        $p2 = $this->createPersonalChallenge($gym, ['name' => 'P2', 'goal_workouts' => 5]);
+
+        $this->grantValidWorkout($user, $gym, now());
+
+        $part1 = ChallengeParticipant::where('challenge_id', $p1->id)->where('user_id', $user->id)->first();
+        $part2 = ChallengeParticipant::where('challenge_id', $p2->id)->where('user_id', $user->id)->first();
+
+        $this->assertEquals(1, $part1->workouts_this_challenge);
+        $this->assertEquals(1, $part2->workouts_this_challenge);
+
+        Carbon::setTestNow();
+    }
+
+    /** @test */
+    public function each_personal_challenge_grants_reward_independently()
+    {
+        Carbon::setTestNow(Carbon::now());
+        [$gym, $user] = $this->createAuthUser();
+
+        // P1: meta 1 treino / P2: meta 2 treinos
+        $this->createPersonalChallenge($gym, ['name' => 'P1', 'goal_workouts' => 1, 'reward_points' => 50]);
+        $this->createPersonalChallenge($gym, ['name' => 'P2', 'goal_workouts' => 2, 'reward_points' => 80]);
+
+        $this->grantValidWorkout($user, $gym, now());
+
+        $user->refresh();
+        $this->assertEquals(50, $user->points_balance); // só P1 concluído
+
+        $this->grantValidWorkout($user, $gym, now()->addDays(1));
+
+        $user->refresh();
+        $this->assertEquals(130, $user->points_balance); // P1 + P2
+
+        Carbon::setTestNow();
+    }
+
+    /** @test */
+    public function active_endpoint_returns_personal_challenges_separately()
+    {
+        Carbon::setTestNow(Carbon::now());
+        [$gym, $user] = $this->createAuthUser();
+        Sanctum::actingAs($user);
+
+        $this->createPersonalChallenge($gym, ['name' => 'P1']);
+        $this->createPersonalChallenge($gym, ['name' => 'P2']);
+
+        $response = $this->getJson('/api/challenges/active');
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure(['challenge', 'personal_challenges']);
+        $response->assertJsonCount(2, 'personal_challenges');
+        $response->assertJsonPath('challenge', null); // sem desafio comunitário
+
+        Carbon::setTestNow();
+    }
+
+    /** @test */
+    public function workout_finish_response_includes_personal_challenges_progress()
+    {
+        Carbon::setTestNow(Carbon::now());
+        [$gym, $user] = $this->createAuthUser();
+
+        $this->createPersonalChallenge($gym, ['name' => 'P1', 'goal_workouts' => 3]);
+
+        Checkin::firstOrCreate([
+            'user_id'      => $user->id,
+            'gym_id'       => $gym->id,
+            'checkin_date' => now()->toDateString(),
+        ]);
+
+        WorkoutSession::factory()->create([
+            'user_id'    => $user->id,
+            'gym_id'     => $gym->id,
+            'started_at' => now()->subMinutes(20),
+            'progress'   => 0,
+        ]);
+
+        $response = $this->postJson('/api/workout/finish', [
+            'completion_percent' => 80,
+            'duration_seconds'   => 900,
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure(['personal_challenges_progress']);
+        $this->assertCount(1, $response->json('personal_challenges_progress'));
 
         Carbon::setTestNow();
     }
