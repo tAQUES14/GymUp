@@ -37,9 +37,13 @@ class User extends Authenticatable
         'consistency_bonus_days',
         'last_workout_date',
         'last_schedule_change',
+        'invited_at',
+        'email_verified_at',
     ];
 
     protected $casts = [
+        'invited_at'             => 'datetime',
+        'email_verified_at'      => 'datetime',
         'week_goal_completed'    => 'boolean',
         'current_week_start'     => 'date',
         'last_workout_date'      => 'date',

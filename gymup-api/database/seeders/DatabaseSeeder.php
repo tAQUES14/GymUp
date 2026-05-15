@@ -54,7 +54,7 @@ class DatabaseSeeder extends Seeder
         // ── 7. Planos de treino sequenciais ───────────────────────────────────
         $this->call(WorkoutPlanSeeder::class);
 
-        // ── 8. Gym admin de teste ──────────────────────────────────────────────
+        // ── 8. Gym admin de teste ─────────────────────────────────────────────
         User::firstOrCreate(
             ['email' => 'gymadmin@gymup.app'],
             [
@@ -65,7 +65,11 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // ── 9. Trainer de teste ───────────────────────────────────────────────
+        // ── 9. Treinos template da academia ───────────────────────────────────
+        // Deve rodar APÓS gym_admin existir (templates ficam no user_id dele).
+        $this->call(WorkoutTemplateSeeder::class);
+
+        // ── 10. Trainer de teste ─────────────────────────────────────────────
         User::firstOrCreate(
             ['email' => 'trainer@gymup.app'],
             [
@@ -76,11 +80,11 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // ── 10. Roles e permissões ─────────────────────────────────────────────
+        // ── 11. Roles e permissões ─────────────────────────────────────────────
         // Deve rodar APÓS usuários existirem para vincular roles corretamente.
         $this->call(RolesAndPermissionsSeeder::class);
 
-        // ── 11. Dados de teste para a feature de redes (opcional) ─────────────
+        // ── 12. Dados de teste para a feature de redes (opcional) ─────────────
         // Para ativar: php artisan db:seed --class=NetworkTestSeeder
         // $this->call(NetworkTestSeeder::class);
     }

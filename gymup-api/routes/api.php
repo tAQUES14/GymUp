@@ -39,6 +39,7 @@ use App\Http\Controllers\Api\AdminExerciseOverrideController;
 use App\Http\Controllers\Api\ExerciseController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\RoleController;
+use App\Http\Controllers\Api\AdminStaffController;
 use App\Http\Controllers\Api\AdminGymScheduleController;
 use App\Http\Controllers\Api\TrainerController;
 use App\Http\Controllers\Api\SuperChainController;
@@ -426,6 +427,20 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Permissões disponíveis — qualquer admin pode consultar
         Route::get('/permissions', [RoleController::class, 'permissions']);
+
+        /*
+        |----------------------------------------------------------------------
+        | Equipe e Acessos (manage_roles) — membros do painel da academia
+        |----------------------------------------------------------------------
+        */
+
+        Route::middleware('permission:manage_roles')->prefix('staff')->group(function () {
+            Route::get('/',                        [AdminStaffController::class, 'index']);
+            Route::post('/',                       [AdminStaffController::class, 'store']);
+            Route::put('/{id}',                    [AdminStaffController::class, 'update']);
+            Route::delete('/{id}',                 [AdminStaffController::class, 'destroy']);
+            Route::post('/{id}/resend-invite',     [AdminStaffController::class, 'resendInvite']);
+        });
     });
 
     /*

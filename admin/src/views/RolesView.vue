@@ -4,13 +4,13 @@
     <div class="flex items-center justify-between mb-6">
       <div>
         <h1 class="text-2xl font-bold text-slate-900">Permissões</h1>
-        <p class="text-sm text-slate-500 mt-1">Gerencie roles e seus acessos dentro da academia</p>
+        <p class="text-sm text-slate-500 mt-1">Defina o que cada tipo de usuário pode acessar no sistema</p>
       </div>
       <button @click="openCreate" class="btn-primary inline-flex items-center gap-2">
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
         </svg>
-        Novo Role
+        Novo perfil
       </button>
     </div>
 
@@ -26,35 +26,36 @@
     </div>
 
     <!-- Empty -->
-    <div v-else-if="!roles.length" class="card p-12 text-center">
+    <div v-else-if="!visibleRoles.length" class="card p-12 text-center">
       <div class="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-3">
         <svg class="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
           <path stroke-linecap="round" stroke-linejoin="round"
             d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
         </svg>
       </div>
-      <p class="text-sm font-semibold text-slate-700 mb-1">Nenhum role criado</p>
-      <p class="text-xs text-slate-400 mb-4">Crie um role para definir permissões de acesso</p>
-      <button @click="openCreate" class="btn-primary text-sm">Criar primeiro role</button>
+      <p class="text-sm font-semibold text-slate-700 mb-1">Nenhum perfil criado</p>
+      <p class="text-xs text-slate-400 mb-4">Crie um perfil para definir permissões de acesso</p>
+      <button @click="openCreate" class="btn-primary text-sm">Criar primeiro perfil</button>
     </div>
 
-    <!-- Grid de roles -->
+    <!-- Grid de perfis -->
     <div v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <div v-for="role in roles" :key="role.id" class="card p-5 flex flex-col gap-3">
+      <div v-for="role in visibleRoles" :key="role.id" class="card p-5 flex flex-col gap-3">
         <div class="flex items-start justify-between">
           <div>
             <div class="flex items-center gap-2">
-              <h3 class="font-semibold text-slate-900 capitalize">{{ role.name }}</h3>
+              <h3 class="font-semibold text-slate-900">{{ roleLabel(role.name) }}</h3>
               <span v-if="role.is_global"
                 class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">
                 Global
               </span>
             </div>
-            <p class="text-xs text-slate-400 mt-0.5">
+            <p class="text-xs text-slate-500 mt-0.5">{{ roleDescription(role.name) }}</p>
+            <p class="text-xs text-slate-400 mt-1">
               {{ role.permissions.length }} permissão{{ role.permissions.length !== 1 ? 'ões' : '' }}
             </p>
           </div>
-          <div class="flex gap-1">
+          <div class="flex gap-1 flex-shrink-0">
             <button @click="openEdit(role)"
               class="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
               title="Editar">
@@ -90,7 +91,7 @@
       </div>
     </div>
 
-    <!-- ── Modal criar/editar role ──────────────────────────────────────────── -->
+    <!-- ── Modal criar/editar perfil ───────────────────────────────────────────── -->
     <Teleport to="body">
       <div v-if="modal.open"
         class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
@@ -100,7 +101,7 @@
           <!-- Header modal -->
           <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
             <h2 class="text-base font-bold text-slate-900">
-              {{ modal.isEditing ? 'Editar Role' : 'Novo Role' }}
+              {{ modal.isEditing ? 'Editar perfil' : 'Novo perfil' }}
             </h2>
             <button @click="modal.open = false" class="text-slate-400 hover:text-slate-700">
               <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -112,9 +113,9 @@
           <!-- Body modal -->
           <div class="overflow-y-auto flex-1 px-6 py-5 space-y-5">
 
-            <!-- Nome do role -->
+            <!-- Nome do perfil -->
             <div>
-              <label class="block text-xs font-semibold text-slate-700 mb-1.5">Nome do Role</label>
+              <label class="block text-xs font-semibold text-slate-700 mb-1.5">Nome do perfil</label>
               <input v-model="modal.form.name" type="text" placeholder="Ex: Personal Trainer, Estagiário"
                 class="input w-full" />
             </div>
@@ -150,7 +151,7 @@
             <button @click="saveRole" :disabled="saving || !modal.form.name.trim()"
               class="btn-primary min-w-[100px]">
               <span v-if="saving">Salvando…</span>
-              <span v-else>{{ modal.isEditing ? 'Salvar' : 'Criar Role' }}</span>
+              <span v-else>{{ modal.isEditing ? 'Salvar' : 'Criar perfil' }}</span>
             </button>
           </div>
         </div>
@@ -163,11 +164,11 @@
         class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
         @click.self="deleteModal.open = false">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-          <h3 class="font-bold text-slate-900 mb-2">Remover role</h3>
+          <h3 class="font-bold text-slate-900 mb-2">Remover perfil</h3>
           <p class="text-sm text-slate-500 mb-6">
-            Tem certeza que deseja remover o role
-            <strong class="text-slate-700">{{ deleteModal.role?.name }}</strong>?
-            Os usuários com esse role perderão as permissões associadas.
+            Tem certeza que deseja remover o perfil
+            <strong class="text-slate-700">{{ roleLabel(deleteModal.role?.name) }}</strong>?
+            Os usuários com esse perfil perderão as permissões associadas.
           </p>
           <div class="flex justify-end gap-3">
             <button @click="deleteModal.open = false" class="btn-secondary">Cancelar</button>
@@ -185,13 +186,42 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import api from '../services/api.js'
+import { useAuthStore } from '../stores/auth.js'
 
+const auth    = useAuthStore()
 const loading = ref(true)
 const saving  = ref(false)
 const deleting = ref(false)
 const roles   = ref([])
+
+// Oculta super_admin para quem não é super_admin
+const visibleRoles = computed(() =>
+  auth.isSuperAdmin
+    ? roles.value
+    : roles.value.filter(r => r.name !== 'super_admin')
+)
+
+// Nomes amigáveis para perfis do sistema
+const roleLabels = {
+  super_admin:   'Super Admin',
+  gym_admin:     'Gestor da academia',
+  network_admin: 'Gestor de rede',
+  trainer:       'Treinador',
+  user:          'Aluno',
+}
+
+const roleDescriptions = {
+  super_admin:   'Acesso total à plataforma GymUp.',
+  gym_admin:     'Acesso completo à gestão da unidade.',
+  network_admin: 'Gerencia todas as unidades da rede.',
+  trainer:       'Gerencia treinos e acompanha alunos.',
+  user:          'Acesso ao app como aluno.',
+}
+
+const roleLabel       = (name) => roleLabels[name] ?? name
+const roleDescription = (name) => roleDescriptions[name] ?? 'Perfil personalizado.'
 
 // Permissões disponíveis vindas da API
 const allPermissions = ref([])
@@ -213,7 +243,7 @@ const permLabels = {
   manage_redemptions:    'Resgates',
   view_ranking:          'Ranking',
   view_reports:          'Relatórios',
-  manage_roles:          'Gerenciar roles',
+  manage_roles:          'Gerenciar perfis',
   manage_settings:       'Configurações',
   manage_gyms:           'Academias',
 }
@@ -267,11 +297,11 @@ const deleteModal = reactive({
 })
 
 function openCreate() {
-  modal.isEditing  = false
-  modal.editId     = null
+  modal.isEditing        = false
+  modal.editId           = null
   modal.form.name        = ''
   modal.form.permissions = []
-  modal.open       = true
+  modal.open             = true
 }
 
 function openEdit(role) {

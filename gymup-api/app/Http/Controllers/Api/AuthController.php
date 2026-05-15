@@ -84,6 +84,12 @@ class AuthController extends Controller
             ]);
         }
 
+        // Marca primeiro login (usado para detectar convites de staff pendentes)
+        if (! $user->email_verified_at) {
+            $user->email_verified_at = now();
+            $user->save();
+        }
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([

@@ -102,17 +102,18 @@ class WorkoutPlanSeeder extends Seeder
 
         // ── 2. Helper to resolve exercise id by name ──────────────────────────
 
-        $gym = Gym::first();
+        $gyms = Gym::all();
 
-        if (!$gym) {
+        if ($gyms->isEmpty()) {
             $this->command->warn('No gym found — skipping WorkoutPlanSeeder plan creation.');
             return;
         }
 
         $ex = fn (string $name): int => Exercise::where('name', $name)->firstOrFail()->id;
 
-        // ── 3. Create 4 workout plans ─────────────────────────────────────────
+        // ── 3. Create 4 workout plans for every gym ───────────────────────────
 
+        foreach ($gyms as $gym) {
         $this->createPlan($gym->id, 'Iniciante 3x', 'Plano para iniciantes com 3 treinos por semana de corpo inteiro.', [
             [
                 'name'     => 'Full Body A',
@@ -288,6 +289,7 @@ class WorkoutPlanSeeder extends Seeder
             ],
             ['name' => 'Descanso', 'rest_day' => true, 'exercises' => []],
         ]);
+        } // end foreach $gyms
     }
 
     private function createPlan(int $gymId, string $name, string $description, array $days): void

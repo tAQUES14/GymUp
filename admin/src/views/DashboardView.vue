@@ -277,13 +277,13 @@ async function loadData() {
   try {
     const { data: res } = await api.get('/admin/dashboard')
     data.value = res
-    await nextTick()
-    renderChart()
   } catch (e) {
     error.value = e.response?.data?.message ?? 'Não foi possível carregar o dashboard.'
   } finally {
     loading.value = false
   }
+  await nextTick()
+  renderChart()
 }
 
 function renderChart() {

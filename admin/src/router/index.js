@@ -133,7 +133,14 @@ const router = createRouter({
           component: () => import('../views/CheckinView.vue'),
           meta: { title: 'Check-in & QR Code', gymAdminOrAbove: true },
         },
-        // ── Roles e Permissões (gym_admin+) ──────────────────────────────────
+        // ── Equipe e Acessos (gym_admin+) ────────────────────────────────────
+        {
+          path: 'team',
+          name: 'team',
+          component: () => import('../views/TeamView.vue'),
+          meta: { title: 'Equipe e Acessos', gymAdminOrAbove: true },
+        },
+        // ── Roles e Permissões técnicos (gym_admin+, mantido para compatibilidade) ─
         {
           path: 'roles',
           name: 'roles',
