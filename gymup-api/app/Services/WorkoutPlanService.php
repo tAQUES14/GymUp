@@ -26,7 +26,8 @@ class WorkoutPlanService
             return null;
         }
 
-        $plan = WorkoutPlan::find($userPlan->plan_id);
+        $gymId = $user->activeGymId();
+        $plan  = WorkoutPlan::where('gym_id', $gymId)->find($userPlan->plan_id);
 
         if (! $plan) {
             return null;
@@ -105,7 +106,8 @@ class WorkoutPlanService
             return $this->emptyWeekOverview();
         }
 
-        $plan = WorkoutPlan::find($userPlan->plan_id);
+        $gymId = $user->activeGymId();
+        $plan  = WorkoutPlan::where('gym_id', $gymId)->find($userPlan->plan_id);
 
         return $plan ? $this->buildWeekOverview($plan) : $this->emptyWeekOverview();
     }
@@ -113,6 +115,9 @@ class WorkoutPlanService
     // se já tem plano ativo, o novo entra na próxima segunda (preserva streak em curso)
     public function assignPlanToUser(int $userId, int $planId, int $gymId): UserWorkoutPlan
     {
+        // Garante que o plano pertence à academia correta
+        WorkoutPlan::where('gym_id', $gymId)->findOrFail($planId);
+
         $hasActivePlan = UserWorkoutPlan::active()->where('user_id', $userId)->exists();
 
         // Novo plano começa imediatamente se não há plano ativo;
@@ -143,6 +148,7 @@ class WorkoutPlanService
     {
         $workout = CustomWorkout::with('exercises')
             ->where('is_template', true)
+            ->where('gym_id', $plan->gym_id)
             ->findOrFail($workoutId);
 
         return DB::transaction(function () use ($plan, $workout, $dow) {
@@ -185,12 +191,19 @@ class WorkoutPlanService
             $override = $ex ? $overrides->get($ex->id) : null;
 
             if (! $ex) {
+                \Illuminate\Support\Facades\Log::warning('workout_plan.orphaned_exercise', [
+                    'workout_exercise_id' => $we->id,
+                    'exercise_id'         => $we->exercise_id,
+                    'plan_day_id'         => $we->plan_day_id,
+                ]);
+
                 return [
                     'id'               => $we->id,
                     'exercise_id'      => $we->exercise_id,
                     'name'             => '',
                     'muscle_group'     => '',
                     'image_url'        => null,
+                    'gif_url'          => null,
                     'video_url'        => null,
                     'description'      => null,
                     'execution_steps'  => [],

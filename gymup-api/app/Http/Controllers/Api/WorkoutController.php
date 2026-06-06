@@ -167,14 +167,23 @@ class WorkoutController extends Controller
     /**
      * GET /api/workout/status
      *
-     * Returns only the currently active (unfinished) session.
-     * A finished session is never returned here — Flutter uses this to seed
-     * the elapsed timer, and returning a stale session would produce absurd durations.
+     * Returns only the currently active (unfinished) session that is still within
+     * the configured timeout window. Sessions older than the timeout are expired
+     * on the spot so they never reach the client as "resumable".
      */
     public function status(Request $request)
     {
-        $session = WorkoutSession::where('user_id', $request->user()->id)
+        $userId       = $request->user()->id;
+        $timeoutHours = (int) config('workout.session_timeout_hours', 4);
+
+        // Auto-expire any stale open sessions before checking for an active one.
+        WorkoutSession::where('user_id', $userId)
             ->whereNull('finished_at')
+            ->where('started_at', '<', now()->subHours($timeoutHours))
+            ->update(['finished_at' => now()]);
+
+        $session = WorkoutSession::activeSession()
+            ->where('user_id', $userId)
             ->latest('started_at')
             ->first();
 

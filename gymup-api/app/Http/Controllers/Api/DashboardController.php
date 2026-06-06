@@ -42,16 +42,28 @@ class DashboardController extends Controller
             ->whereDate('finished_at', $today)
             ->exists();
 
-        $hasActiveSession = WorkoutSession::where('user_id', $userId)
+        // Expira sessões antigas antes de verificar sessão ativa (igual ao status endpoint)
+        $timeoutHours = (int) config('workout.session_timeout_hours', 4);
+        WorkoutSession::where('user_id', $userId)
             ->whereNull('finished_at')
-            ->exists();
+            ->where('started_at', '<', now()->subHours($timeoutHours))
+            ->update(['finished_at' => now()]);
+
+        $activeSession = WorkoutSession::activeSession()
+            ->where('user_id', $userId)
+            ->latest('started_at')
+            ->first();
+
+        $hasActiveSession             = $activeSession !== null;
+        $activeSessionElapsedMinutes  = $activeSession ? (int) $activeSession->elapsedMinutes() : null;
 
         return response()->json([
             'name'                         => $user->name,
             'points_balance'               => (int) $user->points_balance,
-            'has_completed_today'          => $hasCompletedToday,
-            'has_active_session'           => $hasActiveSession,
-            'has_checked_in_today'         => $hasCheckedInToday,
+            'has_completed_today'              => $hasCompletedToday,
+            'has_active_session'               => $hasActiveSession,
+            'active_session_elapsed_minutes'   => $activeSessionElapsedMinutes,
+            'has_checked_in_today'             => $hasCheckedInToday,
             'weekly_progress'              => $this->getWeeklyProgress($user),
             'recent_activities'            => $this->getRecentActivities($userId),
             'streak'                       => $streakState['streak'],

@@ -44,6 +44,11 @@ class GoalController extends Controller
             ['weight'  => $data['start_weight']]
         );
 
+        $request->user()->update([
+            'weight' => $data['start_weight'],
+            'height' => $data['height'],
+        ]);
+
         return response()->json($this->formatGoal($goal), 201);
     }
 

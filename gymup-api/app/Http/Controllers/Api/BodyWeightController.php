@@ -27,6 +27,8 @@ class BodyWeightController extends Controller
             ['weight' => $request->weight]
         );
 
+        $request->user()->update(['weight' => $request->weight]);
+
         return response()->json([
             'weight'      => (float) $log->weight,
             'recorded_at' => $log->recorded_at->toDateString(),

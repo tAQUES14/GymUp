@@ -120,13 +120,27 @@ class ChallengeService
             $myWorkoutsThisWeek = $currentWeek?->workouts_count ?? 0;
             $myTotalPoints      = $participant->total_challenge_points;
 
-            // Só exibe posição se o aluno já tem alguma atividade no desafio.
-            // Caso contrário seria "1º lugar" para quem nunca treinou.
-            $myPosition = ($myTotalPoints > 0 || $myWorkoutsThisWeek > 0)
-                ? ChallengeParticipant::where('challenge_id', $challenge->id)
+            // Verifica se alguma semana já foi finalizada (pontos históricos existem)
+            $hasFinishedWeeks = ChallengeWeeklyRanking::where('challenge_id', $challenge->id)
+                ->where('finalized', true)
+                ->exists();
+
+            // Posição baseada em pontos históricos apenas quando há semanas finalizadas.
+            // Durante a semana ativa sem histórico, usa ranking por treinos da semana atual.
+            if ($myTotalPoints > 0) {
+                $myPosition = ChallengeParticipant::where('challenge_id', $challenge->id)
                     ->where('total_challenge_points', '>', $myTotalPoints)
-                    ->count() + 1
-                : null;
+                    ->count() + 1;
+            } elseif ($hasFinishedWeeks || $myWorkoutsThisWeek === 0) {
+                // Sem pontos históricos e sem treino esta semana → sem posição
+                $myPosition = null;
+            } else {
+                // Primeira semana ou apenas treinos desta semana: posição por workouts_count
+                $myPosition = ChallengeWeeklyRanking::where('challenge_id', $challenge->id)
+                    ->where('week_start', $weekStart)
+                    ->where('workouts_count', '>', $myWorkoutsThisWeek)
+                    ->count() + 1;
+            }
 
             return array_merge($base, [
                 'min_weekly_workouts'   => $challenge->min_weekly_workouts,
@@ -158,16 +172,26 @@ class ChallengeService
         $this->finalizeCompletedWeeks($challenge);
 
         if ($challenge->isCompetitive()) {
-            return ChallengeParticipant::where('challenge_id', $challenge->id)
+            $weekStart = Carbon::now()->startOfWeek(Carbon::MONDAY)->toDateString();
+
+            // Busca treinos desta semana para todos os participantes
+            $thisWeekByUser = ChallengeWeeklyRanking::where('challenge_id', $challenge->id)
+                ->where('week_start', $weekStart)
+                ->pluck('workouts_count', 'user_id');
+
+            $participants = ChallengeParticipant::where('challenge_id', $challenge->id)
                 ->with('user:id,name')
                 ->orderByDesc('total_challenge_points')
-                ->get()
+                ->get();
+
+            return $participants
                 ->values()
                 ->map(fn ($p, $i) => [
-                    'position'     => $i + 1,
-                    'user_id'      => $p->user_id,
-                    'user_name'    => $p->user->name,
-                    'total_points' => $p->total_challenge_points,
+                    'position'              => $i + 1,
+                    'user_id'              => $p->user_id,
+                    'user_name'            => $p->user->name,
+                    'total_points'         => $p->total_challenge_points,
+                    'workouts_this_week'   => $thisWeekByUser[$p->user_id] ?? 0,
                 ])
                 ->all();
         }

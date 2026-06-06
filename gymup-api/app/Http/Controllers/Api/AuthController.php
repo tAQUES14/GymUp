@@ -7,7 +7,10 @@ use App\Models\Gym;
 use App\Models\User;
 use App\Services\ChallengeService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -69,6 +72,73 @@ class AuthController extends Controller
         return response()->json(['id' => $gym->id, 'name' => $gym->name]);
     }
 
+    public function google(Request $request)
+    {
+        $request->validate([
+            'id_token'    => 'required|string',
+            'invite_code' => 'nullable|string|max:8',
+        ]);
+
+        $profile = $this->verifyGoogleToken($request->id_token);
+        $email = strtolower((string) ($profile['email'] ?? ''));
+
+        if ($email === '') {
+            return response()->json(['message' => 'Nao foi possivel obter o email do Google.'], 422);
+        }
+
+        $user = User::where('email', $email)->first();
+
+        if (! $user && ! $request->filled('invite_code')) {
+            return response()->json([
+                'needs_invite' => true,
+                'profile' => [
+                    'name' => $profile['name'] ?? strtok($email, '@'),
+                    'email' => $email,
+                    'picture' => $profile['picture'] ?? null,
+                ],
+            ]);
+        }
+
+        if (! $user) {
+            $gym = Gym::where('invite_code', strtoupper(trim($request->invite_code)))->first();
+
+            if (! $gym) {
+                return response()->json([
+                    'message' => 'Codigo de convite invalido.',
+                ], 422);
+            }
+
+            $payload = [
+                'name' => $profile['name'] ?? strtok($email, '@'),
+                'email' => $email,
+                'password' => Hash::make(Str::random(48)),
+                'gym_id' => $gym->id,
+                'role' => 'user',
+                'email_verified_at' => now(),
+            ];
+
+            if (Schema::hasColumn('users', 'avatar_url')) {
+                $payload['avatar_url'] = $profile['picture'] ?? null;
+            }
+
+            $user = User::create($payload);
+
+            $this->challengeService->assignActiveChallengeTo($user);
+        } elseif (! $user->email_verified_at) {
+            $user->email_verified_at = now();
+            $user->save();
+        }
+
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        return response()->json([
+            'message' => 'Login com Google realizado com sucesso',
+            'needs_invite' => false,
+            'token' => $token,
+            'user' => $user,
+        ]);
+    }
+
     public function login(Request $request)
     {
         $request->validate([
@@ -97,6 +167,40 @@ class AuthController extends Controller
             'token' => $token,
             'user' => $user
         ]);
+    }
+
+    private function verifyGoogleToken(string $idToken): array
+    {
+        $response = Http::timeout(8)->get('https://oauth2.googleapis.com/tokeninfo', [
+            'id_token' => $idToken,
+        ]);
+
+        if (! $response->ok()) {
+            throw ValidationException::withMessages([
+                'google' => ['Token do Google invalido.'],
+            ]);
+        }
+
+        $payload = $response->json();
+
+        if (($payload['email_verified'] ?? 'false') !== 'true' && ($payload['email_verified'] ?? false) !== true) {
+            throw ValidationException::withMessages([
+                'google' => ['Email do Google ainda nao foi verificado.'],
+            ]);
+        }
+
+        $allowedAudiences = collect(explode(',', (string) config('services.google.client_ids')))
+            ->map(fn ($id) => trim($id))
+            ->filter()
+            ->values();
+
+        if ($allowedAudiences->isNotEmpty() && ! $allowedAudiences->contains($payload['aud'] ?? null)) {
+            throw ValidationException::withMessages([
+                'google' => ['Cliente Google nao autorizado.'],
+            ]);
+        }
+
+        return $payload;
     }
 
     public function me(Request $request)

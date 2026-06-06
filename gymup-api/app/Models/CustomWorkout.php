@@ -8,6 +8,7 @@ class CustomWorkout extends Model
 {
     protected $fillable = [
         'user_id',
+        'gym_id',
         'name',
         'description',
         'level',

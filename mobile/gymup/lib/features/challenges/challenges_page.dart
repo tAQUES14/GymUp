@@ -7,6 +7,7 @@ import 'challenge_api_service.dart';
 import 'challenge_details_page.dart';
 import 'achievement_api_service.dart';
 import 'achievements_list.dart';
+import 'my_achievements_page.dart';
 
 // Azul principal conforme solicitado
 const _kBlue     = Color(0xFF2563EB);
@@ -14,9 +15,14 @@ const _kBlueDark = Color(0xFF1D4ED8);
 
 class _PageData {
   final ChallengeData? challenge;
+  final List<ChallengeData> personalChallenges;
   final List<Achievement> achievements;
 
-  const _PageData({required this.challenge, required this.achievements});
+  const _PageData({
+    required this.challenge,
+    required this.personalChallenges,
+    required this.achievements,
+  });
 }
 
 class ChallengesPage extends StatefulWidget {
@@ -45,12 +51,15 @@ class _ChallengesPageState extends State<ChallengesPage> {
 
     try {
       final results = await Future.wait([
-        _challengeApi.getActiveChallenge().catchError((_) => null),
+        _challengeApi.getActiveChallenges().catchError(
+              (_) => const ActiveChallengesData(community: null, personal: []),
+            ),
         _achievementApi.getAchievements().catchError((_) => <Achievement>[]),
       ]);
 
       if (!mounted) return;
 
+      final challenges = results[0] as ActiveChallengesData;
       final all = results[1] as List<Achievement>;
 
       // Ordem: desbloqueadas → em progresso → bloqueadas
@@ -62,7 +71,8 @@ class _ChallengesPageState extends State<ChallengesPage> {
 
       setState(() {
         _data = _PageData(
-          challenge:    results[0] as ChallengeData?,
+          challenge: challenges.community,
+          personalChallenges: challenges.personal,
           achievements: sorted,
         );
         _isLoading = false;
@@ -204,23 +214,62 @@ class _ChallengesPageState extends State<ChallengesPage> {
                   else
                     _buildNoChallenge(),
 
-                  const SizedBox(height: 32),
+                  if (data.personalChallenges.isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    _buildSectionHeader(
+                      icon: Icons.track_changes_rounded,
+                      title: 'Desafios pessoais',
+                      color: _kBlue,
+                      trailing: '${data.personalChallenges.length}',
+                    ),
+                    const SizedBox(height: 12),
+                    for (final challenge in data.personalChallenges)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: ActiveChallengeCard(
+                          challenge: challenge,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => ChallengeDetailsPage(challenge: challenge),
+                            ),
+                          ).then((_) => _load()),
+                        ),
+                      ),
+                  ],
+
+                  const SizedBox(height: 12),
+                  _buildAchievementsShortcut(
+                    unlocked: unlocked,
+                    total: total,
+                    onTap: () => _openAchievements(data.achievements),
+                  ),
 
                   // ── Conquistas ───────────────────────────────────────────
+                  const SizedBox(height: 32),
                   _buildSectionHeader(
                     icon: Icons.emoji_events_rounded,
                     title: 'Conquistas',
                     color: _kBlue,
-                    trailing: '$unlocked de $total',
+                    trailing: 'Ver todas',
+                    onTrailingTap: () => _openAchievements(data.achievements),
                   ),
                   const SizedBox(height: 12),
-                  AchievementsList(achievements: data.achievements),
+                  AchievementsList(achievements: data.achievements.take(3).toList()),
                 ],
               ),
             ),
           ],
         ),
     );
+  }
+
+  Future<void> _openAchievements(List<Achievement> achievements) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MyAchievementsPage(initialAchievements: achievements),
+      ),
+    );
+    if (mounted) _load();
   }
 
   // ── Banner hero com gradiente azul ────────────────────────────────────────
@@ -313,6 +362,7 @@ class _ChallengesPageState extends State<ChallengesPage> {
     required String title,
     required Color color,
     String? trailing,
+    VoidCallback? onTrailingTap,
   }) {
     return Row(
       children: [
@@ -336,21 +386,117 @@ class _ChallengesPageState extends State<ChallengesPage> {
           ),
         ),
         if (trailing != null)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              trailing,
-              style: AppTypography.caption.copyWith(
-                color: color,
-                fontWeight: FontWeight.w700,
+          GestureDetector(
+            onTap: onTrailingTap,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                trailing,
+                style: AppTypography.caption.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildAchievementsShortcut({
+    required int unlocked,
+    required int total,
+    required VoidCallback onTap,
+  }) {
+    final ratio = total > 0 ? unlocked / total : 0.0;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _kBlue.withValues(alpha: 0.14)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: _kBlue.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: const Icon(
+                Icons.emoji_events_rounded,
+                color: _kBlue,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Minhas conquistas',
+                    style: AppTypography.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '$unlocked de $total desbloqueadas',
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(100),
+                    child: LinearProgressIndicator(
+                      value: ratio,
+                      minHeight: 6,
+                      backgroundColor: _kBlue.withValues(alpha: 0.10),
+                      valueColor: const AlwaysStoppedAnimation<Color>(_kBlue),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: _kBlue.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: const Icon(
+                Icons.arrow_forward_rounded,
+                color: _kBlue,
+                size: 17,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

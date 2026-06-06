@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/gym_card.dart';
 import '../../workouts/workout_api_service.dart';
-
-const _kBlue = Color(0xFF2563EB);
-const _kGray = Color(0xFFF3F4F6);
 
 /// Barra de progresso semanal baseada no calendário do plano.
 ///
@@ -31,7 +29,7 @@ class WeeklyProgressBar extends StatelessWidget {
     final now      = DateTime.now();
     final todayDow = now.weekday % 7; // Dart: 1=Mon..7=Sun → 0=Sun..6=Sat
 
-    final trainedCount = weeklyProgress.where((d) => d.trained).length;
+    final trainedCount  = weeklyProgress.where((d) => d.trained).length;
     final planDaysCount = weeklyProgress.where((d) => d.isObligatory).length;
 
     // Segunda → Domingo (1, 2, 3, 4, 5, 6, 0)
@@ -44,80 +42,59 @@ class WeeklyProgressBar extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Esta semana',
-              style: AppTypography.h3.copyWith(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            Text('Esta semana', style: AppText.sectionTitle),
             Text(
               planDaysCount > 0
                   ? '$trainedCount/$planDaysCount treino${planDaysCount == 1 ? '' : 's'}'
                   : '$trainedCount treino${trainedCount == 1 ? '' : 's'}',
-              style: AppTypography.caption.copyWith(
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w600,
+              style: AppText.pjs(
+                size: 12, weight: FontWeight.w600, color: AppColors.inkMuted,
               ),
             ),
           ],
         ),
         const SizedBox(height: 14),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
+        GymCard(
+          radius: 18,
           padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: List.generate(7, (i) {
-              final dow        = displayOrder[i];
-              final day        = byDow[dow];
-              final isToday    = dow == todayDow;
-              final trained    = day?.trained ?? false;
+              final dow          = displayOrder[i];
+              final day          = byDow[dow];
+              final isToday      = dow == todayDow;
+              final trained      = day?.trained ?? false;
               final isObligatory = day?.isObligatory ?? false;
-              final isRestDay  = day?.isRestDay ?? true;
-              final isPast     = _isDayPast(dow, now);
+              final isRestDay    = day?.isRestDay ?? true;
+              final isPast       = _isDayPast(dow, now);
 
               Color   circleBg;
               Color   borderColor;
               Widget? circleChild;
 
               if (trained) {
-                // Treinou: azul sólido com check
-                circleBg    = _kBlue;
-                borderColor = _kBlue;
+                circleBg    = AppColors.blue;
+                borderColor = AppColors.blue;
                 circleChild = const Icon(Icons.check_rounded, color: Colors.white, size: 16);
               } else if (isObligatory && isPast && !isToday) {
-                // Obrigatório perdido: vermelho com ×
                 circleBg    = Colors.red.shade50;
                 borderColor = Colors.red.shade300;
                 circleChild = Icon(Icons.close_rounded, color: Colors.red.shade400, size: 16);
               } else if (isToday) {
-                // Hoje: borda azul com ponto
                 circleBg    = Colors.white;
-                borderColor = _kBlue;
+                borderColor = AppColors.blue;
                 circleChild = Container(
-                  width: 6,
-                  height: 6,
-                  decoration: const BoxDecoration(color: _kBlue, shape: BoxShape.circle),
+                  width: 6, height: 6,
+                  decoration: const BoxDecoration(
+                    color: AppColors.blue, shape: BoxShape.circle,
+                  ),
                 );
               } else if (isRestDay) {
-                // Descanso: cinza muito claro com lua
                 circleBg    = Colors.grey.shade100;
                 borderColor = Colors.grey.shade200;
                 circleChild = Icon(Icons.bedtime_rounded, color: Colors.grey.shade400, size: 14);
               } else {
-                // Futuro treino planejado: cinza neutro
-                circleBg    = _kGray;
+                circleBg    = AppColors.background;
                 borderColor = Colors.transparent;
                 circleChild = null;
               }
@@ -126,8 +103,7 @@ class WeeklyProgressBar extends StatelessWidget {
                 children: [
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 250),
-                    width: 36,
-                    height: 36,
+                    width: 36, height: 36,
                     decoration: BoxDecoration(
                       color: circleBg,
                       shape: BoxShape.circle,
@@ -138,14 +114,10 @@ class WeeklyProgressBar extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(
                     labels[i],
-                    style: AppTypography.caption.copyWith(
-                      fontWeight: (isToday || trained) ? FontWeight.w700 : FontWeight.normal,
-                      color: trained
-                          ? _kBlue
-                          : isToday
-                              ? _kBlue
-                              : AppColors.textSecondary,
-                      fontSize: 10,
+                    style: AppText.pjs(
+                      size: 10,
+                      weight: (isToday || trained) ? FontWeight.w700 : FontWeight.w500,
+                      color: (trained || isToday) ? AppColors.blue : AppColors.inkMuted,
                     ),
                   ),
                 ],
@@ -157,7 +129,6 @@ class WeeklyProgressBar extends StatelessWidget {
     );
   }
 
-  /// Retorna true se o dia já passou nesta semana (usando a ordem Seg→Dom).
   bool _isDayPast(int dow, DateTime now) {
     const displayOrder = [1, 2, 3, 4, 5, 6, 0];
     final todayDow   = now.weekday % 7;

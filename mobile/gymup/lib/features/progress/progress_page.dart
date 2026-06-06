@@ -1,19 +1,28 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../../core/api/api_service.dart';
-import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_typography.dart';
 import '../../core/widgets/gymup_loading.dart';
+import '../goals/create_goal_page.dart';
 import '../goals/goal_api_service.dart';
 import '../goals/goal_summary_page.dart';
-import '../goals/create_goal_page.dart';
 
-const _kBlue     = Color(0xFF2563EB);
-const _kBlueDark = Color(0xFF1D4ED8);
-const _kGreen    = Color(0xFF10B981);
-const _kAmber    = Color(0xFFF59E0B);
-const _kOrange   = Color(0xFFF97316);
+const _kBg = Color(0xFFF3F5F9);
+const _kInk = Color(0xFF0E1116);
+const _kMuted = Color(0xFF5B6472);
+const _kSoft = Color(0xFF9AA3B0);
+const _kBlue = Color(0xFF2F6FED);
+const _kBlueDark = Color(0xFF1F4FC4);
+const _kBlue2 = Color(0xFF4A8CFF);
+const _kBlueSoft = Color(0xFFE7EEFE);
+const _kLime = Color(0xFFC8F84A);
+const _kGreen = Color(0xFF0E9F6E);
+const _kGreenSoft = Color(0xFFEAF8EF);
+const _kGold = Color(0xFFE5A300);
+const _kGoldSoft = Color(0xFFFFF8E1);
+const _kOrangeSoft = Color(0xFFFFF4E4);
+const _kRed = Color(0xFFD14343);
 
 class ProgressPage extends StatefulWidget {
   const ProgressPage({super.key});
@@ -27,9 +36,9 @@ class _ProgressPageState extends State<ProgressPage> {
 
   Map<String, dynamic>? _dashboard;
   Map<String, dynamic>? _summary;
-  GoalData?             _goalData;
+  GoalData? _goalData;
   String? _error;
-  bool    _loading = true;
+  bool _loading = true;
 
   @override
   void initState() {
@@ -38,7 +47,11 @@ class _ProgressPageState extends State<ProgressPage> {
   }
 
   Future<void> _loadData() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
     try {
       final results = await Future.wait<dynamic>([
         _api.get('/dashboard'),
@@ -46,27 +59,27 @@ class _ProgressPageState extends State<ProgressPage> {
         GoalApiService().getCurrentGoal().catchError((_) => null),
       ]);
 
-      // ignore: avoid_dynamic_calls
-      final dashRes    = results[0];
-      // ignore: avoid_dynamic_calls
+      final dashRes = results[0];
       final summaryRes = results[1];
 
       if (dashRes.statusCode == 401 || summaryRes.statusCode == 401) {
         throw Exception('401');
       }
-      if (dashRes.statusCode != 200) throw Exception('Erro ao carregar dados');
+      if (dashRes.statusCode != 200) {
+        throw Exception('Erro ao carregar dados');
+      }
 
       final dashboard = jsonDecode(dashRes.body) as Map<String, dynamic>;
-      final summary   = summaryRes.statusCode == 200
+      final summary = summaryRes.statusCode == 200
           ? jsonDecode(summaryRes.body) as Map<String, dynamic>
           : <String, dynamic>{};
 
       if (!mounted) return;
       setState(() {
         _dashboard = dashboard;
-        _summary   = summary;
-        _goalData  = results[2] as GoalData?;
-        _loading   = false;
+        _summary = summary;
+        _goalData = results[2] as GoalData?;
+        _loading = false;
       });
     } catch (e) {
       if (e.toString().contains('401') && mounted) {
@@ -75,481 +88,465 @@ class _ProgressPageState extends State<ProgressPage> {
       }
       if (!mounted) return;
       setState(() {
-        _error   = e.toString().replaceFirst('Exception: ', '');
+        _error = e.toString().replaceFirst('Exception: ', '');
         _loading = false;
       });
     }
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+
+    return Scaffold(
+      backgroundColor: _kBg,
+      body: SafeArea(
+        bottom: false,
+        child: _loading
+            ? const GymUpLoading()
+            : RefreshIndicator(
+                color: _kBlue,
+                onRefresh: _loadData,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(20, 8, 20, 34 + bottomInset),
+                  children: [
+                    _Header(
+                      onBack: () => Navigator.pop(context),
+                      onRefresh: _loadData,
+                    ),
+                    const SizedBox(height: 18),
+                    if (_error != null)
+                      _StateCard(
+                        icon: Icons.wifi_off_rounded,
+                        title: 'Erro ao carregar',
+                        subtitle: _error!,
+                        color: _kRed,
+                        actionLabel: 'Tentar novamente',
+                        onAction: _loadData,
+                      )
+                    else
+                      _content(context),
+                  ],
+                ),
+              ),
+      ),
+    );
+  }
+
+  Widget _content(BuildContext context) {
+    final data = _dashboard ?? {};
+    final summary = _summary ?? {};
+
+    final totalCheckins = _int(data['total_checkins']);
+    final totalWorkouts = _int(data['total_workouts']);
+    final workoutsWithPoints = _int(data['total_workouts_with_points']);
+    final workoutsWithoutPoints =
+        (totalWorkouts - workoutsWithPoints).clamp(0, totalWorkouts).toInt();
+    final weeklyDays = _weeklyDays(data['weekly_progress'] as List<dynamic>? ?? []);
+    final trainedThisWeek = weeklyDays.where((trained) => trained).length;
+    final weeklyGoal = _goalData?.estimatedWorkoutsPerWeek ?? 4;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _EvolutionHero(
+          checkins: totalCheckins,
+          workouts: totalWorkouts,
+          workoutsWithPoints: workoutsWithPoints,
+          workoutsWithoutPoints: workoutsWithoutPoints,
+        ),
+        const SizedBox(height: 24),
+        _SectionTitle(
+          title: 'Frequ\u00EAncia semanal',
+          trailing: '$trainedThisWeek / $weeklyGoal dias',
+        ),
+        const SizedBox(height: 10),
+        _WeeklyCard(
+          weeklyDays: weeklyDays,
+          trained: trainedThisWeek,
+          goal: weeklyGoal,
+        ),
+        const SizedBox(height: 24),
+        const _SectionTitle(title: 'Minha Meta'),
+        const SizedBox(height: 10),
+        _GoalCard(
+          goal: _goalData,
+          workoutsDone: trainedThisWeek,
+          onCreate: () => Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const CreateGoalPage()))
+              .then((_) => _loadData()),
+          onOpen: () => Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const GoalSummaryPage()))
+              .then((_) => _loadData()),
+        ),
+        const SizedBox(height: 24),
+        const _SectionTitle(title: 'Performance'),
+        const SizedBox(height: 10),
+        _PerformanceCard(summary: summary),
+        const SizedBox(height: 24),
+        _SectionTitle(
+          title: 'Conquistas',
+          actionLabel: 'Ver todas',
+          onAction: () => Navigator.pushNamed(context, '/achievements'),
+        ),
+        const SizedBox(height: 10),
+        _AchievementPreview(totalWorkoutsWithPoints: workoutsWithPoints),
+      ],
+    );
+  }
+
+  List<bool> _weeklyDays(List<dynamic> rawProgress) {
+    final trainedByDow = <int, bool>{};
+    for (final entry in rawProgress) {
+      if (entry is Map<String, dynamic>) {
+        trainedByDow[_int(entry['day_of_week'], fallback: -1)] = entry['trained'] == true;
+      }
+    }
+    const weekDisplayOrder = [1, 2, 3, 4, 5, 6, 0];
+    return weekDisplayOrder.map((dow) => trainedByDow[dow] ?? false).toList();
+  }
+}
+
+class _Header extends StatelessWidget {
+  final VoidCallback onBack;
+  final VoidCallback onRefresh;
+
+  const _Header({required this.onBack, required this.onRefresh});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: _kBlue,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'Meu Progresso',
-          style: AppTypography.h3.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.3,
+    return Row(
+      children: [
+        _CircleButton(icon: Icons.arrow_back_rounded, onTap: onBack),
+        Expanded(
+          child: Text(
+            'Meu Progresso',
+            textAlign: TextAlign.center,
+            style: _pjs(size: 16, weight: FontWeight.w700, color: _kInk),
           ),
         ),
-      ),
-      body: _buildBody(),
+        _CircleButton(icon: Icons.refresh_rounded, onTap: onRefresh),
+      ],
     );
   }
+}
 
-  Widget _buildBody() {
-    if (_loading) return const GymUpLoading();
+class _CircleButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
 
-    if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 64, height: 64,
-                decoration: BoxDecoration(
-                  color: AppColors.error.withValues(alpha: 0.08),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.wifi_off_rounded,
-                    color: AppColors.error, size: 28),
-              ),
-              const SizedBox(height: 16),
-              Text('Erro ao carregar',
-                  style: AppTypography.bodyLarge
-                      .copyWith(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 8),
-              Text(_error!,
-                  textAlign: TextAlign.center,
-                  style: AppTypography.bodyMedium
-                      .copyWith(color: AppColors.textSecondary)),
-              const SizedBox(height: 20),
-              GestureDetector(
-                onTap: _loadData,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 24, vertical: 12),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                        colors: [_kBlue, _kBlueDark]),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text('Tentar novamente',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600)),
-                ),
-              ),
-            ],
-          ),
+  const _CircleButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: _shadow(tight: true),
         ),
-      );
-    }
-
-    final data    = _dashboard ?? {};
-    final summary = _summary   ?? {};
-
-    final int totalCheckins    = (data['total_checkins'] as num?)?.toInt() ?? 0;
-    final int totalTreinos     = (data['total_workouts'] as num?)?.toInt() ?? 0;
-    final int treinosComPontos = (data['total_workouts_with_points'] as num?)?.toInt() ?? 0;
-    final int treinosSemPontos = totalTreinos - treinosComPontos;
-
-    // weekly_progress é uma lista de objetos {day_of_week, trained, ...}.
-    // Monta um mapa por dow e extrai em ordem Seg→Dom (dow 1..6, 0).
-    final rawProgress = data['weekly_progress'] as List<dynamic>? ?? [];
-    final trainedByDow = <int, bool>{};
-    for (final e in rawProgress) {
-      if (e is Map<String, dynamic>) {
-        final trained = e['trained'];
-        // ignore: avoid_print
-        assert(() { if (trained is! bool && trained != null) { print('[DEBUG] weekly_progress.trained inesperado: ${trained.runtimeType} = $trained'); } return true; }());
-        trainedByDow[e['day_of_week'] as int? ?? -1] = trained == true;
-      }
-    }
-    // Exibição: Seg=1, Ter=2, Qua=3, Qui=4, Sex=5, Sáb=6, Dom=0
-    const weekDisplayOrder = [1, 2, 3, 4, 5, 6, 0];
-    final List<int> weeklyDays =
-        weekDisplayOrder.map((dow) => (trainedByDow[dow] ?? false) ? 1 : 0).toList();
-
-    final pr   = summary['latest_pr']    as Map<String, dynamic>?;
-    final best = summary['best_exercise'] as Map<String, dynamic>?;
-
-    return RefreshIndicator(
-      onRefresh: _loadData,
-      color: _kBlue,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 48),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-
-            // ── Hero: Resumo Geral ──────────────────────────────────────
-            _buildHeroStats(
-                totalCheckins, totalTreinos, treinosComPontos, treinosSemPontos),
-
-            const SizedBox(height: 28),
-
-            // ── Esta semana ─────────────────────────────────────────────
-            _sectionLabel('Esta semana'),
-            _buildWeekCard(weeklyDays),
-
-            const SizedBox(height: 28),
-
-            // ── Minha Meta ──────────────────────────────────────────────
-            _sectionLabel('Minha Meta'),
-            _buildGoalCard(weeklyDays),
-
-            const SizedBox(height: 28),
-
-            // ── Performance ─────────────────────────────────────────────
-            _sectionLabel('Performance'),
-            _buildEvolutionCard(summary),
-            if (pr != null || best != null) ...[
-              const SizedBox(height: 12),
-              _buildHighlightsCard(pr, best),
-            ],
-
-            const SizedBox(height: 28),
-
-            // ── Conquistas ───────────────────────────────────────────────
-            _sectionLabel('Conquistas'),
-            _buildAchievementCard(treinosComPontos),
-          ],
-        ),
+        child: Icon(icon, color: _kInk, size: 19),
       ),
     );
   }
+}
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+class _EvolutionHero extends StatelessWidget {
+  final int checkins;
+  final int workouts;
+  final int workoutsWithPoints;
+  final int workoutsWithoutPoints;
 
-  Widget _sectionLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
-          color: Color(0xFF1E293B),
-          letterSpacing: -0.3,
-        ),
-      ),
-    );
-  }
+  const _EvolutionHero({
+    required this.checkins,
+    required this.workouts,
+    required this.workoutsWithPoints,
+    required this.workoutsWithoutPoints,
+  });
 
-  Widget _card({required Widget child, EdgeInsets? padding}) {
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: padding ?? const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: child,
-    );
-  }
-
-  // ── Hero Stats ────────────────────────────────────────────────────────────
-
-  Widget _buildHeroStats(
-      int checkins, int treinos, int comPontos, int semPontos) {
-    return Container(
+      padding: const EdgeInsets.all(18),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [_kBlue, _kBlueDark],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+          begin: Alignment(0.13, -0.03),
+          end: Alignment(0.77, 0.83),
+          colors: [_kBlueDark, _kBlue, _kBlue2],
         ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: _kBlue.withValues(alpha: 0.30),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: _shadow(color: _kBlue.withValues(alpha: 0.24)),
       ),
-      child: Column(
-        children: [
-          // ── Metric principal ─────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
-            child: Row(
-              children: [
-                Container(
-                  width: 48, height: 48,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(Icons.qr_code_scanner_rounded,
-                      color: Colors.white, size: 24),
-                ),
-                const SizedBox(width: 16),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '$checkins',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 40,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -1.5,
-                        height: 1,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Check-ins totais',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          // ── Stats strip ──────────────────────────────────────────────
-          Container(
-            margin: const EdgeInsets.fromLTRB(12, 0, 12, 14),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                _heroStat('$treinos', 'Treinos', Colors.white),
-                _stripDivider(),
-                _heroStat('$comPontos', 'Com pontos',
-                    const Color(0xFFFDE68A)),
-                _stripDivider(),
-                _heroStat('$semPontos', 'Sem pontos', Colors.white54),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _heroStat(String value, String label, Color valueColor) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(value,
-              style: TextStyle(
-                  color: valueColor,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5)),
-          const SizedBox(height: 3),
-          Text(label,
-              style: const TextStyle(
-                  color: Colors.white60,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500)),
-        ],
-      ),
-    );
-  }
-
-  Widget _stripDivider() {
-    return Container(
-      width: 1, height: 30,
-      color: Colors.white.withValues(alpha: 0.20),
-    );
-  }
-
-  // ── Week Card ─────────────────────────────────────────────────────────────
-
-  Widget _buildWeekCard(List<int> weeklyDays) {
-    const days    = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
-    final trained = weeklyDays.where((d) => d == 1).length;
-    final goal    = _goalData?.estimatedWorkoutsPerWeek ?? 4;
-    final reached = trained >= goal;
-
-    return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Frequência semanal',
-                  style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1E293B))),
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 5),
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
-                  color: reached
-                      ? _kGreen.withValues(alpha: 0.10)
-                      : _kBlue.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(20),
+                  color: Colors.white.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                 ),
-                child: Text(
-                  '$trained / $goal dias',
-                  style: TextStyle(
-                      color: reached ? _kGreen : _kBlue,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12),
+                child: const Icon(Icons.trending_up_rounded, color: Colors.white, size: 23),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'SUA EVOLU\u00C7\u00C3O',
+                      style: _pjs(
+                        size: 10.5,
+                        weight: FontWeight.w800,
+                        color: Colors.white.withValues(alpha: 0.84),
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '$checkins',
+                          style: _sg(size: 64, weight: FontWeight.w700, color: Colors.white, height: 0.95),
+                        ),
+                        const SizedBox(width: 8),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 7),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('check-ins', style: _sg(size: 14, weight: FontWeight.w700, color: Colors.white)),
+                              Text('totais na academia', style: _pjs(size: 13, weight: FontWeight.w500, color: Colors.white)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          // Day dots
+          const SizedBox(height: 18),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(7, (i) {
-              final done = i < weeklyDays.length && weeklyDays[i] == 1;
-              return Column(
-                children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 400),
-                    width: 38, height: 38,
-                    decoration: BoxDecoration(
-                      color: done
-                          ? _kBlue
-                          : const Color(0xFFF1F5F9),
-                      shape: BoxShape.circle,
-                      boxShadow: done
-                          ? [
-                              BoxShadow(
-                                color: _kBlue.withValues(alpha: 0.28),
-                                blurRadius: 8,
-                                offset: const Offset(0, 3),
-                              )
-                            ]
-                          : null,
-                    ),
-                    child: Center(
-                      child: done
-                          ? const Icon(Icons.check_rounded,
-                              color: Colors.white, size: 16)
-                          : null,
-                    ),
-                  ),
-                  const SizedBox(height: 7),
-                  Text(days[i],
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: done
-                              ? FontWeight.w700
-                              : FontWeight.w400,
-                          color: done
-                              ? _kBlue
-                              : const Color(0xFFCBD5E1))),
-                ],
-              );
-            }),
+            children: [
+              _HeroMetric(value: '$workouts', label: 'TREINOS', color: Colors.white),
+              _HeroDivider(),
+              _HeroMetric(value: '$workoutsWithPoints', label: 'COM PONTOS', color: _kLime),
+              _HeroDivider(),
+              _HeroMetric(value: '$workoutsWithoutPoints', label: 'SEM PONTOS', color: Colors.white),
+            ],
           ),
-          // Feedback message
-          if (trained > 0) ...[
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: reached
-                    ? _kGreen.withValues(alpha: 0.07)
-                    : _kBlue.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    reached
-                        ? Icons.celebration_rounded
-                        : Icons.bolt_rounded,
-                    size: 15,
-                    color: reached ? _kGreen : _kBlue,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      reached
-                          ? 'Meta semanal atingida! Excelente!'
-                          : 'Falta${goal - trained == 1 ? "" : "m"} ${goal - trained} '
-                            'treino${goal - trained == 1 ? "" : "s"} para a meta desta semana.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: reached ? _kGreen : _kBlue,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ],
       ),
     );
   }
+}
 
-  // ── Goal Card ─────────────────────────────────────────────────────────────
+class _HeroMetric extends StatelessWidget {
+  final String value;
+  final String label;
+  final Color color;
 
-  Widget _buildGoalCard(List<int> weeklyDays) {
-    if (_goalData == null) {
-      return _card(
+  const _HeroMetric({required this.value, required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(value, textAlign: TextAlign.center, style: _sg(size: 22, weight: FontWeight.w700, color: color, height: 1)),
+          const SizedBox(height: 5),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: _pjs(size: 10, weight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.78), letterSpacing: 0.3),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 32,
+      color: Colors.white.withValues(alpha: 0.18),
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  final String title;
+  final String? trailing;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  const _SectionTitle({
+    required this.title,
+    this.trailing,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(title, style: _pjs(size: 16, weight: FontWeight.w700, color: _kInk)),
+        ),
+        if (trailing != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(color: _kBlueSoft, borderRadius: BorderRadius.circular(100)),
+            child: Text(trailing!, style: _sg(size: 12, weight: FontWeight.w700, color: _kBlueDark)),
+          ),
+        if (actionLabel != null)
+          GestureDetector(
+            onTap: onAction,
+            child: Text(actionLabel!, style: _pjs(size: 13, weight: FontWeight.w700, color: _kBlue)),
+          ),
+      ],
+    );
+  }
+}
+
+class _WeeklyCard extends StatelessWidget {
+  final List<bool> weeklyDays;
+  final int trained;
+  final int goal;
+
+  const _WeeklyCard({
+    required this.weeklyDays,
+    required this.trained,
+    required this.goal,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const days = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'S\u00E1b', 'Dom'];
+    final remaining = (goal - trained).clamp(0, goal);
+
+    return _Card(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(7, (index) {
+              final done = index < weeklyDays.length && weeklyDays[index];
+              return _WeekDay(label: days[index], done: done);
+            }),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: remaining == 0 ? _kGreenSoft : _kOrangeSoft,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: remaining == 0 ? 'Meta semanal atingida' : 'Faltam ',
+                    style: _pjs(size: 12.5, weight: FontWeight.w600, color: remaining == 0 ? _kGreen : const Color(0xFF7A4500)),
+                  ),
+                  if (remaining > 0)
+                    TextSpan(
+                      text: '$remaining treino${remaining == 1 ? '' : 's'}',
+                      style: _pjs(size: 12.5, weight: FontWeight.w800, color: _kInk),
+                    ),
+                  if (remaining > 0)
+                    TextSpan(
+                      text: ' para a meta desta semana',
+                      style: _pjs(size: 12.5, weight: FontWeight.w600, color: const Color(0xFF7A4500)),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WeekDay extends StatelessWidget {
+  final String label;
+  final bool done;
+
+  const _WeekDay({required this.label, required this.done});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: done ? _kBlue : const Color(0xFFF1F4F8),
+            shape: BoxShape.circle,
+            boxShadow: done ? _shadow(color: _kBlue.withValues(alpha: 0.18), tight: true) : null,
+          ),
+          child: done ? const Icon(Icons.check_rounded, color: Colors.white, size: 17) : null,
+        ),
+        const SizedBox(height: 7),
+        Text(label, style: _pjs(size: 10.5, weight: FontWeight.w700, color: done ? _kInk : _kSoft, letterSpacing: 0.2)),
+      ],
+    );
+  }
+}
+
+class _GoalCard extends StatelessWidget {
+  final GoalData? goal;
+  final int workoutsDone;
+  final VoidCallback onCreate;
+  final VoidCallback onOpen;
+
+  const _GoalCard({
+    required this.goal,
+    required this.workoutsDone,
+    required this.onCreate,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (goal == null) {
+      return _Card(
         child: Column(
           children: [
             Row(
               children: [
-                Container(
-                  width: 44, height: 44,
-                  decoration: BoxDecoration(
-                    color: _kBlue.withValues(alpha: 0.08),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.flag_outlined,
-                      color: _kBlue, size: 22),
-                ),
-                const SizedBox(width: 14),
+                _IconBox(icon: Icons.flag_outlined, color: _kBlue, bg: _kBlueSoft),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Nenhuma meta definida',
-                          style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF1E293B))),
+                      Text('Nenhuma meta definida', style: _pjs(size: 15, weight: FontWeight.w800, color: _kInk)),
                       const SizedBox(height: 3),
-                      Text(
-                        'Defina uma meta para acompanhar sua evolução.',
-                        style: TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textSecondary),
-                      ),
+                      Text('Defina uma meta para acompanhar sua evolu\u00E7\u00E3o.', style: _pjs(size: 12.5, weight: FontWeight.w500, color: _kMuted, height: 1.4)),
                     ],
                   ),
                 ),
@@ -557,24 +554,16 @@ class _ProgressPageState extends State<ProgressPage> {
             ),
             const SizedBox(height: 16),
             GestureDetector(
-              onTap: () => Navigator.of(context)
-                  .push(MaterialPageRoute(
-                      builder: (_) => const CreateGoalPage()))
-                  .then((_) => _loadData()),
+              onTap: onCreate,
               child: Container(
-                height: 44,
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 13),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                      colors: [_kBlue, _kBlueDark]),
-                  borderRadius: BorderRadius.circular(12),
+                  gradient: const LinearGradient(colors: [_kBlueDark, _kBlue, _kBlue2]),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: _shadow(color: _kBlue.withValues(alpha: 0.22), tight: true),
                 ),
-                child: const Center(
-                  child: Text('Definir meta',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14)),
-                ),
+                child: Center(child: Text('Definir meta', style: _pjs(size: 12.5, weight: FontWeight.w800, color: Colors.white))),
               ),
             ),
           ],
@@ -582,162 +571,64 @@ class _ProgressPageState extends State<ProgressPage> {
       );
     }
 
-    final goal         = _goalData!;
-    final workoutsDone = weeklyDays.where((d) => d == 1).length;
-    final weeklyGoal   = goal.estimatedWorkoutsPerWeek;
-    final progress     = (workoutsDone / weeklyGoal).clamp(0.0, 1.0);
-    final deltaKg      = (goal.targetWeight - goal.startWeight).abs();
-    final direction    = goal.goalType == 'weight_gain' ? 'ganhar' : 'perder';
-    final progressColor =
-        workoutsDone >= weeklyGoal ? _kGreen : _kBlue;
+    final activeGoal = goal!;
+    final weeklyGoal = activeGoal.estimatedWorkoutsPerWeek;
+    final progress = weeklyGoal == 0 ? 0.0 : (workoutsDone / weeklyGoal).clamp(0.0, 1.0);
+    final deltaKg = (activeGoal.targetWeight - activeGoal.startWeight).abs();
+    final isConsistency = activeGoal.goalType == 'consistency';
+    final direction = activeGoal.goalType == 'weight_gain' ? 'ganhar' : 'perder';
+    final title = isConsistency
+        ? 'Consist\u00EAncia de treinos'
+        : '${_goalTypeLabel(activeGoal.goalType)}: $direction ${deltaKg.toStringAsFixed(0)} kg';
 
     return GestureDetector(
-      onTap: () => Navigator.of(context)
-          .push(
-              MaterialPageRoute(builder: (_) => const GoalSummaryPage()))
-          .then((_) => _loadData()),
-      child: _card(
+      onTap: onOpen,
+      child: _Card(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
             Row(
               children: [
-                Container(
-                  width: 44, height: 44,
-                  decoration: BoxDecoration(
-                    color: _kGreen.withValues(alpha: 0.10),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.flag_rounded,
-                      color: _kGreen, size: 22),
-                ),
-                const SizedBox(width: 14),
+                _IconBox(icon: Icons.flag_rounded, color: _kGreen, bg: _kGreenSoft),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Meta Pessoal',
-                          style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF1E293B))),
+                      Text('Meta Pessoal', style: _pjs(size: 15, weight: FontWeight.w800, color: _kInk)),
                       const SizedBox(height: 3),
-                      Text(
-                        goal.goalType == 'consistency'
-                            ? 'Consistência de treinos'
-                            : '${goal.goalTypeLabel}: $direction '
-                              '${deltaKg.toStringAsFixed(0)} kg',
-                        style: const TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF64748B)),
-                      ),
+                      Text(title, style: _pjs(size: 12.5, weight: FontWeight.w500, color: _kMuted)),
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded,
-                    size: 18, color: Color(0xFFCBD5E1)),
+                const Icon(Icons.chevron_right_rounded, color: _kSoft, size: 20),
               ],
             ),
-            const SizedBox(height: 20),
-            // Weekly progress
+            const SizedBox(height: 18),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Treinos esta semana',
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF64748B))),
-                Text('$workoutsDone / $weeklyGoal',
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: progressColor)),
+                Text('Treinos esta semana', style: _pjs(size: 12.5, weight: FontWeight.w600, color: _kMuted)),
+                Text('$workoutsDone / $weeklyGoal', style: _sg(size: 13, weight: FontWeight.w700, color: _kBlue)),
               ],
             ),
             const SizedBox(height: 8),
             ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(100),
               child: LinearProgressIndicator(
                 value: progress,
-                minHeight: 10,
-                backgroundColor: const Color(0xFFF1F5F9),
-                valueColor: AlwaysStoppedAnimation<Color>(progressColor),
+                minHeight: 8,
+                backgroundColor: const Color(0x0F0E1116),
+                valueColor: const AlwaysStoppedAnimation<Color>(_kBlue),
               ),
             ),
-            // Weight journey
-            if (goal.goalType != 'consistency') ...[
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    _weightPill('Início',
-                        '${goal.startWeight.toStringAsFixed(0)} kg',
-                        const Color(0xFF94A3B8)),
-                    Expanded(
-                      child: Padding(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 8),
-                        child: Row(
-                          children: const [
-                            Expanded(
-                              child: Divider(
-                                  color: Color(0xFFCBD5E1),
-                                  thickness: 1.5),
-                            ),
-                            Icon(Icons.arrow_forward_ios_rounded,
-                                size: 11,
-                                color: Color(0xFFCBD5E1)),
-                          ],
-                        ),
-                      ),
-                    ),
-                    _weightPill('Meta',
-                        '${goal.targetWeight.toStringAsFixed(0)} kg',
-                        _kBlue),
-                    const SizedBox(width: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _kGreen.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        '${deltaKg.toStringAsFixed(0)} kg',
-                        style: const TextStyle(
-                            color: _kGreen,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            // Calories
-            if (goal.estimatedDailyCalorieDeficit != null) ...[
-              const SizedBox(height: 12),
+            if (!isConsistency) ...[
+              const SizedBox(height: 16),
               Row(
                 children: [
-                  const Icon(
-                      Icons.local_fire_department_rounded,
-                      color: _kOrange,
-                      size: 15),
-                  const SizedBox(width: 6),
-                  Text(
-                    '${goal.estimatedDailyCalorieDeficit} kcal/dia estimadas',
-                    style: const TextStyle(
-                        color: _kOrange,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13),
-                  ),
+                  _WeightPill(label: 'In\u00EDcio', value: '${activeGoal.startWeight.toStringAsFixed(0)} kg'),
+                  const Expanded(child: Divider(color: Color(0x1F0E1116), thickness: 1)),
+                  _WeightPill(label: 'Meta', value: '${activeGoal.targetWeight.toStringAsFixed(0)} kg', color: _kBlue),
                 ],
               ),
             ],
@@ -746,57 +637,53 @@ class _ProgressPageState extends State<ProgressPage> {
       ),
     );
   }
+}
 
-  Widget _weightPill(String label, String value, Color color) {
-    return Column(
-      children: [
-        Text(value,
-            style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: color)),
-        const SizedBox(height: 2),
-        Text(label,
-            style: const TextStyle(
-                fontSize: 11, color: Color(0xFF94A3B8))),
-      ],
+class _WeightPill extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _WeightPill({required this.label, required this.value, this.color = _kInk});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: Column(
+        children: [
+          Text(value, style: _sg(size: 15, weight: FontWeight.w700, color: color)),
+          const SizedBox(height: 2),
+          Text(label, style: _pjs(size: 10.5, weight: FontWeight.w700, color: _kSoft, letterSpacing: 0.3)),
+        ],
+      ),
     );
   }
+}
 
-  // ── Evolution Card ────────────────────────────────────────────────────────
+class _PerformanceCard extends StatelessWidget {
+  final Map<String, dynamic> summary;
 
-  Widget _buildEvolutionCard(Map<String, dynamic> summary) {
+  const _PerformanceCard({required this.summary});
+
+  @override
+  Widget build(BuildContext context) {
     final deltaPct = (summary['overall_delta_pct'] as num?)?.toDouble();
     final deltaAbs = (summary['overall_delta_abs'] as num?)?.toDouble();
 
     if (deltaPct == null || deltaAbs == null) {
-      return _card(
+      return _Card(
         child: Row(
           children: [
-            Container(
-              width: 44, height: 44,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.trending_up_rounded,
-                  color: Color(0xFFCBD5E1), size: 22),
-            ),
-            const SizedBox(width: 14),
+            _IconBox(icon: Icons.trending_up_rounded, color: _kSoft, bg: const Color(0xFFEFF3F8)),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Evolução 30 dias',
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1E293B))),
+                  Text('Evolu\u00E7\u00E3o 30 dias', style: _pjs(size: 14, weight: FontWeight.w700, color: _kInk)),
                   const SizedBox(height: 3),
-                  Text('Sem dados suficientes ainda.',
-                      style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.textSecondary)),
+                  Text('Sem dados suficientes ainda', style: _pjs(size: 12, weight: FontWeight.w500, color: _kMuted)),
                 ],
               ),
             ),
@@ -805,268 +692,88 @@ class _ProgressPageState extends State<ProgressPage> {
       );
     }
 
-    final isPositive = deltaPct >= 0;
-    final color      = isPositive ? _kGreen : AppColors.error;
-    final bgColor    = isPositive
-        ? _kGreen.withValues(alpha: 0.08)
-        : AppColors.error.withValues(alpha: 0.08);
-    final sign       = isPositive ? '+' : '';
-    final icon       = isPositive
-        ? Icons.trending_up_rounded
-        : Icons.trending_down_rounded;
+    final positive = deltaPct >= 0;
+    final color = positive ? _kGreen : _kRed;
+    final sign = positive ? '+' : '';
 
-    return _card(
+    return _Card(
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Evolução 30 dias',
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF94A3B8)),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '$sign${deltaPct.toStringAsFixed(1)}%',
-                  style: TextStyle(
-                    fontSize: 38,
-                    fontWeight: FontWeight.w800,
-                    color: color,
-                    letterSpacing: -1.5,
-                    height: 1,
-                  ),
-                ),
+                Text('Evolu\u00E7\u00E3o 30 dias', style: _pjs(size: 14, weight: FontWeight.w700, color: _kInk)),
+                const SizedBox(height: 8),
+                Text('$sign${deltaPct.toStringAsFixed(1)}%', style: _sg(size: 34, weight: FontWeight.w700, color: color, height: 1)),
                 const SizedBox(height: 5),
-                Text(
-                  '$sign${deltaAbs.toStringAsFixed(1)} kg e1RM médio',
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: color.withValues(alpha: 0.80)),
-                ),
+                Text('$sign${deltaAbs.toStringAsFixed(1)} kg e1RM m\u00E9dio', style: _pjs(size: 12, weight: FontWeight.w600, color: color)),
               ],
             ),
           ),
-          Container(
-            width: 56, height: 56,
-            decoration: BoxDecoration(
-              color: bgColor,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(icon, color: color, size: 28),
+          _IconBox(
+            icon: positive ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+            color: color,
+            bg: color.withValues(alpha: 0.10),
+            size: 56,
+            iconSize: 28,
           ),
         ],
       ),
     );
   }
+}
 
-  // ── Highlights Card (PR + Maior Evolução) ─────────────────────────────────
+class _AchievementPreview extends StatelessWidget {
+  final int totalWorkoutsWithPoints;
 
-  Widget _buildHighlightsCard(
-    Map<String, dynamic>? pr,
-    Map<String, dynamic>? best,
-  ) {
-    return _card(
-      padding: EdgeInsets.zero,
-      child: Column(
-        children: [
-          if (pr != null) _prRow(pr),
-          if (pr != null && best != null)
-            const Divider(
-                height: 1,
-                color: Color(0xFFF1F5F9),
-                indent: 20,
-                endIndent: 20),
-          if (best != null) _bestExerciseRow(best),
-        ],
-      ),
-    );
-  }
+  const _AchievementPreview({required this.totalWorkoutsWithPoints});
 
-  Widget _prRow(Map<String, dynamic> pr) {
-    final name   = pr['name']   as String? ?? '';
-    final weight = (pr['weight'] as num?)?.toDouble() ?? 0;
-    final reps   = (pr['reps']  as num?)?.toInt() ?? 0;
+  @override
+  Widget build(BuildContext context) {
+    final milestone = ((totalWorkoutsWithPoints / 20).floor() + 1) * 20;
+    final progressCount = totalWorkoutsWithPoints % 20;
+    final progress = progressCount / 20.0;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-      child: Row(
-        children: [
-          Container(
-            width: 44, height: 44,
-            decoration: BoxDecoration(
-              color: _kAmber.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.emoji_events_rounded,
-                color: _kAmber, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('PR Mais Recente',
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF94A3B8))),
-                const SizedBox(height: 3),
-                Text(name,
-                    style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1E293B))),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: _kAmber.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              '${weight.toStringAsFixed(1)} kg × $reps',
-              style: const TextStyle(
-                  color: _kAmber,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _bestExerciseRow(Map<String, dynamic> best) {
-    final name     = best['name'] as String? ?? '';
-    final deltaPct = (best['delta_pct'] as num?)?.toDouble() ?? 0;
-    final sign     = deltaPct >= 0 ? '+' : '';
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-      child: Row(
-        children: [
-          Container(
-            width: 44, height: 44,
-            decoration: BoxDecoration(
-              color: _kOrange.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.local_fire_department_rounded,
-                color: _kOrange, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Maior Evolução',
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF94A3B8))),
-                const SizedBox(height: 3),
-                Text(name,
-                    style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1E293B))),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: _kOrange.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              '$sign${deltaPct.toStringAsFixed(1)}%',
-              style: const TextStyle(
-                  color: _kOrange,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Achievement Card ──────────────────────────────────────────────────────
-
-  Widget _buildAchievementCard(int totalTreinos) {
-    final milestone = ((totalTreinos / 20).floor() + 1) * 20;
-    final feitos    = totalTreinos % 20;
-    final progresso = feitos / 20.0;
-
-    return _card(
+    return _Card(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 52, height: 52,
-            decoration: BoxDecoration(
-              color: _kAmber.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(Icons.emoji_events_rounded,
-                color: _kAmber, size: 28),
-          ),
+          _IconBox(icon: Icons.emoji_events_rounded, color: _kGold, bg: _kGoldSoft, size: 52, iconSize: 26),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Próxima Conquista',
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1E293B))),
+                Text('PR\u00D3XIMA CONQUISTA', style: _pjs(size: 10.5, weight: FontWeight.w800, color: _kSoft, letterSpacing: 0.5)),
+                const SizedBox(height: 6),
+                Text('Maratonista', style: _pjs(size: 15, weight: FontWeight.w800, color: _kInk, height: 1.15)),
                 const SizedBox(height: 3),
-                Text(
-                  'Complete $milestone treinos para o próximo badge.',
-                  style: const TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF64748B),
-                      height: 1.4),
-                ),
+                Text('Complete $milestone treinos para o pr\u00F3ximo badge.', style: _pjs(size: 12, weight: FontWeight.w500, color: _kMuted, height: 1.4)),
                 const SizedBox(height: 14),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('$feitos / 20',
-                        style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF64748B))),
-                    Text(
-                      '${(progresso * 100).toStringAsFixed(0)}%',
-                      style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: _kAmber),
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(text: '$progressCount', style: _sg(size: 12, weight: FontWeight.w700, color: _kInk)),
+                          TextSpan(text: ' / 20', style: _sg(size: 12, weight: FontWeight.w700, color: _kSoft)),
+                          TextSpan(text: ' treinos', style: _sg(size: 12, weight: FontWeight.w700, color: _kMuted)),
+                        ],
+                      ),
                     ),
+                    Text('${(progress * 100).round()}%', style: _sg(size: 12, weight: FontWeight.w700, color: _kBlue)),
                   ],
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 7),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(100),
                   child: LinearProgressIndicator(
-                    value: progresso,
-                    minHeight: 8,
-                    backgroundColor: const Color(0xFFF1F5F9),
-                    valueColor:
-                        const AlwaysStoppedAnimation<Color>(_kAmber),
+                    value: progress,
+                    minHeight: 7,
+                    backgroundColor: const Color(0x0F0E1116),
+                    valueColor: const AlwaysStoppedAnimation<Color>(_kBlue),
                   ),
                 ),
               ],
@@ -1076,4 +783,175 @@ class _ProgressPageState extends State<ProgressPage> {
       ),
     );
   }
+}
+
+class _Card extends StatelessWidget {
+  final Widget child;
+  final EdgeInsets padding;
+
+  const _Card({
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0x0F0E1116)),
+        boxShadow: _shadow(),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _IconBox extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final Color bg;
+  final double size;
+  final double iconSize;
+
+  const _IconBox({
+    required this.icon,
+    required this.color,
+    required this.bg,
+    this.size = 44,
+    this.iconSize = 22,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(size * 0.30)),
+      child: Icon(icon, color: color, size: iconSize),
+    );
+  }
+}
+
+class _StateCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  const _StateCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _Card(
+      child: Column(
+        children: [
+          Row(
+            children: [
+              _IconBox(icon: icon, color: color, bg: color.withValues(alpha: 0.10)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: _pjs(size: 14.5, weight: FontWeight.w800, color: _kInk)),
+                    const SizedBox(height: 3),
+                    Text(subtitle, style: _pjs(size: 12, weight: FontWeight.w500, color: _kMuted, height: 1.35)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: onAction,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Center(child: Text(actionLabel!, style: _pjs(size: 13, weight: FontWeight.w800, color: Colors.white))),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+int _int(dynamic value, {int fallback = 0}) {
+  return (value as num?)?.toInt() ?? fallback;
+}
+
+String _goalTypeLabel(String value) {
+  return switch (value) {
+    'weight_loss' => 'Perda de Peso',
+    'weight_gain' => 'Ganho de Peso',
+    'consistency' => 'Consist\u00EAncia',
+    _ => value,
+  };
+}
+
+TextStyle _pjs({
+  required double size,
+  required FontWeight weight,
+  required Color color,
+  double? letterSpacing,
+  double? height,
+}) {
+  return TextStyle(
+    color: color,
+    fontSize: size,
+    fontFamily: 'Plus Jakarta Sans',
+    fontWeight: weight,
+    letterSpacing: letterSpacing,
+    height: height,
+  );
+}
+
+TextStyle _sg({
+  required double size,
+  required FontWeight weight,
+  required Color color,
+  double? height,
+}) {
+  return TextStyle(
+    color: color,
+    fontSize: size,
+    fontFamily: 'Space Grotesk',
+    fontWeight: weight,
+    height: height,
+  );
+}
+
+List<BoxShadow> _shadow({Color? color, bool tight = false}) {
+  return [
+    BoxShadow(
+      color: color ?? const Color(0x0A0F172A),
+      blurRadius: tight ? 8 : 6,
+      offset: const Offset(0, 2),
+    ),
+    if (!tight)
+      const BoxShadow(
+        color: Color(0x0F0F172A),
+        blurRadius: 24,
+        offset: Offset(0, 8),
+      ),
+  ];
 }

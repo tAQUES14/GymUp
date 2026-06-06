@@ -19,6 +19,9 @@ class DatabaseSeeder extends Seeder
         // ── 2. Catálogo de exercícios ──────────────────────────────────────────
         $this->call(ExerciseSeeder::class);
 
+        // ── 2b. Conteúdo educacional dos exercícios ────────────────────────────
+        $this->call(ExerciseContentSeeder::class);
+
         // ── 3. Usuário de teste (aluno) ────────────────────────────────────────
         User::firstOrCreate(
             ['email' => 'test@example.com'],
@@ -53,6 +56,10 @@ class DatabaseSeeder extends Seeder
 
         // ── 7. Planos de treino sequenciais ───────────────────────────────────
         $this->call(WorkoutPlanSeeder::class);
+
+        // ── 7b. Vincula GIFs aos exercícios (fuzzy match por nome) ────────────
+        // Sem efeito se os arquivos GIF não existirem em storage/app/public/exercises.
+        \Illuminate\Support\Facades\Artisan::call('exercises:link-missing-gifs');
 
         // ── 8. Gym admin de teste ─────────────────────────────────────────────
         User::firstOrCreate(

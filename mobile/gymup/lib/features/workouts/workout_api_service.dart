@@ -66,6 +66,7 @@ class DashboardData {
   final int pointsBalance;
   final bool hasCompletedToday;
   final bool hasActiveSession;
+  final int? activeSessionElapsedMinutes;
   final bool hasCheckedInToday;
   /// Lista de 7 dias (0=Dom → 6=Sáb) com contexto completo.
   final List<WeeklyProgressDay> weeklyProgress;
@@ -78,12 +79,15 @@ class DashboardData {
   final int totalCheckins;
   final int totalWorkouts;
   final int totalWorkoutsWithPoints;
+  /// Posição no ranking da academia. 0 = sem dados.
+  final int ranking;
 
   const DashboardData({
     required this.name,
     required this.pointsBalance,
     required this.hasCompletedToday,
     required this.hasActiveSession,
+    this.activeSessionElapsedMinutes,
     required this.hasCheckedInToday,
     required this.weeklyProgress,
     required this.recentActivities,
@@ -95,6 +99,7 @@ class DashboardData {
     required this.totalCheckins,
     required this.totalWorkouts,
     required this.totalWorkoutsWithPoints,
+    this.ranking = 0,
   });
 
   int get totalWorkoutsWithoutPoints => totalWorkouts - totalWorkoutsWithPoints;
@@ -109,6 +114,7 @@ class DashboardData {
       pointsBalance:    (json['points_balance'] as num).toInt(),
       hasCompletedToday:    json['has_completed_today']  == true,
       hasActiveSession:     json['has_active_session']   == true,
+      activeSessionElapsedMinutes: (json['active_session_elapsed_minutes'] as num?)?.toInt(),
       hasCheckedInToday:    json['has_checked_in_today'] == true,
       weeklyProgress: rawProgress
           .map((e) => WeeklyProgressDay.fromJson(e as Map<String, dynamic>))
@@ -127,6 +133,7 @@ class DashboardData {
       totalWorkouts:    (json['total_workouts'] as num?)?.toInt() ?? 0,
       totalWorkoutsWithPoints:
           (json['total_workouts_with_points'] as num?)?.toInt() ?? 0,
+      ranking: (json['ranking'] as num?)?.toInt() ?? 0,
     );
   }
 }

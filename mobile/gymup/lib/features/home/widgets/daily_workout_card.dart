@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme/app_typography.dart';
-
-const _kBlue     = Color(0xFF2563EB);
-const _kBlueDark = Color(0xFF1D4ED8);
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/gym_icon_box.dart';
 
 class DailyWorkoutCard extends StatelessWidget {
   final String workoutName;
@@ -30,15 +29,15 @@ class DailyWorkoutCard extends StatelessWidget {
             ? const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [_kBlue, _kBlueDark],
+                colors: [AppColors.blue, AppColors.blueDark],
               )
             : null,
-        color: hasWorkout ? null : Colors.white,
+        color: hasWorkout ? null : AppColors.surface,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
             color: hasWorkout
-                ? _kBlue.withValues(alpha: 0.30)
+                ? AppColors.blue.withValues(alpha: 0.30)
                 : Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 6),
@@ -54,37 +53,27 @@ class DailyWorkoutCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Rótulo
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(20),
+        // Rótulo do dia
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.calendar_today_rounded, color: Colors.white, size: 11),
+              const SizedBox(width: 5),
+              Text(
+                dayLabel != null ? 'HOJE · ${dayLabel!.toUpperCase()}' : 'TREINO DE HOJE',
+                style: AppText.pjs(
+                  size: 10, weight: FontWeight.w700,
+                  color: Colors.white, letterSpacing: 0.8,
+                ),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.calendar_today_rounded,
-                    color: Colors.white,
-                    size: 11,
-                  ),
-                  const SizedBox(width: 5),
-                  Text(
-                    dayLabel != null ? 'HOJE · ${dayLabel!.toUpperCase()}' : 'TREINO DE HOJE',
-                    style: AppTypography.caption.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 10,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
 
         const SizedBox(height: 16),
@@ -92,11 +81,7 @@ class DailyWorkoutCard extends StatelessWidget {
         // Nome do treino
         Text(
           workoutName,
-          style: AppTypography.h3.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.w800,
-            fontSize: 20,
-          ),
+          style: AppText.pjs(size: 20, weight: FontWeight.w800, color: Colors.white),
         ),
 
         const SizedBox(height: 12),
@@ -112,14 +97,14 @@ class DailyWorkoutCard extends StatelessWidget {
 
         const SizedBox(height: 24),
 
-        // Botão
+        // Botão de ação
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
             onPressed: onTap,
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
-              foregroundColor: _kBlue,
+              foregroundColor: AppColors.blue,
               padding: const EdgeInsets.symmetric(vertical: 15),
               elevation: 0,
               shape: RoundedRectangleBorder(
@@ -128,10 +113,7 @@ class DailyWorkoutCard extends StatelessWidget {
             ),
             child: Text(
               'Iniciar treino',
-              style: AppTypography.button.copyWith(
-                color: _kBlue,
-                fontWeight: FontWeight.w700,
-              ),
+              style: AppText.pjs(size: 14, weight: FontWeight.w700, color: AppColors.blue),
             ),
           ),
         ),
@@ -142,37 +124,22 @@ class DailyWorkoutCard extends StatelessWidget {
   Widget _buildEmpty() {
     return Row(
       children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            Icons.fitness_center_rounded,
-            color: Colors.grey.shade400,
-            size: 22,
-          ),
+        GymIconBox(
+          icon: Icons.fitness_center_rounded,
+          bg: Colors.grey.shade100,
+          color: Colors.grey.shade400,
+          size: GymIconSize.md,
         ),
         const SizedBox(width: 14),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Nenhum treino cadastrado',
-                style: AppTypography.bodyMedium.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF374151),
-                ),
-              ),
+              Text('Nenhum treino cadastrado', style: AppText.itemTitle),
               const SizedBox(height: 2),
               Text(
                 'Crie um treino na aba Treinos para começar.',
-                style: AppTypography.caption.copyWith(
-                  color: const Color(0xFF9CA3AF),
-                ),
+                style: AppText.subtitle,
               ),
             ],
           ),
@@ -189,9 +156,9 @@ class DailyWorkoutCard extends StatelessWidget {
         const SizedBox(width: 5),
         Text(
           label,
-          style: AppTypography.caption.copyWith(
+          style: AppText.pjs(
+            size: 12, weight: FontWeight.w500,
             color: Colors.white.withValues(alpha: 0.85),
-            fontWeight: FontWeight.w500,
           ),
         ),
       ],

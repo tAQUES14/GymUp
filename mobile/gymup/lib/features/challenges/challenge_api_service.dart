@@ -67,30 +67,43 @@ class ChallengeData {
   bool get isCompetitive => type == 'competitive';
 }
 
+class ActiveChallengesData {
+  final ChallengeData? community;
+  final List<ChallengeData> personal;
+
+  const ActiveChallengesData({
+    required this.community,
+    required this.personal,
+  });
+}
+
 class ChallengeRankingEntry {
   final int position;
   final int userId;
   final String userName;
-  final int? totalPoints;    // competitive
-  final int? workouts;       // simple
-  final bool? goalCompleted; // simple
+  final int? totalPoints;       // competitive — pontos históricos finalizados
+  final int? workoutsThisWeek; // competitive — treinos da semana atual
+  final int? workouts;          // simple
+  final bool? goalCompleted;   // simple
 
   const ChallengeRankingEntry({
     required this.position,
     required this.userId,
     required this.userName,
     this.totalPoints,
+    this.workoutsThisWeek,
     this.workouts,
     this.goalCompleted,
   });
 
   factory ChallengeRankingEntry.fromJson(Map<String, dynamic> json, int index) {
     return ChallengeRankingEntry(
-      position:     (json['position'] as num?)?.toInt() ?? (index + 1),
-      userId:       (json['user_id'] as num).toInt(),
-      userName:     json['user_name'] as String,
-      totalPoints:  (json['total_points'] as num?)?.toInt(),
-      workouts:     (json['workouts'] as num?)?.toInt(),
+      position:         (json['position'] as num?)?.toInt() ?? (index + 1),
+      userId:           (json['user_id'] as num).toInt(),
+      userName:         json['user_name'] as String,
+      totalPoints:      (json['total_points'] as num?)?.toInt(),
+      workoutsThisWeek:(json['workouts_this_week'] as num?)?.toInt(),
+      workouts:         (json['workouts'] as num?)?.toInt(),
       goalCompleted: json['goal_completed'] is bool ? json['goal_completed'] as bool : null,
     );
   }
@@ -99,17 +112,29 @@ class ChallengeRankingEntry {
 class ChallengeApiService {
   final _api = ApiService();
 
-  Future<ChallengeData?> getActiveChallenge() async {
+  Future<ActiveChallengesData> getActiveChallenges() async {
     final response = await _api.get('/challenges/active');
 
     if (response.statusCode == 200) {
-      final body      = jsonDecode(response.body) as Map<String, dynamic>;
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
       final challenge = body['challenge'];
-      if (challenge == null) return null;
-      return ChallengeData.fromJson(challenge as Map<String, dynamic>);
+      final personal = (body['personal_challenges'] as List<dynamic>? ?? const [])
+          .map((item) => ChallengeData.fromJson(item as Map<String, dynamic>))
+          .toList();
+
+      return ActiveChallengesData(
+        community: challenge == null
+            ? null
+            : ChallengeData.fromJson(challenge as Map<String, dynamic>),
+        personal: personal,
+      );
     }
 
-    throw Exception('Erro ao buscar desafio ativo.');
+    throw Exception('Erro ao buscar desafios ativos.');
+  }
+
+  Future<ChallengeData?> getActiveChallenge() async {
+    return (await getActiveChallenges()).community;
   }
 
   Future<List<ChallengeRankingEntry>> getRanking(int id) async {

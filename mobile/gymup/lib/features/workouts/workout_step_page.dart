@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_typography.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_typography.dart';
 import 'controllers/workout_execution_controller.dart';
 import 'models/workout_model.dart';
 import 'widgets/exercise_image_widget.dart';
@@ -715,6 +715,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
             progressMessage: finishResult.progressMessage,
             prMessages: finishResult.prMessages,
             workoutVolume: finishResult.workoutVolume,
+            exerciseNames: widget.workout.exercises.map((e) => e.name).toList(),
           ),
         ),
         (_) => false,
@@ -1092,23 +1093,1378 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
       },
       child: Scaffold(
         backgroundColor: AppColors.background,
-        body: Column(
-          children: [
-            _buildTopBar(),
-            _buildRequirementsBlock(),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: _buildExerciseCard(
-                  currentExercise,
-                  totalSeries,
-                  exercises.length,
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              _buildExecutionHeader(exercises.length),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
+                  child: Column(
+                    children: [
+                      _buildExecutionProgressCard(exercises.length),
+                      const SizedBox(height: 18),
+                      _buildExecutionExerciseView(
+                        currentExercise,
+                        totalSeries,
+                        exercises.length,
+                      ),
+                    ],
+                  ),
                 ),
               ),
+              _buildProgressBanner(),
+              _buildExecutionDock(exercises, totalSeries),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExecutionHeader(int totalExercises) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 6, 20, 14),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: _handlePopAttempt,
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.arrow_back_rounded,
+                color: Color(0xFF0E1116),
+                size: 20,
+              ),
             ),
-            _buildProgressBanner(),
-            _buildBottomDock(exercises, totalSeries),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'TREINO EM ANDAMENTO',
+                  style: AppTypography.caption.copyWith(
+                    color: const Color(0xFF9AA3B0),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  widget.workout.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodyLarge.copyWith(
+                    color: const Color(0xFF0E1116),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0E1116),
+              borderRadius: BorderRadius.circular(100),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFC8F84A),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFC8F84A).withValues(alpha: 0.8),
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _elapsedPillLabel,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontFamily: 'Space Grotesk',
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String get _elapsedPillLabel {
+    final minutes = _elapsed.inMinutes;
+    final seconds = _elapsed.inSeconds % 60;
+    if (_elapsed.inHours > 0) {
+      return _elapsedFormatted;
+    }
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildExecutionProgressCard(int totalExercises) {
+    final minSecs = (_session?.minMinutes ?? 1) * 60;
+    final elapsedSecs = _elapsed.inSeconds;
+    final minProgress = _session?.minProgress ?? 75;
+    final localProgress =
+        (((_completedExercises > _currentExerciseIndex
+                        ? _completedExercises
+                        : _currentExerciseIndex) /
+                    totalExercises.clamp(1, 999)) *
+                100)
+            .round()
+            .clamp(0, 100);
+    final displayProgress = _session == null
+        ? localProgress
+        : (localProgress > _session!.progress
+            ? localProgress
+            : _session!.progress);
+    final exerciseProgress = totalExercises == 0
+        ? 0.0
+        : ((_currentExerciseIndex + 1) / totalExercises).clamp(0.0, 1.0);
+
+    String mmss(int seconds) {
+      return '${(seconds ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}';
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+          BoxShadow(
+            color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'PROGRESSO DO TREINO',
+                  style: AppTypography.caption.copyWith(
+                    color: const Color(0xFF9AA3B0),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ),
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: '${_currentExerciseIndex + 1}',
+                      style: const TextStyle(
+                        color: Color(0xFF2F6FED),
+                        fontSize: 13,
+                        fontFamily: 'Space Grotesk',
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    TextSpan(
+                      text: ' / $totalExercises',
+                      style: const TextStyle(
+                        color: Color(0xFF9AA3B0),
+                        fontSize: 13,
+                        fontFamily: 'Space Grotesk',
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Text(
+                'exerc.',
+                style: TextStyle(
+                  color: Color(0xFF5B6472),
+                  fontSize: 10.5,
+                  fontFamily: 'Space Grotesk',
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(100),
+            child: LinearProgressIndicator(
+              value: exerciseProgress,
+              minHeight: 6,
+              backgroundColor: const Color(0xFF2F6FED).withValues(alpha: 0.12),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                Color(0xFF2F6FED),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _buildProgressMetric(
+                icon: Icons.timer_outlined,
+                value: mmss(elapsedSecs),
+                goal: mmss(minSecs),
+              ),
+              Container(
+                width: 3,
+                height: 3,
+                margin: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF9AA3B0),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              _buildProgressMetric(
+                icon: Icons.fitness_center_rounded,
+                value: '$displayProgress%',
+                goal: '$minProgress%',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgressMetric({
+    required IconData icon,
+    required String value,
+    required String goal,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: const Color(0xFF9AA3B0)),
+        const SizedBox(width: 5),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Color(0xFF0E1116),
+            fontSize: 11.5,
+            fontFamily: 'Space Grotesk',
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.1,
+          ),
+        ),
+        Text(
+          ' / $goal',
+          style: AppTypography.caption.copyWith(
+            color: const Color(0xFF9AA3B0),
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildExecutionExerciseView(
+    ExerciseModel exercise,
+    int totalSeries,
+    int totalExercises,
+  ) {
+    final repsLabel = exercise.reps.toString();
+    return Column(
+      children: [
+        _buildExecutionGifCard(exercise, totalExercises),
+        const SizedBox(height: 16),
+        _buildExecutionExerciseSummary(exercise),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(child: _buildExecutionStat('$totalSeries', 'SERIES')),
+            const SizedBox(width: 10),
+            Expanded(child: _buildExecutionStat(repsLabel, 'REPS')),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildExecutionStat('${exercise.rest}', 'DESCANSO', unit: 's'),
+            ),
           ],
+        ),
+        const SizedBox(height: 18),
+        _buildExecutionSeriesList(exercise, totalSeries),
+      ],
+    );
+  }
+
+  Widget _buildExecutionGifCard(ExerciseModel exercise, int totalExercises) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ExerciseDetailPage(exercise: exercise)),
+      ),
+      child: Container(
+        height: 229,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment(0.35, -0.22),
+            end: Alignment(0.65, 1.22),
+            colors: [Color(0xFFE7EEFE), Color(0xFFF0FFD9)],
+          ),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0x0A0E1116)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+            BoxShadow(
+              color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: ExerciseGifPanel(exercise: exercise, height: 229, paused: true),
+            ),
+            Positioned(
+              left: 13,
+              top: 13,
+              child: _buildDarkPill('${_currentExerciseIndex + 1} / $totalExercises'),
+            ),
+            Positioned(
+              right: 13,
+              top: 13,
+              child: _buildDarkPill('GIF'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDarkPill(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xC60E1116),
+        borderRadius: BorderRadius.circular(100),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontFamily: 'Space Grotesk',
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.1,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExecutionExerciseSummary(ExerciseModel exercise) {
+    final muscle = exercise.muscleGroup.isEmpty ? 'EXERCICIO' : exercise.muscleGroup.toUpperCase();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+          BoxShadow(
+            color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE7EEFE),
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      child: Text(
+                        muscle,
+                        style: AppTypography.caption.copyWith(
+                          color: const Color(0xFF1F4FC4),
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Text(
+                      exercise.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.h3.copyWith(
+                        color: const Color(0xFF0E1116),
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                        height: 1.05,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ExerciseProgressPage(exercise: exercise),
+                  ),
+                ),
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEDFBD3),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.show_chart_rounded,
+                    color: Color(0xFF5BA300),
+                    size: 18,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 13),
+          Container(height: 1, color: const Color(0x0F0E1116)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildSummaryAction(
+                icon: Icons.play_circle_outline_rounded,
+                label: 'Ver execucao',
+                color: const Color(0xFF2F6FED),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ExerciseDetailPage(exercise: exercise),
+                  ),
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 18,
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                color: const Color(0x140E1116),
+              ),
+              _buildSummaryAction(
+                icon: Icons.swap_horiz_rounded,
+                label: 'Substituir',
+                color: const Color(0xFF5B6472),
+                onTap: _showSubstitutionSheet,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryAction({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: AppTypography.caption.copyWith(
+              color: color,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExecutionStat(String value, String label, {String? unit}) {
+    return Container(
+      height: 64,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+          BoxShadow(
+            color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                value,
+                style: const TextStyle(
+                  color: Color(0xFF0E1116),
+                  fontSize: 19,
+                  fontFamily: 'Space Grotesk',
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.5,
+                  height: 1.0,
+                ),
+              ),
+              if (unit != null)
+                Text(
+                  unit,
+                  style: const TextStyle(
+                    color: Color(0xFF9AA3B0),
+                    fontSize: 10.5,
+                    fontFamily: 'Space Grotesk',
+                    fontWeight: FontWeight.w700,
+                    height: 1.0,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: AppTypography.caption.copyWith(
+              color: const Color(0xFF5B6472),
+              fontSize: 9.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.4,
+              height: 1.0,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExecutionSeriesList(ExerciseModel exercise, int totalSeries) {
+    final completedCount = List.generate(totalSeries, (i) => i + 1)
+        .where((setNum) =>
+            _ctrl.isSetCompleted(exercise.id, setNum) ||
+            setNum <= _currentSeriesIndex)
+        .length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'Series',
+              style: AppTypography.bodyLarge.copyWith(
+                color: const Color(0xFF0E1116),
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.3,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              '$completedCount/$totalSeries',
+              style: const TextStyle(
+                color: Color(0xFF5B6472),
+                fontSize: 11,
+                fontFamily: 'Space Grotesk',
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        ...List.generate(totalSeries, (index) {
+          final setNum = index + 1;
+          final isDone = _ctrl.isSetCompleted(exercise.id, setNum) ||
+              index < _currentSeriesIndex ||
+              (_isResting &&
+                  index == _currentSeriesIndex &&
+                  (_restType == RestType.betweenExercises || _isAllDone));
+          final isCurrent = index == _currentSeriesIndex && !isDone;
+          final repsCtrl = _repsCtrls.length > index ? _repsCtrls[index] : null;
+          final reps = repsCtrl?.text.trim().isNotEmpty == true
+              ? repsCtrl!.text.trim()
+              : exercise.reps.toString();
+          final weight = _displayWeight(exercise, setNum, index);
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _buildExecutionSetCard(
+              exercise: exercise,
+              setNum: setNum,
+              reps: reps,
+              weight: weight,
+              isCurrent: isCurrent,
+              isDone: isDone,
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  String _displayWeight(ExerciseModel exercise, int setNum, int index) {
+    final text = _seriesCtrls.length > index ? _seriesCtrls[index].text : '';
+    final parsed = double.tryParse(text);
+    final value = parsed ?? _ctrl.getWeight(exercise.id, setNum);
+    if (value <= 0) return '0 kg';
+    return value == value.roundToDouble()
+        ? '${value.toInt()} kg'
+        : '${value.toStringAsFixed(1)} kg';
+  }
+
+  Widget _buildExecutionSetCard({
+    required ExerciseModel exercise,
+    required int setNum,
+    required String reps,
+    required String weight,
+    required bool isCurrent,
+    required bool isDone,
+  }) {
+    final muted = !isCurrent && !isDone;
+    final borderColor = isCurrent
+        ? const Color(0xFF2F6FED)
+        : isDone
+            ? const Color(0x335BA300)
+            : const Color(0x0F0E1116);
+    final bgColor = isCurrent
+        ? Colors.white
+        : isDone
+            ? const Color(0xFFF0FFD9)
+            : const Color(0xFFF7F9FC);
+    final accentColor = isCurrent
+        ? const Color(0xFF2F6FED)
+        : isDone
+            ? const Color(0xFF5BA300)
+            : const Color(0xFF9AA3B0);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: isCurrent ? 16 : 15,
+        vertical: isCurrent ? 14 : 13,
+      ),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: borderColor, width: isCurrent ? 2 : 1),
+        boxShadow: isCurrent
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF2F6FED).withValues(alpha: 0.18),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12),
+                ),
+              ]
+            : null,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: isCurrent ? 38 : 40,
+            height: isCurrent ? 38 : 40,
+            decoration: BoxDecoration(
+              color: isCurrent
+                  ? const Color(0xFF2F6FED)
+                  : isDone
+                      ? const Color(0xFF5BA300)
+                      : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: muted ? Border.all(color: const Color(0x140E1116)) : null,
+              boxShadow: isCurrent
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFF2F6FED).withValues(alpha: 0.32),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Center(
+              child: isDone && !isCurrent
+                  ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
+                  : Text(
+                      '$setNum',
+                      style: TextStyle(
+                        color: isCurrent ? Colors.white : const Color(0xFF9AA3B0),
+                        fontSize: 14,
+                        fontFamily: 'Space Grotesk',
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'SERIE $setNum',
+                      style: AppTypography.caption.copyWith(
+                        color: accentColor,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    if (isDone || isCurrent) ...[
+                      const SizedBox(width: 6),
+                      Text(
+                        isDone && !isCurrent ? '- FEITA' : '- ATUAL',
+                        style: AppTypography.caption.copyWith(
+                          color: accentColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '$reps reps  -  $weight',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF0E1116),
+                    fontSize: 14.5,
+                    fontFamily: 'Space Grotesk',
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildCompactRepsStepper(
+                setNum: setNum,
+                reps: reps,
+                active: isCurrent,
+              ),
+              const SizedBox(width: 6),
+              _buildCompactKgStepper(
+                exercise: exercise,
+                setNum: setNum,
+                weight: weight,
+                active: isCurrent,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactRepsStepper({
+    required int setNum,
+    required String reps,
+    required bool active,
+  }) {
+    final color = active ? const Color(0xFF2F6FED) : const Color(0xFF5B6472);
+    return _buildInlineStepper(
+      active: active,
+      color: color,
+      minCenterWidth: 42,
+      onMinus: () => _adjustReps(setNum, -1),
+      onPlus: () => _adjustReps(setNum, 1),
+      child: Text(
+        '$reps reps',
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontFamily: 'Space Grotesk',
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.1,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactKgStepper({
+    required ExerciseModel exercise,
+    required int setNum,
+    required String weight,
+    required bool active,
+  }) {
+    final color = active ? const Color(0xFF2F6FED) : const Color(0xFF5B6472);
+    return _buildInlineStepper(
+      active: active,
+      color: color,
+      minCenterWidth: 38,
+      onMinus: () => _adjustWeight(exercise, setNum, -5),
+      onPlus: () => _adjustWeight(exercise, setNum, 5),
+      child: Text(
+        weight,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontFamily: 'Space Grotesk',
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.1,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInlineStepper({
+    required bool active,
+    required Color color,
+    required double minCenterWidth,
+    required VoidCallback onMinus,
+    required VoidCallback onPlus,
+    required Widget child,
+  }) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 0),
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: active ? const Color(0xFFE7EEFE) : Colors.white,
+        borderRadius: BorderRadius.circular(100),
+        border: Border.all(
+          color: active ? const Color(0x3F2F6FED) : const Color(0x140E1116),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildStepperButton(
+            icon: Icons.remove_rounded,
+            active: active,
+            onTap: onMinus,
+          ),
+          ConstrainedBox(
+            constraints: BoxConstraints(minWidth: minCenterWidth),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: Center(child: child),
+            ),
+          ),
+          _buildStepperButton(
+            icon: Icons.add_rounded,
+            active: active,
+            filled: active,
+            onTap: onPlus,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _adjustReps(int setNum, int delta) {
+    final ctrlIndex = setNum - 1;
+    if (ctrlIndex < 0 || ctrlIndex >= _repsCtrls.length) return;
+    final current = int.tryParse(_repsCtrls[ctrlIndex].text) ?? 0;
+    final next = (current + delta).clamp(0, 999).toInt();
+    final text = next > 0 ? next.toString() : '';
+    setState(() {
+      _repsCtrls[ctrlIndex].text = text;
+      _repsCtrls[ctrlIndex].selection =
+          TextSelection.collapsed(offset: text.length);
+    });
+    if (ctrlIndex == _currentSeriesIndex) {
+      _checkSetReadiness();
+    }
+  }
+
+  Widget _buildStepperButton({
+    required IconData icon,
+    required bool active,
+    required VoidCallback onTap,
+    bool filled = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          color: filled ? const Color(0xFF2F6FED) : Colors.transparent,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          icon,
+          size: 15,
+          color: filled
+              ? Colors.white
+              : active
+                  ? const Color(0xFF1F4FC4)
+                  : const Color(0xFF9AA3B0),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExecutionDock(List<ExerciseModel> exercises, int totalSeries) {
+    if (_isResting) {
+      return _buildExecutionRestDock();
+    }
+
+    final canGoPrev = _currentExerciseIndex > 0;
+    final canGoNext = _currentExerciseIndex < exercises.length - 1;
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        14,
+        7,
+        14,
+        MediaQuery.of(context).padding.bottom + 18,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(26),
+          topRight: Radius.circular(26),
+        ),
+        border: Border.all(color: const Color(0x0F0E1116)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withValues(alpha: 0.16),
+            blurRadius: 34,
+            offset: const Offset(0, -8),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            onTap: _markSeriesDone,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment(0.21, -1.25),
+                  end: Alignment(0.79, 2.25),
+                  colors: [Color(0xFF1F4FC4), Color(0xFF2F6FED), Color(0xFF4A8CFF)],
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF2F6FED).withValues(alpha: 0.36),
+                    blurRadius: 22,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 26,
+                    height: 26,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.22),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.check_rounded, color: Colors.white, size: 16),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    _isAllDone ? 'Finalizar treino' : 'Concluir serie',
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              _buildDockIconButton(
+                icon: Icons.arrow_back_rounded,
+                onTap: canGoPrev ? _prevExercise : null,
+              ),
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'EXERCICIO',
+                      style: AppTypography.caption.copyWith(
+                        color: const Color(0xFF9AA3B0),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '${_currentExerciseIndex + 1}',
+                            style: const TextStyle(
+                              color: Color(0xFF2F6FED),
+                              fontSize: 13,
+                              fontFamily: 'Space Grotesk',
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          TextSpan(
+                            text: ' / ${exercises.length}',
+                            style: const TextStyle(
+                              color: Color(0xFF9AA3B0),
+                              fontSize: 13,
+                              fontFamily: 'Space Grotesk',
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _buildDockIconButton(
+                icon: Icons.arrow_forward_rounded,
+                onTap: canGoNext ? _nextExercise : null,
+              ),
+              Container(
+                width: 1,
+                height: 18,
+                margin: const EdgeInsets.symmetric(horizontal: 8),
+                color: const Color(0x140E1116),
+              ),
+              GestureDetector(
+                onTap: _isFinishing ? null : _onFimPressed,
+                child: Opacity(
+                  opacity: _isFinishing ? 0.5 : 1,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.flag_rounded,
+                          color: Color(0xFF5B6472),
+                          size: 13,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          'Encerrar',
+                          style: AppTypography.caption.copyWith(
+                            color: const Color(0xFF5B6472),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExecutionRestDock() {
+    final progress = _restTotal > 0
+        ? (_restCountdown / _restTotal).clamp(0.0, 1.0)
+        : 0.0;
+    final minutes = _restCountdown ~/ 60;
+    final seconds = _restCountdown % 60;
+    final timeLabel = '$minutes:${seconds.toString().padLeft(2, '0')}';
+    final subtitle = _restSubtitleLabel();
+    const actionsWidth = 174.0;
+
+    return Container(
+      margin: EdgeInsets.fromLTRB(
+        14,
+        0,
+        14,
+        MediaQuery.of(context).padding.bottom + 12,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xF40E1116),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0E1116).withValues(alpha: 0.32),
+            blurRadius: 36,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFC8F84A),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFC8F84A).withValues(alpha: 0.70),
+                      blurRadius: 8,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 5),
+              Text(
+                'DESCANSO',
+                style: AppTypography.caption.copyWith(
+                  color: Colors.white.withValues(alpha: 0.70),
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.4,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                  style: AppTypography.caption.copyWith(
+                    color: Colors.white.withValues(alpha: 0.55),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Text(
+                timeLabel,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 38,
+                  fontFamily: 'Space Grotesk',
+                  fontWeight: FontWeight.w700,
+                  height: 1,
+                  letterSpacing: -1.5,
+                ),
+              ),
+              const Spacer(),
+              SizedBox(
+                width: actionsWidth,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _restCountdown = (_restCountdown + 15).clamp(0, 999);
+                          _restTotal = (_restTotal + 15).clamp(1, 999);
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(100),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.18),
+                          ),
+                        ),
+                        child: Text(
+                          '+15s',
+                          style: AppTypography.caption.copyWith(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: _skipRest,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFC8F84A),
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.skip_next_rounded,
+                              color: Color(0xFF1F4FC4),
+                              size: 13,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              'Pular',
+                              style: AppTypography.caption.copyWith(
+                                color: const Color(0xFF1F4FC4),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 11),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(100),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 5,
+              backgroundColor: Colors.white.withValues(alpha: 0.12),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                Color(0xFFC8F84A),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _restSubtitleLabel() {
+    if (_restType == RestType.betweenExercises) {
+      final exercises = _workout?.exercises ?? const <ExerciseModel>[];
+      final nextIndex = _currentExerciseIndex + 1;
+      if (nextIndex < exercises.length) {
+        return 'PROXIMO: ${exercises[nextIndex].name.toUpperCase()}';
+      }
+    }
+
+    final label = (_restCompletedLabel ?? 'Serie concluida')
+        .replaceAll('Ã—', 'x')
+        .replaceAll('×', 'x')
+        .toUpperCase();
+    return 'ULTIMA SERIE: $label';
+  }
+
+  Widget _buildDockIconButton({
+    required IconData icon,
+    required VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Opacity(
+        opacity: onTap == null ? 0.35 : 1,
+        child: SizedBox(
+          width: 36,
+          height: 36,
+          child: Icon(icon, color: const Color(0xFF5B6472), size: 17),
         ),
       ),
     );
@@ -1116,6 +2472,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
 
   // ── Top bar ───────────────────────────────────────────────────────────────
 
+  // ignore: unused_element
   Widget _buildTopBar() {
     final exercises = _workout!.exercises;
     final progress = exercises.isNotEmpty
@@ -1254,6 +2611,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
 
   // ── Status strip (compact) ────────────────────────────────────────────────
 
+  // ignore: unused_element
   Widget _buildRequirementsBlock() {
     if (_session == null) return const SizedBox.shrink();
     if (_pointsGranted) return _buildPointsBanner();
@@ -1413,6 +2771,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
 
   // ── Exercise card ─────────────────────────────────────────────────────────
 
+  // ignore: unused_element
   Widget _buildExerciseCard(
     ExerciseModel exercise,
     int totalSeries,
@@ -1665,6 +3024,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
 
   // ── Bottom dock ───────────────────────────────────────────────────────────
 
+  // ignore: unused_element
   Widget _buildBottomDock(List<ExerciseModel> exercises, int totalSeries) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),

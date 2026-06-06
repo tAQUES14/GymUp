@@ -53,6 +53,7 @@ use App\Http\Controllers\Api\NetworkController;
 
 Route::post('/register',               [AuthController::class, 'register']);
 Route::post('/login',                  [AuthController::class, 'login']);
+Route::post('/auth/google',            [AuthController::class, 'google']);
 Route::get('/gym/by-invite/{code}',    [AuthController::class, 'gymByInvite']);
 
 // 🔹 Catálogo de exercícios (público — usado pelo app antes do login)
@@ -82,6 +83,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // 🔹 Perfil
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::put('/profile', [ProfileController::class, 'update']);
+    Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar']);
 
     // 🔹 Resumo de Progresso
     Route::get('/me/progress-summary', [ProgressSummaryController::class, 'index']);

@@ -7,6 +7,7 @@ use App\Models\CustomWorkout;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class AdminWorkoutController extends Controller
 {
@@ -19,9 +20,7 @@ class AdminWorkoutController extends Controller
         $gymId  = $request->user()->activeGymId();
         $search = trim($request->query('search', ''));
 
-        $userIds = User::where('gym_id', $gymId)->pluck('id');
-
-        $workouts = CustomWorkout::whereIn('user_id', $userIds)
+        $workouts = $this->workoutsForGym($gymId)
             ->where('is_template', true)
             ->when($search, fn ($q) => $q->where('name', 'ilike', "%{$search}%"))
             ->withCount('exercises')
@@ -39,16 +38,16 @@ class AdminWorkoutController extends Controller
      */
     public function show(Request $request, int $id): JsonResponse
     {
-        $gymId   = $request->user()->activeGymId();
-        $userIds = User::where('gym_id', $gymId)->pluck('id');
+        $gymId = $request->user()->activeGymId();
 
-        $workout = CustomWorkout::whereIn('user_id', $userIds)
+        $workout = $this->workoutsForGym($gymId)
             ->where('is_template', true)
             ->with(['exercises', 'user:id,name'])
             ->withCount('copies as assigned_count')
             ->findOrFail($id);
 
         // Alunos que receberam este treino (cópias)
+        $userIds     = User::where('gym_id', $gymId)->pluck('id');
         $assignments = CustomWorkout::where('template_id', $id)
             ->whereIn('user_id', $userIds)
             ->with('user:id,name,email')
@@ -101,7 +100,7 @@ class AdminWorkoutController extends Controller
             'exercises.*.rest'        => 'nullable|integer|min:0|max:600',
         ]);
 
-        $workout = CustomWorkout::create([
+        $workout = CustomWorkout::create($this->withGymId([
             'user_id'      => $request->user()->id,
             'name'         => $request->name,
             'description'  => $request->description,
@@ -109,7 +108,7 @@ class AdminWorkoutController extends Controller
             'duration'     => $request->duration,
             'is_generated' => false,
             'is_template'  => true,
-        ]);
+        ], $request->user()->activeGymId()));
 
         $syncData = [];
         foreach ($request->exercises as $item) {
@@ -133,10 +132,9 @@ class AdminWorkoutController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
-        $gymId   = $request->user()->activeGymId();
-        $userIds = User::where('gym_id', $gymId)->pluck('id');
+        $gymId = $request->user()->activeGymId();
 
-        $workout = CustomWorkout::whereIn('user_id', $userIds)
+        $workout = $this->workoutsForGym($gymId)
             ->where('is_template', true)
             ->findOrFail($id);
 
@@ -174,10 +172,9 @@ class AdminWorkoutController extends Controller
      */
     public function destroy(Request $request, int $id): JsonResponse
     {
-        $gymId   = $request->user()->activeGymId();
-        $userIds = User::where('gym_id', $gymId)->pluck('id');
+        $gymId = $request->user()->activeGymId();
 
-        $workout = CustomWorkout::whereIn('user_id', $userIds)
+        $workout = $this->workoutsForGym($gymId)
             ->where('is_template', true)
             ->findOrFail($id);
 
@@ -193,10 +190,9 @@ class AdminWorkoutController extends Controller
      */
     public function assign(Request $request, int $id): JsonResponse
     {
-        $gymId   = $request->user()->activeGymId();
-        $userIds = User::where('gym_id', $gymId)->pluck('id');
+        $gymId = $request->user()->activeGymId();
 
-        $template = CustomWorkout::whereIn('user_id', $userIds)
+        $template = $this->workoutsForGym($gymId)
             ->where('is_template', true)
             ->with('exercises')
             ->findOrFail($id);
@@ -230,7 +226,7 @@ class AdminWorkoutController extends Controller
 
             if ($alreadyHas) { $skipped++; continue; }
 
-            $copy = CustomWorkout::create([
+            $copy = CustomWorkout::create($this->withGymId([
                 'user_id'      => $userId,
                 'name'         => $template->name,
                 'description'  => $template->description,
@@ -239,7 +235,7 @@ class AdminWorkoutController extends Controller
                 'is_generated' => false,
                 'is_template'  => false,
                 'template_id'  => $template->id,
-            ]);
+            ], $gymId));
 
             $copy->exercises()->sync($pivotData);
             $assigned++;
@@ -263,7 +259,7 @@ class AdminWorkoutController extends Controller
         $userIds = User::where('gym_id', $gymId)->pluck('id');
 
         // Garante que o template pertence à academia
-        CustomWorkout::whereIn('user_id', $userIds)
+        $this->workoutsForGym($gymId)
             ->where('is_template', true)
             ->findOrFail($templateId);
 
@@ -294,5 +290,33 @@ class AdminWorkoutController extends Controller
             'created_by'     => $w->is_generated ? 'IA GymUp' : ($w->user?->name ?? '—'),
             'created_at'     => $w->created_at?->format('Y-m-d'),
         ];
+    }
+
+    private function workoutsForGym(int $gymId)
+    {
+        $query = CustomWorkout::query();
+
+        if ($this->customWorkoutsHasGymId()) {
+            return $query->where('gym_id', $gymId);
+        }
+
+        return $query->whereIn(
+            'user_id',
+            User::where('gym_id', $gymId)->select('id')
+        );
+    }
+
+    private function withGymId(array $payload, int $gymId): array
+    {
+        if ($this->customWorkoutsHasGymId()) {
+            $payload['gym_id'] = $gymId;
+        }
+
+        return $payload;
+    }
+
+    private function customWorkoutsHasGymId(): bool
+    {
+        return Schema::hasColumn('custom_workouts', 'gym_id');
     }
 }

@@ -111,8 +111,10 @@ class _AchievementItem extends StatelessWidget {
                         color: AppColors.accent.withValues(alpha: 0.10),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
-                        Icons.emoji_events_rounded,
+                      child: Icon(
+                        achievement.isStreak
+                            ? Icons.bolt_rounded
+                            : Icons.format_list_bulleted_rounded,
                         color: AppColors.accent,
                         size: 22,
                       ),
@@ -237,8 +239,10 @@ class _AchievementItem extends StatelessWidget {
                         color: _kBlue.withValues(alpha: 0.10),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
-                        Icons.bolt_rounded,
+                      child: Icon(
+                        achievement.isStreak
+                            ? Icons.bolt_rounded
+                            : Icons.format_list_bulleted_rounded,
                         color: _kBlue,
                         size: 22,
                       ),
@@ -373,8 +377,10 @@ class _AchievementItem extends StatelessWidget {
                         color: iconBgColor,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
-                        Icons.lock_outline_rounded,
+                      child: Icon(
+                        achievement.isStreak
+                            ? Icons.bolt_rounded
+                            : Icons.format_list_bulleted_rounded,
                         color: iconColor,
                         size: 20,
                       ),

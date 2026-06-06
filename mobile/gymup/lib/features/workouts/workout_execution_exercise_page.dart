@@ -302,6 +302,7 @@ class _WorkoutExecutionExercisePageState
             streak: result.streakCurrent,
             pontosGerados: result.pointsGenerated,
             totalPontos: result.totalPoints,
+            exerciseNames: widget.workout.exercises.map((e) => e.name).toList(),
           ),
         ),
         (_) => false,

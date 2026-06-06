@@ -64,6 +64,19 @@ class WorkoutSession extends Model
     }
 
     /**
+     * Scope: sessions that are still open AND within the configured timeout window.
+     * Use this instead of bare whereNull('finished_at') so stale sessions are ignored.
+     */
+    public function scopeActiveSession($query)
+    {
+        $hours = (int) config('workout.session_timeout_hours', 4);
+
+        return $query
+            ->whereNull('finished_at')
+            ->where('started_at', '>=', now()->subHours($hours));
+    }
+
+    /**
      * Elapsed time in minutes for this session.
      *
      * Rules:

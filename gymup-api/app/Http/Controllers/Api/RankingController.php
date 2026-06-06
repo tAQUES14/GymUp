@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Gym;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -40,11 +41,15 @@ class RankingController extends Controller
             default     => null,
         };
 
+        // Rank by activity earn transactions only.
+        // Exclude category='redemption' (refunds from rejected redemptions)
+        // so a reject+resubmit cycle does not inflate a user's score.
         $query = DB::table('users')
             ->where('users.role', 'user')
             ->leftJoin('point_transactions', function ($join) use ($startDate) {
                 $join->on('point_transactions.user_id', '=', 'users.id')
-                     ->where('point_transactions.type', '=', 'earn');
+                     ->where('point_transactions.type', '=', 'earn')
+                     ->where('point_transactions.category', '!=', 'redemption');
 
                 if ($startDate) {
                     $join->where('point_transactions.created_at', '>=', $startDate);
@@ -95,19 +100,21 @@ class RankingController extends Controller
         return response()->json($ranking);
     }
 
-    private function progressRanking($user, int $limit, string $scope = 'gym', ?int $chainId = null): array
+    private function progressRanking(User $user, int $limit, string $scope = 'gym', ?int $chainId = null): array
     {
         $weekStart     = now()->startOfWeek();
         $prevWeekStart = now()->subWeek()->startOfWeek();
 
         $currentSub = DB::table('point_transactions')
             ->where('type', 'earn')
+            ->where('category', '!=', 'redemption')
             ->where('created_at', '>=', $weekStart)
             ->select('user_id', DB::raw('SUM(points) as pts'))
             ->groupBy('user_id');
 
         $previousSub = DB::table('point_transactions')
             ->where('type', 'earn')
+            ->where('category', '!=', 'redemption')
             ->where('created_at', '>=', $prevWeekStart)
             ->where('created_at', '<', $weekStart)
             ->select('user_id', DB::raw('SUM(points) as pts'))

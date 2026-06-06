@@ -45,6 +45,8 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Permita que o GymUp acesse suas fotos para escolher uma foto de perfil.</string>
 	<!-- URL Scheme: gymup://reset-password?token=...&email=... (fallback / dev) -->
 	<key>CFBundleURLTypes</key>
 	<array>

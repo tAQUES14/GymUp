@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/gym_card.dart';
+import '../../../core/widgets/gym_icon_box.dart';
 import '../../workouts/workout_api_service.dart';
 
 String _relativeTime(DateTime date) {
@@ -23,45 +25,23 @@ class RecentActivitiesList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (activities.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
+      return GymCard(
+        radius: 18,
+        padding: const EdgeInsets.all(20),
         child: Row(
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.inbox_rounded, color: Colors.grey.shade400, size: 20),
+            GymIconBox(
+              icon: Icons.inbox_rounded,
+              bg: AppColors.blueTint,
+              color: AppColors.inkLight,
+              size: GymIconSize.sm,
             ),
             const SizedBox(width: 14),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Nenhuma atividade ainda',
-                  style: AppTypography.bodyMedium.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                Text(
-                  'Seus treinos aparecerão aqui.',
-                  style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
-                ),
+                Text('Nenhuma atividade ainda', style: AppText.itemTitle),
+                Text('Seus treinos aparecerão aqui.', style: AppText.subtitle),
               ],
             ),
           ],
@@ -69,26 +49,16 @@ class RecentActivitiesList extends StatelessWidget {
       );
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    return GymCard(
+      radius: 18,
+      padding: EdgeInsets.zero,
       child: ListView.separated(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         itemCount: activities.length,
         separatorBuilder: (_, _) => Divider(
-          height: 1,
-          indent: 68,
-          color: Colors.grey.shade100,
+          height: 1, indent: 72,
+          color: AppColors.inkLight.withValues(alpha: 0.15),
         ),
         itemBuilder: (_, i) => _ActivityItem(activity: activities[i]),
       ),
@@ -110,49 +80,27 @@ class _ActivityItem extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         children: [
-          // Ícone
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.08),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.fitness_center_rounded,
-              color: AppColors.accent,
-              size: 18,
-            ),
+          GymIconBox(
+            icon: Icons.fitness_center_rounded,
+            bg: AppColors.greenTint,
+            color: AppColors.green,
+            size: GymIconSize.sm,
           ),
           const SizedBox(width: 14),
-          // Texto
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Treino concluído',
-                  style: AppTypography.bodyMedium.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
+                Text('Treino concluído', style: AppText.timelineTitle),
                 const SizedBox(height: 2),
-                Text(
-                  tempoRelativo,
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
+                Text(tempoRelativo, style: AppText.subtitle),
               ],
             ),
           ),
-          // Pontos
           Text(
             temPontos ? '+${activity.points} pts' : 'Sem pontos',
-            style: AppTypography.caption.copyWith(
-              fontWeight: FontWeight.w700,
-              color: temPontos ? AppColors.accent : AppColors.textSecondary,
+            style: AppText.metricSmall.copyWith(
+              color: temPontos ? AppColors.green : AppColors.inkMuted,
             ),
           ),
         ],

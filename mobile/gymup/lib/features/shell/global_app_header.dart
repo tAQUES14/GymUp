@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+
 import '../../core/theme/app_typography.dart';
 
 const _kBlue = Color(0xFF2563EB);
 
 const _sectionTitles = [
-  null, // Home — shows brand logo
+  null,
   'Meus Treinos',
   'Loja',
   'Ranking',
@@ -18,8 +19,12 @@ class GlobalAppHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isHome  = currentIndex == 0;
-    final title   = _sectionTitles[currentIndex];
+    // Home, workouts, store, ranking, and profile render their headers inside the page.
+    if (currentIndex == 0 || currentIndex == 1 || currentIndex == 2 || currentIndex == 3 || currentIndex == 4) {
+      return const SizedBox.shrink();
+    }
+
+    final title = _sectionTitles[currentIndex];
 
     return Container(
       color: _kBlue,
@@ -41,47 +46,11 @@ class GlobalAppHeader extends StatelessWidget {
                   child: child,
                 ),
               ),
-              child: isHome
-                  ? const _HomeHeader(key: ValueKey('home'))
-                  : _SectionHeader(key: ValueKey(title), title: title!),
+              child: _SectionHeader(key: ValueKey(title), title: title!),
             ),
           ),
         ),
       ),
-    );
-  }
-}
-
-class _HomeHeader extends StatelessWidget {
-  const _HomeHeader({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.18),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Icon(
-            Icons.fitness_center_rounded,
-            color: Colors.white,
-            size: 18,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Text(
-          'GymUp',
-          style: AppTypography.h3.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.3,
-          ),
-        ),
-      ],
     );
   }
 }

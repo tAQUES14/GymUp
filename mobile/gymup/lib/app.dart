@@ -7,15 +7,12 @@ import 'package:gymup/features/auth/auth_gate.dart';
 
 import 'package:gymup/features/auth/login_page.dart';
 import 'package:gymup/features/auth/register_page.dart';
+import 'package:gymup/features/auth/google_invite_page.dart';
 import 'package:gymup/features/auth/forgot_password_page.dart';
 import 'package:gymup/features/auth/reset_password_page.dart';
 import 'package:gymup/features/shell/app_shell.dart';
 import 'package:gymup/features/checkin/checkin_page.dart';
-import 'package:gymup/features/ranking/ranking_page.dart';
-import 'package:gymup/features/store/store_page.dart';
 import 'package:gymup/features/store/reward_details_page.dart';
-import 'package:gymup/features/profile/profile_page.dart';
-import 'package:gymup/features/workouts/workouts_page.dart';
 import 'package:gymup/features/workouts/workout_detail_page.dart';
 import 'package:gymup/features/workouts/workout_step_page.dart';
 import 'package:gymup/features/workouts/workout_generated_page.dart';
@@ -26,8 +23,10 @@ import 'package:gymup/features/personals/personals_page.dart';
 import 'package:gymup/features/progress/progress_page.dart';
 import 'package:gymup/features/history/history_page.dart';
 import 'package:gymup/features/challenges/challenges_page.dart';
+import 'package:gymup/features/challenges/my_achievements_page.dart';
 import 'package:gymup/features/goals/create_goal_page.dart';
 import 'package:gymup/features/goals/goal_summary_page.dart';
+import 'package:gymup/features/settings/settings_page.dart';
 
 class GymUpApp extends StatefulWidget {
   const GymUpApp({super.key});
@@ -108,21 +107,24 @@ class _GymUpAppState extends State<GymUpApp> {
       routes: {
         '/login':            (context) => const LoginPage(),
         '/register':         (context) => const RegisterPage(),
+        '/google-invite':    (context) => const GoogleInvitePage(),
         '/forgot-password':  (context) => const ForgotPasswordPage(),
         '/reset-password':   (context) => const ResetPasswordPage(),
-        '/home':             (context) => const AppShell(),
+        '/home':             (context) => const AppShell(initialIndex: 0),
         '/checkin':          (context) => const CheckinPage(),
-        '/ranking':          (context) => const RankingPage(),
-        '/store':            (context) => const StorePage(),
-        '/profile':          (context) => const ProfilePage(),
+        '/ranking':          (context) => const AppShell(initialIndex: 3),
+        '/store':            (context) => const AppShell(initialIndex: 2),
+        '/profile':          (context) => const AppShell(initialIndex: 4),
         '/rewardDetails':    (context) => const RewardDetailsPage(),
-        '/workouts':         (context) => const WorkoutsPage(),
+        '/workouts':         (context) => const AppShell(initialIndex: 1),
         '/personals':        (context) => const PersonalsPage(),
         '/progress':         (context) => const ProgressPage(),
         '/history':          (context) => const HistoryPage(),
         '/challenges':       (context) => const ChallengesPage(),
+        '/achievements':     (context) => const MyAchievementsPage(),
         '/goals/create':     (context) => const CreateGoalPage(),
         '/goals':            (context) => const GoalSummaryPage(),
+        '/settings':         (context) => const SettingsPage(),
         '/workout-generated':(context) => const WorkoutGeneratedPage(),
         '/workout-concept':  (context) => const WorkoutConceptPage(),
       },

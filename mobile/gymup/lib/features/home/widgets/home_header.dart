@@ -1,98 +1,176 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_typography.dart';
-
-const _kBlue = Color(0xFF2563EB);
+import '../../../core/theme/app_text_styles.dart';
 
 class HomeHeader extends StatelessWidget {
   final String nome;
   final int points;
+  final VoidCallback? onCalendar;
+  final VoidCallback? onBell;
+  final bool hasNotification;
 
   const HomeHeader({
     super.key,
     required this.nome,
     this.points = 0,
+    this.onCalendar,
+    this.onBell,
+    this.hasNotification = true,
   });
 
   String get _greeting {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Bom dia';
-    if (hour < 18) return 'Boa tarde';
-    return 'Boa noite';
+    if (hour < 12) return 'BOM DIA';
+    if (hour < 18) return 'BOA TARDE';
+    return 'BOA NOITE';
   }
-
-  String get _firstName => nome.split(' ').first;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        // Avatar com inicial
+        // ── Avatar com gradiente e inicial ────────────────────────────────
         Container(
-          width: 48,
-          height: 48,
-          decoration: const BoxDecoration(
-            color: _kBlue,
-            shape: BoxShape.circle,
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            gradient: AppColors.gradientPrimary,
+            borderRadius: BorderRadius.circular(18),
           ),
           child: Center(
             child: Text(
               nome.isNotEmpty ? nome[0].toUpperCase() : 'U',
-              style: AppTypography.h3.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
+              textAlign: TextAlign.center,
+              style: AppText.pjs(
+                size: 15.1, weight: FontWeight.w700,
+                color: Colors.white, letterSpacing: -0.3,
               ),
             ),
           ),
         ),
 
-        const SizedBox(width: 14),
+        const SizedBox(width: 12),
 
-        // Saudação
+        // ── Saudação + nome ───────────────────────────────────────────────
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Text(_greeting, style: AppText.greeting),
               Text(
-                '$_greeting,',
-                style: AppTypography.caption.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              Text(
-                _firstName,
-                style: AppTypography.h3.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
+                nome,
+                style: AppText.pjs(
+                  size: 18, weight: FontWeight.w700,
+                  color: AppColors.ink, letterSpacing: -0.3, height: 1.1,
                 ),
               ),
             ],
           ),
         ),
 
-        // Badge de pontos
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            color: _kBlue,
-            borderRadius: BorderRadius.circular(20),
+        // ── Botão calendário ──────────────────────────────────────────────
+        _HeaderIconButton(
+          onTap: onCalendar,
+          child: const Icon(
+            Icons.calendar_month_outlined,
+            size: 22,
+            color: AppColors.ink,
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+        ),
+
+        const SizedBox(width: 12),
+
+        // ── Botão notificações ────────────────────────────────────────────
+        _HeaderIconButton(
+          onTap: onBell,
+          child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              const Icon(Icons.star_rounded, color: Colors.white, size: 14),
-              const SizedBox(width: 5),
-              Text(
-                '$points pts',
-                style: AppTypography.caption.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
+              const Icon(
+                Icons.notifications_outlined,
+                size: 22,
+                color: AppColors.ink,
               ),
+              if (hasNotification)
+                Positioned(
+                  right: -1,
+                  top: -1,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: AppColors.orange,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Botão quadrado branco com sombra suave — padrão dos ícones do header.
+class _HeaderIconButton extends StatelessWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+
+  const _HeaderIconButton({required this.child, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              left: -6,
+              top: -1,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x0A0E1116),
+                      blurRadius: 0,
+                      offset: Offset(0, 0),
+                      spreadRadius: 1,
+                    ),
+                    BoxShadow(
+                      color: Color(0x0F0F172A),
+                      blurRadius: 8,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: Center(child: child),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

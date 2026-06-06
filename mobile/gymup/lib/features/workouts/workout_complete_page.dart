@@ -1,15 +1,29 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'workout_share_card.dart';
 
-const _kBlue     = Color(0xFF2563EB);
-const _kBlueDark = Color(0xFF1D4ED8);
+const _kBlue = Color(0xFF2F6FED);
+const _kBlueDark = Color(0xFF1F4FC4);
+const _kGreen = Color(0xFF5BA300);
+const _kLime = Color(0xFFC8F84A);
+const _homeButtonSvg = '''
+<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M2.5 9.58317L10 2.9165L17.5 9.58317M4.16667 8.33317V16.6665H15.8333V8.33317" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+''';
+const _shareButtonSvg = '''
+<svg width="13" height="15" viewBox="0 0 13 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M10.3722 9.81903C10.0027 9.8189 9.63742 9.89578 9.30024 10.0446C8.96305 10.1935 8.66159 10.4109 8.41562 10.6827L5.03489 8.54015C5.18079 8.21268 5.25613 7.8589 5.25613 7.50123C5.25613 7.14355 5.18079 6.78977 5.03489 6.4623L8.41562 4.3197C8.85668 4.80481 9.46693 5.10824 10.1247 5.1695C10.7825 5.23076 11.4396 5.04536 11.965 4.65025C12.4904 4.25514 12.8454 3.67933 12.9595 3.03759C13.0735 2.39585 12.9381 1.7353 12.5803 1.18759C12.2225 0.639886 11.6685 0.245241 11.0287 0.0823131C10.389 -0.080615 9.71048 0.000138509 9.12842 0.308479C8.54637 0.61682 8.10351 1.1301 7.88812 1.74603C7.67273 2.36196 7.70062 3.0353 7.96624 3.63186L4.58551 5.77446C4.23083 5.38336 3.76408 5.10767 3.24701 4.98388C2.72994 4.86009 2.18694 4.89403 1.68987 5.08121C1.19279 5.2684 0.765077 5.6 0.463323 6.03213C0.161568 6.46426 0 6.97656 0 7.50123C0 8.02589 0.161568 8.53819 0.463323 8.97032C0.765077 9.40246 1.19279 9.73406 1.68987 9.92124C2.18694 10.1084 2.72994 10.1424 3.24701 10.0186C3.76408 9.89478 4.23083 9.61909 4.58551 9.22799L7.96624 11.3706C7.73929 11.8817 7.68579 12.4515 7.81369 12.995C7.9416 13.5386 8.24408 14.0269 8.67612 14.3873C9.10815 14.7476 9.64665 14.9608 10.2115 14.9951C10.7763 15.0294 11.3372 14.8829 11.8108 14.5775C12.2844 14.2721 12.6453 13.824 12.8399 13.3001C13.0344 12.7761 13.0522 12.2042 12.8905 11.6694C12.7288 11.1347 12.3964 10.6657 11.9426 10.3323C11.4889 9.99891 10.938 9.81888 10.3722 9.81903ZM10.3722 0.820502C10.7277 0.820502 11.0752 0.924454 11.3708 1.11921C11.6664 1.31397 11.8968 1.59079 12.0328 1.91466C12.1689 2.23853 12.2045 2.59491 12.1351 2.93872C12.0658 3.28254 11.8946 3.59836 11.6432 3.84624C11.3918 4.09412 11.0715 4.26293 10.7228 4.33132C10.3741 4.39971 10.0127 4.36461 9.68427 4.23046C9.35582 4.09631 9.07508 3.86913 8.87757 3.57765C8.68005 3.28618 8.57463 2.94349 8.57463 2.59294C8.57463 2.12286 8.76401 1.67203 9.10111 1.33964C9.43821 1.00724 9.89542 0.820502 10.3722 0.820502ZM2.62898 9.27366C2.27346 9.27366 1.92593 9.16971 1.63033 8.97495C1.33473 8.7802 1.10434 8.50338 0.968287 8.17951C0.832236 7.85564 0.79664 7.49926 0.865997 7.15544C0.935355 6.81162 1.10655 6.4958 1.35794 6.24792C1.60933 6.00004 1.92962 5.83124 2.2783 5.76285C2.62699 5.69446 2.98841 5.72956 3.31686 5.86371C3.64532 5.99786 3.92605 6.22504 4.12357 6.51651C4.32108 6.80799 4.4265 7.15067 4.4265 7.50123C4.4265 7.97131 4.23712 8.42213 3.90002 8.75453C3.56292 9.08692 3.10571 9.27366 2.62898 9.27366ZM10.3722 14.1819C10.0166 14.1819 9.6691 14.078 9.3735 13.8832C9.0779 13.6885 8.84751 13.4117 8.71146 13.0878C8.57541 12.7639 8.53981 12.4075 8.60917 12.0637C8.67853 11.7199 8.84972 11.4041 9.10111 11.1562C9.3525 10.9083 9.67279 10.7395 10.0215 10.6711C10.3702 10.6027 10.7316 10.6378 11.06 10.772C11.3885 10.9061 11.6692 11.1333 11.8667 11.4248C12.0643 11.7163 12.1697 12.059 12.1697 12.4095C12.1697 12.6423 12.1232 12.8728 12.0328 13.0878C11.9425 13.3028 11.8101 13.4982 11.6432 13.6628C11.4763 13.8274 11.2781 13.958 11.06 14.047C10.8419 14.1361 10.6082 14.1819 10.3722 14.1819Z" fill="#0E1116"/>
+</svg>
+''';
 
 class WorkoutCompletePage extends StatefulWidget {
   final String workoutNome;
@@ -20,15 +34,10 @@ class WorkoutCompletePage extends StatefulWidget {
   final int pontosGerados;
   final int totalPontos;
   final String? noPointsReason;
-
-  /// Motivational progress message from the backend, e.g. "+2kg no Supino".
   final String? progressMessage;
-
-  /// PR achievement messages from this session, e.g. "🔥 Novo recorde de carga".
   final List<String> prMessages;
-
-  /// Total workout volume (sum of weight × reps) in kg.
   final int workoutVolume;
+  final List<String> exerciseNames;
 
   const WorkoutCompletePage({
     super.key,
@@ -43,41 +52,24 @@ class WorkoutCompletePage extends StatefulWidget {
     this.progressMessage,
     this.prMessages = const [],
     this.workoutVolume = 0,
+    this.exerciseNames = const [],
   });
 
   @override
   State<WorkoutCompletePage> createState() => _WorkoutCompletePageState();
 }
 
-class _WorkoutCompletePageState extends State<WorkoutCompletePage>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _scaleAnim;
-  late final Animation<double> _fadeAnim;
-
+class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
   final GlobalKey _repaintKey = GlobalKey();
   String _userName = '';
-  String _gymName  = '';
+  String _gymName = '';
   bool _shareLoading = false;
+
+  bool get _hasPoints => widget.noPointsReason == null && widget.pontosGerados > 0;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    );
-    _scaleAnim = Tween<double>(begin: 0.3, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
-    );
-    _fadeAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 0.55, curve: Curves.easeIn),
-      ),
-    );
-    _controller.forward();
-
     _loadCachedUserData();
   }
 
@@ -86,28 +78,26 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage>
     if (!mounted) return;
     setState(() {
       _userName = prefs.getString('user_name') ?? '';
-      _gymName  = prefs.getString('gym_name')  ?? '';
+      _gymName = prefs.getString('gym_name') ?? '';
     });
   }
 
   Future<void> _shareCard() async {
     setState(() => _shareLoading = true);
     try {
-      final boundary = _repaintKey.currentContext?.findRenderObject()
-          as RenderRepaintBoundary?;
+      final boundary =
+          _repaintKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
       if (boundary == null || !mounted) return;
       final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
       final ByteData? byteData =
           await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null || !mounted) return;
       final Uint8List imageBytes = byteData.buffer.asUint8List();
-
-      final tempDir = Directory.systemTemp;
-      final file =
-          await File('${tempDir.path}/gymup_workout.png').writeAsBytes(imageBytes);
+      final file = await File('${Directory.systemTemp.path}/gymup_workout.png')
+          .writeAsBytes(imageBytes);
       await Share.shareXFiles(
         [XFile(file.path)],
-        text: 'Treino concluído no GymUp! 💪',
+        text: 'Treino concluido no GymUp!',
       );
     } finally {
       if (mounted) setState(() => _shareLoading = false);
@@ -122,12 +112,12 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage>
       builder: (ctx) => _ShareBottomSheet(
         repaintKey: _repaintKey,
         shareCard: WorkoutShareCard(
-          userName:        _userName,
-          gymName:         _gymName,
-          pontosGerados:   widget.pontosGerados,
-          streak:          widget.streak,
-          duracaoMinutos:  widget.duracaoMinutos,
-          setsConcluidos:  widget.setsConcluidos,
+          userName: _userName,
+          gymName: _gymName,
+          pontosGerados: widget.pontosGerados,
+          streak: widget.streak,
+          duracaoMinutos: widget.duracaoMinutos,
+          setsConcluidos: widget.setsConcluidos,
         ),
         onShare: _shareCard,
         isLoading: _shareLoading,
@@ -135,429 +125,978 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage>
     );
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  void _goHome() {
+    Navigator.pushNamedAndRemoveUntil(context, '/home', (_) => false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool hasPoints = widget.noPointsReason == null;
-
+    final bottomInset = MediaQuery.of(context).padding.bottom;
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: hasPoints
-                ? const [Color(0xFF1E3A8A), _kBlueDark, _kBlue]
-                : const [Color(0xFF1E293B), Color(0xFF334155)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Spacer(flex: 2),
-
-                // Trophy — only when validated
-                if (hasPoints) ...[
-                  ScaleTransition(
-                    scale: _scaleAnim,
-                    child: FadeTransition(
-                      opacity: _fadeAnim,
-                      child: const Icon(
-                        Icons.emoji_events_rounded,
-                        size: 108,
-                        color: Color(0xFFFFD700),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                ],
-
-                // Title + subtitle
-                FadeTransition(
-                  opacity: _fadeAnim,
-                  child: Column(
+      backgroundColor: const Color(0xFFF3F5F9),
+      body: SafeArea(
+        bottom: false,
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(20, 8, 20, 128 + bottomInset),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _header(),
+                  const SizedBox(height: 18),
+                  _heroCard(),
+                  const SizedBox(height: 16),
+                  Row(
                     children: [
-                      Text(
-                        hasPoints ? 'Treino validado!' : 'Treino não validado',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        widget.workoutNome,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.75),
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      Expanded(child: _pointsCard()),
+                      const SizedBox(width: 12),
+                      Expanded(child: _streakCard()),
                     ],
                   ),
-                ),
-
-                const SizedBox(height: 36),
-
-                // Stats card
-                FadeTransition(
-                  opacity: _fadeAnim,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 22),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _statBlock(
-                          icon: Icons.timer_outlined,
-                          value: '${widget.duracaoMinutos}min',
-                          label: 'Duração',
-                        ),
-                        _vDivider(),
-                        _statBlock(
-                          icon: Icons.fitness_center_rounded,
-                          value: '${widget.setsConcluidos}/${widget.setsTotais}',
-                          label: 'Sets',
-                        ),
-                        _vDivider(),
-                        _statBlock(
-                          icon: Icons.local_fire_department_rounded,
-                          value: '${widget.streak}',
-                          label: 'Streak 🔥',
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 14),
-
-                // Workout volume
-                if (widget.workoutVolume > 0)
-                  FadeTransition(
-                    opacity: _fadeAnim,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.25)),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.fitness_center_rounded,
-                              color: Colors.white70, size: 18),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Volume total: ${widget.workoutVolume} kg',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                // PR messages
-                if (widget.prMessages.isNotEmpty)
-                  FadeTransition(
-                    opacity: _fadeAnim,
-                    child: Column(
-                      children: widget.prMessages.map((msg) {
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 18, vertical: 12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFD700)
-                                  .withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: const Color(0xFFFFD700)
-                                    .withValues(alpha: 0.40),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.emoji_events_rounded,
-                                    color: Color(0xFFFFD700), size: 20),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    msg,
-                                    style: const TextStyle(
-                                      color: Color(0xFFFFD700),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-
-                const SizedBox(height: 6),
-
-                // Progress message (personal record / improvement)
-                if (widget.progressMessage != null)
-                  FadeTransition(
-                    opacity: _fadeAnim,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: const Color(0xFF10B981).withValues(alpha: 0.40),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.trending_up_rounded,
-                            color: Color(0xFF10B981),
-                            size: 20,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              widget.progressMessage!,
-                              style: const TextStyle(
-                                color: Color(0xFF10B981),
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                const SizedBox(height: 6),
-
-                // No-points reason
-                if (widget.pontosGerados == 0 && widget.noPointsReason != null)
-                  FadeTransition(
-                    opacity: _fadeAnim,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.25)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.info_outline_rounded,
-                              color: Colors.white.withValues(alpha: 0.75),
-                              size: 20),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              widget.noPointsReason!,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.75),
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                const SizedBox(height: 8),
-
-                // Points earned
-                if (widget.pontosGerados > 0)
-                  FadeTransition(
-                    opacity: _fadeAnim,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 28, vertical: 16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFD700).withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: const Color(0xFFFFD700).withValues(alpha: 0.45),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.star_rounded,
-                              color: Color(0xFFFFD700), size: 30),
-                          const SizedBox(width: 10),
-                          Text(
-                            '+${widget.pontosGerados} pontos',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                // Total points — only shown when this session actually earned points
-                if (widget.pontosGerados > 0 && widget.totalPontos > 0)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: FadeTransition(
-                      opacity: _fadeAnim,
-                      child: Text(
-                        'Total: ${widget.totalPontos} pontos',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.7),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                const Spacer(flex: 3),
-
-                // Share button — only when points were earned
-                if (widget.pontosGerados > 0)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: _kBlue,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          elevation: 0,
-                        ),
-                        onPressed: _showShareBottomSheet,
-                        icon: const Icon(Icons.share_rounded, size: 20),
-                        label: const Text(
-                          'Compartilhar treino',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                // CTA
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: _kBlue,
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      elevation: 0,
-                    ),
-                    onPressed: () {
-                      Navigator.pushNamedAndRemoveUntil(
-                          context, '/home', (_) => false);
-                    },
-                    child: const Text(
-                      'Voltar ao início',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-              ],
+                  const SizedBox(height: 14),
+                  _weeklyGoalCard(),
+                  const SizedBox(height: 18),
+                  _sectionTitle('Resumo do treino'),
+                  const SizedBox(height: 12),
+                  _summaryCard(),
+                  const SizedBox(height: 18),
+                  _sectionTitle('Exercicios realizados'),
+                  const SizedBox(height: 12),
+                  _exerciseListCard(),
+                  if (widget.progressMessage != null ||
+                      widget.prMessages.isNotEmpty ||
+                      widget.noPointsReason != null) ...[
+                    const SizedBox(height: 18),
+                    _messagesCard(),
+                  ],
+                ],
+              ),
             ),
-          ),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: _bottomDock(bottomInset),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _statBlock({
-    required IconData icon,
-    required String value,
-    required String label,
-  }) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+  Widget _header() {
+    return Row(
       children: [
-        Icon(icon, color: Colors.white, size: 22),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.w900,
+        _circleButton(
+          icon: Icons.close_rounded,
+          onTap: _goHome,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Treino finalizado',
+                style: _pjs(
+                  size: 17,
+                  weight: FontWeight.w700,
+                  color: const Color(0xFF0E1116),
+                  height: 1.05,
+                  letterSpacing: -0.4,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                widget.workoutNome,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _pjs(
+                  size: 12.5,
+                  weight: FontWeight.w500,
+                  color: const Color(0xFF5B6472),
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.65),
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
+        const SizedBox(width: 12),
+        _circleButton(
+          icon: Icons.share_rounded,
+          onTap: _showShareBottomSheet,
         ),
       ],
     );
   }
 
-  Widget _vDivider() => Container(
-        width: 1,
-        height: 52,
-        color: Colors.white.withValues(alpha: 0.25),
-      );
-}
+  Widget _heroCard() {
+    return Container(
+      width: double.infinity,
+      height: 236,
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment(0.08, -0.12),
+          end: Alignment(0.92, 1.12),
+          colors: [Color(0xFF2F6FED), Color(0xFF4A8CFF), Color(0xFF5E98FF)],
+        ),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: _kBlue.withValues(alpha: 0.28),
+            blurRadius: 40,
+            offset: const Offset(0, 20),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -84,
+            top: -80,
+            child: Container(
+              width: 220,
+              height: 220,
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  colors: [
+                    _kLime.withValues(alpha: 0.42),
+                    _kLime.withValues(alpha: 0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 66,
+                  height: 66,
+                  padding: const EdgeInsets.all(9),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
+                  ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: _kLime,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.check_rounded,
+                      color: _kBlueDark,
+                      size: 30,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Treino concluido!',
+                  textAlign: TextAlign.center,
+                  style: _pjs(
+                    size: 24,
+                    weight: FontWeight.w800,
+                    color: Colors.white,
+                    height: 1.05,
+                    letterSpacing: -0.7,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _hasPoints
+                      ? 'Voce completou o treino de hoje com\nsucesso.'
+                      : 'Seu treino foi salvo com sucesso.',
+                  textAlign: TextAlign.center,
+                  style: _pjs(
+                    size: 13.5,
+                    weight: FontWeight.w500,
+                    color: Colors.white,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _darkBadge(_hasPoints ? 'TREINO VALIDO' : 'TREINO SALVO'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-// ─────────────────────────────────────────────────────────────────────────────
+  Widget _pointsCard() {
+    return _metricBigCard(
+      label: 'PONTOS GANHOS',
+      icon: Icons.workspace_premium_rounded,
+      iconBg: const Color(0xFFEDFBD3),
+      valuePrefix: widget.pontosGerados > 0 ? '+' : '',
+      value: '${widget.pontosGerados}',
+      suffix: 'pts',
+      footer: widget.totalPontos > 0 ? 'Saldo: ${widget.totalPontos} pts' : null,
+      accent: _kGreen,
+    );
+  }
+
+  Widget _streakCard() {
+    return _metricBigCard(
+      label: 'STREAK',
+      icon: Icons.local_fire_department_rounded,
+      iconBg: Colors.white,
+      value: '${widget.streak}',
+      suffix: 'dias',
+      footer: widget.streak > 0 ? 'Sequencia mantida' : 'Comece sua sequencia',
+      accent: const Color(0xFFB85A00),
+      warm: true,
+    );
+  }
+
+  Widget _metricBigCard({
+    required String label,
+    required IconData icon,
+    required Color iconBg,
+    String valuePrefix = '',
+    required String value,
+    required String suffix,
+    required String? footer,
+    required Color accent,
+    bool warm = false,
+  }) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 142),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: warm ? null : Colors.white,
+        gradient: warm
+            ? const LinearGradient(
+                begin: Alignment(0.30, -0.13),
+                end: Alignment(0.70, 1.13),
+                colors: [Color(0xFFFFF4E5), Color(0xFFFFEDDC)],
+              )
+            : null,
+        borderRadius: BorderRadius.circular(20),
+        border: warm ? Border.all(color: const Color(0x2DFF7A1A)) : null,
+        boxShadow: _softShadow(),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(icon, color: accent, size: 16),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: _pjs(
+                  size: 10.5,
+                  weight: FontWeight.w800,
+                  color: warm ? accent : const Color(0xFF5B6472),
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              if (valuePrefix.isNotEmpty)
+                Text(
+                  valuePrefix,
+                  style: _sg(
+                    size: 13,
+                    weight: FontWeight.w700,
+                    color: accent,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              Text(
+                value,
+                style: _sg(
+                  size: 42,
+                  weight: FontWeight.w700,
+                  color: const Color(0xFF0E1116),
+                  height: 0.95,
+                  letterSpacing: -1.6,
+                ),
+              ),
+              const SizedBox(width: 5),
+              Text(
+                suffix,
+                style: _sg(
+                  size: 13,
+                  weight: FontWeight.w700,
+                  color: warm ? accent : const Color(0xFF5B6472),
+                  letterSpacing: -0.1,
+                ),
+              ),
+            ],
+          ),
+          if (footer != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              footer,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _pjs(
+                size: 11.5,
+                weight: FontWeight.w600,
+                color: warm ? const Color(0xFF7A4500) : const Color(0xFF5B6472),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _weeklyGoalCard() {
+    const done = 3;
+    const total = 4;
+    const progress = done / total;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: _whiteDecoration(radius: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 185),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'META SEMANAL',
+                      style: _pjs(
+                        size: 10.5,
+                        weight: FontWeight.w800,
+                        color: const Color(0xFF9AA3B0),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '$done',
+                            style: _sg(
+                              size: 16,
+                              weight: FontWeight.w700,
+                              color: const Color(0xFF0E1116),
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          TextSpan(
+                            text: ' de $total treinos concluidos',
+                            style: _pjs(
+                              size: 16,
+                              weight: FontWeight.w700,
+                              color: const Color(0xFF0E1116),
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEDFBD3),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: Text(
+                  '${(progress * 100).round()}%',
+                  style: _sg(
+                    size: 12,
+                    weight: FontWeight.w700,
+                    color: _kGreen,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            height: 10,
+            padding: const EdgeInsets.only(top: 2),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(100),
+              child: Stack(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: const Color(0x110E1116),
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                  ),
+                  FractionallySizedBox(
+                    widthFactor: progress,
+                    child: Container(
+                      height: 8,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                          colors: [Color(0xFF5BA300), Color(0xFFA6E000)],
+                        ),
+                        borderRadius: BorderRadius.circular(100),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFA6E000).withValues(alpha: 0.4),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(text: 'Falta ', style: _muted12()),
+                TextSpan(
+                  text: '${total - done} treino',
+                  style: _pjs(
+                    size: 12,
+                    weight: FontWeight.w800,
+                    color: const Color(0xFF0E1116),
+                  ),
+                ),
+                TextSpan(
+                  text: ' para completar sua meta da semana.',
+                  style: _muted12(),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryCard() {
+    final totalExercises = widget.exerciseNames.isNotEmpty
+        ? widget.exerciseNames.length
+        : widget.setsTotais;
+    final exercisesDone = widget.setsConcluidos.clamp(0, totalExercises);
+    final totalSets = widget.exerciseNames.isNotEmpty
+        ? widget.exerciseNames.length * 3
+        : widget.setsConcluidos * 3;
+    return Container(
+      width: double.infinity,
+      height: 182,
+      padding: const EdgeInsets.all(4),
+      decoration: _whiteDecoration(radius: 20),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(
+                  child: _summaryTile(
+                    icon: Icons.timer_outlined,
+                    iconBg: const Color(0xFFE7EEFE),
+                    iconColor: _kBlue,
+                    label: 'DURA\u00C7\u00C3O',
+                    value: '${widget.duracaoMinutos}',
+                    suffix: 'min',
+                    border: const Border(
+                      right: BorderSide(color: Color(0x0F0E1116)),
+                      bottom: BorderSide(color: Color(0x0F0E1116)),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: _summaryTile(
+                    icon: Icons.format_list_bulleted_rounded,
+                    iconBg: const Color(0xFFEDFBD3),
+                    iconColor: _kGreen,
+                    label: 'EXERC\u00CDCIOS',
+                    value: '$exercisesDone/$totalExercises',
+                    border: const Border(
+                      bottom: BorderSide(color: Color(0x0F0E1116)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(
+                  child: _summaryTile(
+                    icon: Icons.bar_chart_rounded,
+                    iconBg: const Color(0xFFFFEDDC),
+                    iconColor: const Color(0xFFFF7A1A),
+                    label: 'S\u00C9RIES',
+                    value: '$totalSets',
+                    border: const Border(
+                      right: BorderSide(color: Color(0x0F0E1116)),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: _summaryTile(
+                    icon: Icons.show_chart_rounded,
+                    iconBg: const Color(0xFFECECFA),
+                    iconColor: const Color(0xFF4A5FEA),
+                    label: 'VOLUME TOTAL',
+                    value: '${widget.workoutVolume}',
+                    suffix: 'kg',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryTile({
+    required IconData icon,
+    required Color iconBg,
+    required Color iconColor,
+    required String label,
+    required String value,
+    String? suffix,
+    Border? border,
+  }) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 12, 12),
+      decoration: BoxDecoration(border: border),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: iconBg,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: iconColor, size: 20),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _eyebrow(label),
+                const SizedBox(height: 1),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      value,
+                      style: _sg(
+                        size: 18,
+                        weight: FontWeight.w700,
+                        color: const Color(0xFF0E1116),
+                        letterSpacing: -0.4,
+                      ),
+                    ),
+                    if (suffix != null) ...[
+                      const SizedBox(width: 3),
+                      Text(
+                        suffix,
+                        style: _sg(
+                          size: 11,
+                          weight: FontWeight.w700,
+                          color: const Color(0xFF9AA3B0),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _exerciseListCard() {
+    final names = widget.exerciseNames.isNotEmpty
+        ? widget.exerciseNames
+        : List<String>.generate(
+            widget.setsTotais,
+            (i) => i == 0 ? widget.workoutNome : 'Exercicio ${i + 1}',
+          );
+    return Container(
+      width: double.infinity,
+      decoration: _whiteDecoration(radius: 20),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < names.length; i++)
+            _exerciseRow(
+              names[i],
+              seriesLabel: '3 series',
+              isLast: i == names.length - 1,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _exerciseRow(String name, {required String seriesLabel, required bool isLast}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        border: isLast ? null : const Border(bottom: BorderSide(color: Color(0x0C0E1116))),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: const Color(0xFFEDFBD3),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: const Icon(Icons.check_rounded, color: _kGreen, size: 16),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _pjs(
+                size: 14,
+                weight: FontWeight.w700,
+                color: const Color(0xFF0E1116),
+                letterSpacing: -0.2,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            seriesLabel,
+            style: _sg(
+              size: 11.5,
+              weight: FontWeight.w700,
+              color: const Color(0xFF5B6472),
+              letterSpacing: -0.1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _messagesCard() {
+    final messages = <String>[
+      ...widget.prMessages,
+      if (widget.progressMessage != null) widget.progressMessage!,
+      if (widget.noPointsReason != null) widget.noPointsReason!,
+    ];
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: _whiteDecoration(radius: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final msg in messages)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline_rounded, size: 16, color: _kBlue),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      msg,
+                      style: _pjs(
+                        size: 12.5,
+                        weight: FontWeight.w600,
+                        color: const Color(0xFF5B6472),
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _bottomDock(double bottomInset) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(20, 21, 20, 26 + bottomInset),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF3F5F9),
+        border: Border(top: BorderSide(color: Color(0x0F0E1116))),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x0F0F172A),
+            blurRadius: 24,
+            offset: Offset(0, -8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: _goHome,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment(0.18, -0.69),
+                    end: Alignment(0.82, 1.69),
+                    colors: [_kBlueDark, _kBlue, Color(0xFF4A8CFF)],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _kBlue.withValues(alpha: 0.36),
+                      blurRadius: 30,
+                      offset: const Offset(0, 16),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SvgPicture.string(
+                      _homeButtonSvg,
+                      width: 20,
+                      height: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Voltar para o inicio',
+                      style: _pjs(
+                        size: 14.5,
+                        weight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: GestureDetector(
+              onTap: _showShareBottomSheet,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0x190E1116)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SvgPicture.string(
+                      _shareButtonSvg,
+                      width: 16,
+                      height: 18,
+                    ),
+                    const SizedBox(width: 7),
+                    Text(
+                      'Compartilhar',
+                      style: _pjs(
+                        size: 14,
+                        weight: FontWeight.w700,
+                        color: const Color(0xFF0E1116),
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _circleButton({required IconData icon, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: _softShadow(),
+        ),
+        child: Icon(icon, color: const Color(0xFF0E1116), size: 19),
+      ),
+    );
+  }
+
+  Widget _darkBadge(String label) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 5, 10, 5),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.22),
+        borderRadius: BorderRadius.circular(100),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 16,
+            height: 16,
+            decoration: const BoxDecoration(
+              color: _kLime,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.check_rounded, color: _kBlueDark, size: 11),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: _pjs(
+              size: 11,
+              weight: FontWeight.w800,
+              color: Colors.white,
+              letterSpacing: 0.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String text) {
+    return Text(
+      text,
+      style: _pjs(
+        size: 16,
+        weight: FontWeight.w700,
+        color: const Color(0xFF0E1116),
+        letterSpacing: -0.3,
+      ),
+    );
+  }
+
+  Widget _eyebrow(String text) {
+    return Text(
+      text,
+      style: _pjs(
+        size: 9.5,
+        weight: FontWeight.w800,
+        color: const Color(0xFF9AA3B0),
+        letterSpacing: 0.4,
+      ),
+    );
+  }
+
+  TextStyle _muted12() {
+    return _pjs(
+      size: 12,
+      weight: FontWeight.w500,
+      color: const Color(0xFF5B6472),
+    );
+  }
+
+  BoxDecoration _whiteDecoration({required double radius}) {
+    return BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(radius),
+      boxShadow: _softShadow(),
+    );
+  }
+
+  List<BoxShadow> _softShadow() {
+    return [
+      BoxShadow(
+        color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+        blurRadius: 6,
+        offset: const Offset(0, 2),
+      ),
+      BoxShadow(
+        color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+        blurRadius: 24,
+        offset: const Offset(0, 8),
+      ),
+    ];
+  }
+
+  TextStyle _pjs({
+    required double size,
+    required FontWeight weight,
+    required Color color,
+    double? height,
+    double? letterSpacing,
+  }) {
+    return TextStyle(
+      fontFamily: 'Plus Jakarta Sans',
+      fontSize: size,
+      fontWeight: weight,
+      color: color,
+      height: height,
+      letterSpacing: letterSpacing,
+    );
+  }
+
+  TextStyle _sg({
+    required double size,
+    required FontWeight weight,
+    required Color color,
+    double? height,
+    double? letterSpacing,
+  }) {
+    return TextStyle(
+      fontFamily: 'Space Grotesk',
+      fontSize: size,
+      fontWeight: weight,
+      color: color,
+      height: height,
+      letterSpacing: letterSpacing,
+    );
+  }
+}
 
 class _ShareBottomSheet extends StatefulWidget {
   final GlobalKey repaintKey;
@@ -594,95 +1133,69 @@ class _ShareBottomSheetState extends State<_ShareBottomSheet> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Drag handle
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.20),
-              borderRadius: BorderRadius.circular(2),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.20),
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
-
-          const Text(
-            'Compartilhar treino',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
+            const SizedBox(height: 20),
+            const Text(
+              'Compartilhar treino',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontFamily: 'Plus Jakarta Sans',
+                fontWeight: FontWeight.w800,
+              ),
             ),
-          ),
-
-          const SizedBox(height: 20),
-
-          // Card preview wrapped for capture
-          RepaintBoundary(
-            key: widget.repaintKey,
-            child: widget.shareCard,
-          ),
-
-          const SizedBox(height: 24),
-
-          // Actions
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white60,
-                    side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+            const SizedBox(height: 20),
+            RepaintBoundary(
+              key: widget.repaintKey,
+              child: widget.shareCard,
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _kBlue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text(
-                    'Agora não',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                onPressed: _sharing || widget.isLoading ? null : _handleShare,
+                icon: _sharing || widget.isLoading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.share_rounded, size: 20),
+                label: Text(
+                  _sharing || widget.isLoading ? 'Gerando imagem...' : 'Compartilhar',
+                  style: const TextStyle(
+                    fontFamily: 'Plus Jakarta Sans',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _kBlue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    elevation: 0,
-                  ),
-                  onPressed: _sharing ? null : _handleShare,
-                  icon: _sharing
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Icon(Icons.share_rounded, size: 18),
-                  label: Text(
-                    _sharing ? 'Preparando...' : 'Compartilhar',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }

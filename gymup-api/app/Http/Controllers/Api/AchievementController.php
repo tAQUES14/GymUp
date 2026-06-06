@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Achievement;
-use App\Models\WorkoutHistory;
+use App\Models\WorkoutSession;
 use Illuminate\Http\Request;
 
 class AchievementController extends Controller
@@ -13,27 +13,38 @@ class AchievementController extends Controller
     {
         $user = $request->user();
 
-        $workoutsTotal = WorkoutHistory::where('user_id', $user->id)->count();
-        $streakDays    = (int) ($user->weekly_streak ?? 0);
+        $workoutsTotal = WorkoutSession::where('user_id', $user->id)
+            ->where('points_granted', true)
+            ->count();
+        $streakDays    = (int) ($user->current_streak ?? $user->weekly_streak ?? 0);
 
-        $achievements = Achievement::all()->map(function (Achievement $achievement) use ($workoutsTotal, $streakDays) {
-            $progress = match ($achievement->metric) {
-                'workouts_total' => $workoutsTotal,
-                'streak_days'    => $streakDays,
-                default          => 0,
-            };
+        $achievements = Achievement::orderBy('metric')
+            ->orderBy('target_value')
+            ->get()
+            ->map(function (Achievement $achievement) use ($workoutsTotal, $streakDays) {
+                $progress = match ($achievement->metric) {
+                    'workouts_total' => $workoutsTotal,
+                    'streak_days'    => $streakDays,
+                    default          => 0,
+                };
 
-            $progress = min($progress, $achievement->target_value);
+                $progress = min($progress, $achievement->target_value);
 
-            return [
-                'title'        => $achievement->title,
-                'description'  => $achievement->description,
-                'progress'     => $progress,
-                'target'       => $achievement->target_value,
-                'pointsReward' => $achievement->points_reward,
-                'unlocked'     => $progress >= $achievement->target_value,
-            ];
-        });
+                return [
+                    'id'            => $achievement->id,
+                    'code'          => $achievement->code,
+                    'title'         => $achievement->title,
+                    'description'   => $achievement->description,
+                    'metric'        => $achievement->metric,
+                    'icon'          => $achievement->icon,
+                    'progress'      => $progress,
+                    'target'        => $achievement->target_value,
+                    'target_value'  => $achievement->target_value,
+                    'pointsReward'  => $achievement->points_reward,
+                    'points_reward' => $achievement->points_reward,
+                    'unlocked'      => $progress >= $achievement->target_value,
+                ];
+            });
 
         return response()->json($achievements);
     }

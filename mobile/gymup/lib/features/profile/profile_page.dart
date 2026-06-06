@@ -1,56 +1,59 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/api_service.dart';
-import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_typography.dart';
 import '../../core/widgets/gymup_loading.dart';
 import '../auth/auth_service.dart';
-import '../goals/goal_api_service.dart';
 import '../goals/create_goal_page.dart';
+import '../goals/goal_api_service.dart';
 
-const _kBlue     = Color(0xFF2563EB);
-const _kBlueDark = Color(0xFF1D4ED8);
-const _kGreen    = Color(0xFF10B981);
-const _kAmber    = Color(0xFFF59E0B);
+const _kBg = Color(0xFFF3F5F9);
+const _kInk = Color(0xFF0E1116);
+const _kMuted = Color(0xFF5B6472);
+const _kSoft = Color(0xFF9AA3B0);
+const _kBlue = Color(0xFF2F6FED);
+const _kBlue2 = Color(0xFF4A8CFF);
+const _kBlueSoft = Color(0xFFE7EEFE);
+const _kLimeSoft = Color(0xFFEDFBD3);
+const _kGreen = Color(0xFF5BA300);
+const _kAmberSoft = Color(0xFFFFEDDC);
+const _kAmber = Color(0xFFFF8A1F);
+const _kRed = Color(0xFFD14343);
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
+
   @override
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  bool _isEditing = false;
-  bool _isLoading = false;
+  final _api = ApiService();
   final _formKey = GlobalKey<FormState>();
 
-  late TextEditingController _nomeController;
-  late TextEditingController _telefoneController;
-  late TextEditingController _idadeController;
-  late TextEditingController _pesoController;
-  late TextEditingController _alturaController;
-  late TextEditingController _academiaController;
+  late final TextEditingController _nomeController;
+  late final TextEditingController _pesoController;
+  late final TextEditingController _alturaController;
+  late final TextEditingController _academiaController;
 
+  late Future<void> _profileFuture;
   Map<String, dynamic>? _userData;
-  GoalData?             _goalData;
-  double?               _currentWeight;
-  late Future<void>     _profileFuture;
-
-  final _api = ApiService();
+  GoalData? _goalData;
+  bool _isEditing = false;
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    _nomeController     = TextEditingController();
-    _telefoneController = TextEditingController();
-    _idadeController    = TextEditingController();
-    _pesoController     = TextEditingController();
-    _alturaController   = TextEditingController();
+    _nomeController = TextEditingController();
+    _pesoController = TextEditingController();
+    _alturaController = TextEditingController();
     _academiaController = TextEditingController();
     _profileFuture = _loadProfile();
   }
@@ -58,8 +61,6 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void dispose() {
     _nomeController.dispose();
-    _telefoneController.dispose();
-    _idadeController.dispose();
     _pesoController.dispose();
     _alturaController.dispose();
     _academiaController.dispose();
@@ -77,129 +78,86 @@ class _ProfilePageState extends State<ProfilePage> {
     ]);
 
     final response = results[0];
-    developer.log(
-      'ProfilePage response: status=${response.statusCode} body=${response.body}',
-      name: 'ProfilePage',
-    );
-
     if (response.statusCode != 200) {
       throw Exception('HTTP ${response.statusCode}: ${response.body}');
     }
 
-    final data          = jsonDecode(response.body) as Map<String, dynamic>;
-    final gym           = data['gym'] as Map<String, dynamic>?;
-    final goal          = results[1] as GoalData?;
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final gym = data['gym'] as Map<String, dynamic>?;
+    final goal = results[1] as GoalData?;
     final weightHistory = results[2] as List<BodyWeightLog>;
 
-    final logWeight     = weightHistory.isNotEmpty ? weightHistory.first.weight : null;
-    final profileWeight = data['weight'] != null
-        ? double.tryParse(data['weight'].toString())
-        : null;
+    final logWeight = weightHistory.isNotEmpty ? weightHistory.first.weight : null;
+    final profileWeight = data['weight'] != null ? double.tryParse(data['weight'].toString()) : null;
     final resolvedWeight = logWeight ?? profileWeight ?? goal?.startWeight;
-
-    final profileHeight = data['height'] != null
-        ? double.tryParse(data['height'].toString())
-        : null;
+    final profileHeight = data['height'] != null ? double.tryParse(data['height'].toString()) : null;
     final resolvedHeight = profileHeight ?? goal?.height;
-
     final gymName = gym?['name'] as String?;
+
     if (gymName != null) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('gym_name', gymName);
     }
 
+    if (!mounted) return;
     setState(() {
-      _userData                = data;
-      _goalData                = goal;
-      _currentWeight           = resolvedWeight;
-      _nomeController.text     = data['name'] ?? '';
-      _telefoneController.text = data['phone'] ?? '';
-      _idadeController.text    = '';
-      _pesoController.text     =
-          resolvedWeight != null ? resolvedWeight.toStringAsFixed(1) : '';
-      _alturaController.text   =
-          resolvedHeight != null ? resolvedHeight.toStringAsFixed(0) : '';
-      _academiaController.text = gym?['name'] ?? '';
+      _userData = data;
+      _goalData = goal;
+      _nomeController.text = data['name'] as String? ?? '';
+      _pesoController.text = resolvedWeight != null ? resolvedWeight.toStringAsFixed(1) : '';
+      _alturaController.text = resolvedHeight != null ? resolvedHeight.toStringAsFixed(0) : '';
+      _academiaController.text = gymName ?? '';
     });
   }
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
+    setState(() => _isSaving = true);
+
     try {
       final response = await _api.put('/profile', {
-        'name':   _nomeController.text.trim(),
+        'name': _nomeController.text.trim(),
         'weight': double.tryParse(_pesoController.text.trim()),
         'height': double.tryParse(_alturaController.text.trim()),
       });
-
-      developer.log(
-        'SaveProfile response: status=${response.statusCode} body=${response.body}',
-        name: 'ProfilePage',
-      );
 
       if (response.statusCode != 200) {
         throw Exception('HTTP ${response.statusCode}: ${response.body}');
       }
 
-      setState(() => _isEditing = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Perfil atualizado com sucesso!'),
-            backgroundColor: _kGreen,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          ),
-        );
-      }
+      if (!mounted) return;
+      setState(() {
+        _isEditing = false;
+        _profileFuture = _loadProfile();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Perfil atualizado com sucesso!'),
+          backgroundColor: _kGreen,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
     } catch (e) {
       developer.log('SaveProfile error: $e', name: 'ProfilePage');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao salvar: $e'),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          ),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao salvar: $e'),
+          backgroundColor: _kRed,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: _kBlue,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        titleSpacing: 20,
-        title: Text(
-          'Meu Perfil',
-          style: AppTypography.h3.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.3,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(
-              _isEditing ? Icons.close_rounded : Icons.edit_rounded,
-              color: Colors.white,
-            ),
-            onPressed: () => setState(() => _isEditing = !_isEditing),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
+      backgroundColor: _kBg,
       body: FutureBuilder<void>(
         future: _profileFuture,
         builder: (context, snapshot) {
@@ -208,100 +166,98 @@ class _ProfilePageState extends State<ProfilePage> {
           }
 
           if (snapshot.hasError) {
-            final err = snapshot.error.toString();
-            developer.log('ProfilePage FutureBuilder error: $err', name: 'ProfilePage');
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 64, height: 64,
-                      decoration: BoxDecoration(
-                        color: AppColors.error.withValues(alpha: 0.08),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Icons.wifi_off_rounded,
-                          color: AppColors.error, size: 28),
-                    ),
-                    const SizedBox(height: 16),
-                    Text('Erro ao carregar perfil',
-                        style: AppTypography.h3, textAlign: TextAlign.center),
-                    const SizedBox(height: 8),
-                    Text(err,
-                        style: AppTypography.bodyMedium
-                            .copyWith(color: AppColors.textSecondary),
-                        textAlign: TextAlign.center),
-                    const SizedBox(height: 24),
-                    GestureDetector(
-                      onTap: () => setState(() { _profileFuture = _loadProfile(); }),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 12),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                              colors: [_kBlue, _kBlueDark]),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Text('Tentar novamente',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            return _ProfileError(
+              message: snapshot.error.toString(),
+              onRetry: () => setState(() => _profileFuture = _loadProfile()),
             );
           }
 
           if (_userData == null) {
-            return const Center(child: Text('Dados não disponíveis'));
+            return _ProfileError(
+              message: 'Dados n\u00E3o dispon\u00EDveis.',
+              onRetry: () => setState(() => _profileFuture = _loadProfile()),
+            );
           }
 
-          final pontos        = (_userData!['points_balance'] as num?)?.toInt() ?? 0;
-          final totalCheckins = (_userData!['total_checkins'] as num?)?.toInt() ?? 0;
-          final streak        = (_userData!['current_streak'] as num?)?.toInt() ?? 0;
-          final email         = _userData!['email'] as String? ?? '';
+          final data = _userData!;
+          final points = (data['points_balance'] as num?)?.toInt() ?? 0;
+          final checkins = (data['total_checkins'] as num?)?.toInt() ?? 0;
+          final streak = (data['current_streak'] as num?)?.toInt() ?? 0;
+          final email = data['email'] as String? ?? '';
+          final bottomInset = MediaQuery.of(context).padding.bottom;
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 48),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // ── Avatar + Name hero ─────────────────────────────────
-                  _buildAvatarHero(email),
-                  const SizedBox(height: 20),
-
-                  // ── Stats strip ────────────────────────────────────────
-                  _buildStatsStrip(pontos, totalCheckins, streak),
-                  const SizedBox(height: 24),
-
-                  // ── Dados pessoais card ────────────────────────────────
-                  _buildDadosPessoaisCard(),
-                  const SizedBox(height: 16),
-
-                  // ── Save button (only in edit mode) ────────────────────
-                  if (_isEditing) ...[
-                    _buildGradientButton(
-                      label: 'Salvar Alterações',
-                      loading: _isLoading,
-                      onTap: _saveProfile,
+          return Form(
+            key: _formKey,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(20, 20, 20, 126 + bottomInset),
+              children: [
+                _ProfileHeader(
+                  editing: _isEditing,
+                  onEditToggle: () => setState(() => _isEditing = !_isEditing),
+                ),
+                const SizedBox(height: 16),
+                _ProfileHero(
+                  name: _displayName,
+                  email: email,
+                  gymName: _academiaController.text,
+                  avatarUrl: data['avatar_url'] as String? ?? '',
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _StatCard(
+                        value: _formatNumber(points),
+                        label: 'PONTOS',
+                        icon: Icons.workspace_premium_rounded,
+                        color: _kBlue,
+                        bg: _kBlueSoft,
+                      ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _StatCard(
+                        value: '$checkins',
+                        label: 'CHECK-INS',
+                        icon: Icons.qr_code_scanner_rounded,
+                        color: _kGreen,
+                        bg: _kLimeSoft,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _StatCard(
+                        value: '${streak}d',
+                        label: 'SEQU\u00CANCIA',
+                        icon: Icons.local_fire_department_rounded,
+                        color: _kAmber,
+                        bg: _kAmberSoft,
+                      ),
+                    ),
                   ],
-
-                  // ── Meta section ───────────────────────────────────────
-                  _buildGoalsSection(),
-                  const SizedBox(height: 32),
-
-                  // ── Sign out ───────────────────────────────────────────
-                  _buildSignOutButton(context),
+                ),
+                const SizedBox(height: 22),
+                _ProfileMenuCard(
+                  onEdit: () => setState(() => _isEditing = !_isEditing),
+                  onProgress: _openProgress,
+                  onGoal: _openGoal,
+                  onSettings: _openSettings,
+                ),
+                if (_isEditing) ...[
+                  const SizedBox(height: 16),
+                  _EditProfileCard(
+                    nomeController: _nomeController,
+                    pesoController: _pesoController,
+                    alturaController: _alturaController,
+                    academiaController: _academiaController,
+                  ),
+                  const SizedBox(height: 14),
+                  _SaveButton(loading: _isSaving, onTap: _saveProfile),
                 ],
-              ),
+                const SizedBox(height: 22),
+                _SignOutButton(onTap: _signOut),
+              ],
             ),
           );
         },
@@ -309,496 +265,722 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // ── Avatar Hero ─────────────────────────────────────────────────────────────
+  String get _displayName {
+    final name = _nomeController.text.trim();
+    return name.isNotEmpty ? name : 'Usu\u00E1rio';
+  }
 
-  Widget _buildAvatarHero(String email) {
-    final name    = _nomeController.text;
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : null;
+  Future<void> _openProgress() async {
+    await Navigator.pushNamed(context, '/progress');
+    if (mounted) setState(() => _profileFuture = _loadProfile());
+  }
 
-    return Row(
-      children: [
-        Container(
-          width: 72, height: 72,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [_kBlue, _kBlueDark],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: _kBlue.withValues(alpha: 0.30),
-                blurRadius: 14,
-                offset: const Offset(0, 5),
-              ),
-            ],
-          ),
-          child: Center(
-            child: initial != null
-                ? Text(initial,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 30,
-                        fontWeight: FontWeight.w800))
-                : const Icon(Icons.person_rounded,
-                    color: Colors.white, size: 36),
+  Future<void> _openGoal() async {
+    if (_goalData == null) {
+      final peso = double.tryParse(_pesoController.text);
+      final altura = double.tryParse(_alturaController.text);
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CreateGoalPage(
+            initialWeight: peso,
+            initialHeight: altura,
           ),
         ),
-        const SizedBox(width: 16),
+      );
+    } else {
+      await Navigator.pushNamed(context, '/goals');
+    }
+    if (mounted) setState(() => _profileFuture = _loadProfile());
+  }
+
+  Future<void> _openSettings() async {
+    await Navigator.pushNamed(context, '/settings');
+    if (mounted) setState(() => _profileFuture = _loadProfile());
+  }
+
+  Future<void> _signOut() async {
+    await context.read<AuthService>().signOut();
+    if (mounted) {
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+    }
+  }
+}
+
+class _ProfileHeader extends StatelessWidget {
+  final bool editing;
+  final VoidCallback onEditToggle;
+
+  const _ProfileHeader({
+    required this.editing,
+    required this.onEditToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                name.isNotEmpty ? name : 'Usuário',
-                style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1E293B),
-                    letterSpacing: -0.3),
-              ),
-              const SizedBox(height: 2),
-              Text(email,
-                  style: const TextStyle(
-                      fontSize: 13, color: Color(0xFF94A3B8))),
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                decoration: BoxDecoration(
-                  color: _kGreen.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Text('Membro ativo',
-                    style: TextStyle(
-                        color: _kGreen,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600)),
-              ),
-            ],
+          child: Text(
+            'Perfil',
+            style: _pjs(size: 22, weight: FontWeight.w700, color: _kInk, height: 1, letterSpacing: -0.6),
+          ),
+        ),
+        GestureDetector(
+          onTap: onEditToggle,
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: _shadow(tight: true),
+            ),
+            child: Icon(editing ? Icons.close_rounded : Icons.edit_rounded, color: _kInk, size: 18),
           ),
         ),
       ],
     );
   }
+}
 
-  // ── Stats Strip ─────────────────────────────────────────────────────────────
+class _ProfileHero extends StatelessWidget {
+  final String name;
+  final String email;
+  final String gymName;
+  final String avatarUrl;
 
-  Widget _buildStatsStrip(int pontos, int checkins, int streak) {
-    return Row(
-      children: [
-        Expanded(child: _statCard('$pontos', 'Pontos', Icons.stars_rounded, _kBlue)),
-        const SizedBox(width: 10),
-        Expanded(child: _statCard('$checkins', 'Check-ins', Icons.qr_code_scanner_rounded, const Color(0xFF6366F1))),
-        const SizedBox(width: 10),
-        Expanded(child: _statCard('$streak', 'Sequência', Icons.local_fire_department_rounded, _kAmber)),
-      ],
-    );
-  }
+  const _ProfileHero({
+    required this.name,
+    required this.email,
+    required this.gymName,
+    required this.avatarUrl,
+  });
 
-  Widget _statCard(String value, String label, IconData icon, Color color) {
+  @override
+  Widget build(BuildContext context) {
+    final initial = name.trim().isEmpty ? '?' : name.characters.first.toUpperCase();
+    final hasAvatar = avatarUrl.trim().isNotEmpty;
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
+      padding: const EdgeInsets.fromLTRB(20, 26, 20, 22),
+      clipBehavior: Clip.antiAlias,
+      decoration: _whiteDecoration(26),
+      child: Stack(
+        alignment: Alignment.topCenter,
         children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(height: 8),
-          Text(value,
-              style: TextStyle(
-                  fontSize: 20, fontWeight: FontWeight.w800, color: color)),
-          const SizedBox(height: 2),
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 10, color: Color(0xFF94A3B8)),
-              textAlign: TextAlign.center),
-        ],
-      ),
-    );
-  }
-
-  // ── Dados Pessoais Card ─────────────────────────────────────────────────────
-
-  Widget _buildDadosPessoaisCard() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+          Column(
             children: [
-              Container(
-                width: 32, height: 32,
-                decoration: BoxDecoration(
-                  color: _kBlue.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.person_outline_rounded,
-                    color: _kBlue, size: 16),
+              Align(
+                alignment: Alignment.topLeft,
+                child: _ActiveBadge(),
               ),
-              const SizedBox(width: 10),
-              const Text('Dados Pessoais',
-                  style: TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w700,
-                      color: Color(0xFF1E293B))),
+              const SizedBox(height: 4),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 96,
+                    height: 96,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [_kBlue, _kBlue2],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: _kBlue.withValues(alpha: 0.18),
+                          blurRadius: 18,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    alignment: Alignment.center,
+                    child: hasAvatar
+                        ? Image.network(
+                            avatarUrl.trim(),
+                            fit: BoxFit.cover,
+                            width: 96,
+                            height: 96,
+                            errorBuilder: (_, _, _) => Text(
+                              initial,
+                              style: _pjs(size: 38, weight: FontWeight.w800, color: Colors.white, letterSpacing: -0.8),
+                            ),
+                          )
+                        : Text(
+                            initial,
+                            style: _pjs(size: 38, weight: FontWeight.w800, color: Colors.white, letterSpacing: -0.8),
+                          ),
+                  ),
+                  Positioned(
+                    right: 2,
+                    bottom: 2,
+                    child: Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: _kGreen,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 3),
+                      ),
+                      child: const Icon(Icons.check_rounded, color: Colors.white, size: 14),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Text(
+                name,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _pjs(size: 22, weight: FontWeight.w800, color: _kInk, height: 1.1, letterSpacing: -0.5),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                email,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _pjs(size: 13, weight: FontWeight.w500, color: _kMuted),
+              ),
+              if (gymName.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7F9FC),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.location_on_rounded, color: _kMuted, size: 14),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Academia ',
+                        style: _pjs(size: 12.5, weight: FontWeight.w600, color: _kMuted),
+                      ),
+                      Flexible(
+                        child: Text(
+                          gymName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: _pjs(size: 12.5, weight: FontWeight.w800, color: _kInk),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
-          const SizedBox(height: 20),
-          _buildField(
-            controller: _nomeController,
+        ],
+      ),
+    );
+  }
+}
+
+class _ActiveBadge extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 4, 10, 4),
+      decoration: BoxDecoration(
+        color: _kLimeSoft,
+        borderRadius: BorderRadius.circular(100),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: _kGreen,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: _kGreen.withValues(alpha: 0.70),
+                  blurRadius: 6,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'MEMBRO ATIVO',
+            style: _pjs(size: 10, weight: FontWeight.w800, color: _kGreen, letterSpacing: 0.6),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String value;
+  final String label;
+  final IconData icon;
+  final Color color;
+  final Color bg;
+
+  const _StatCard({
+    required this.value,
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.bg,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+      decoration: _whiteDecoration(18),
+      child: Column(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 16),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            value,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _sg(size: 20, weight: FontWeight.w700, color: _kInk, height: 1, letterSpacing: -0.5),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _pjs(size: 10.5, weight: FontWeight.w700, color: _kMuted, letterSpacing: 0.4),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileMenuCard extends StatelessWidget {
+  final VoidCallback onEdit;
+  final VoidCallback onProgress;
+  final VoidCallback onGoal;
+  final VoidCallback onSettings;
+
+  const _ProfileMenuCard({
+    required this.onEdit,
+    required this.onProgress,
+    required this.onGoal,
+    required this.onSettings,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: _whiteDecoration(20),
+      child: Column(
+        children: [
+          _MenuRow(
+            title: 'Editar perfil',
+            icon: Icons.edit_rounded,
+            bg: _kBlueSoft,
+            color: _kBlue,
+            onTap: onEdit,
+          ),
+          _MenuRow(
+            title: 'Meu progresso',
+            icon: Icons.show_chart_rounded,
+            bg: _kLimeSoft,
+            color: _kGreen,
+            onTap: onProgress,
+          ),
+          _MenuRow(
+            title: 'Minha meta',
+            icon: Icons.flag_rounded,
+            bg: _kBlueSoft,
+            color: _kBlue,
+            onTap: onGoal,
+          ),
+          _MenuRow(
+            title: 'Configura\u00E7\u00F5es',
+            icon: Icons.settings_rounded,
+            bg: const Color(0xFFF1F3F8),
+            color: _kMuted,
+            showDivider: false,
+            onTap: onSettings,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MenuRow extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Color bg;
+  final Color color;
+  final bool showDivider;
+  final VoidCallback onTap;
+
+  const _MenuRow({
+    required this.title,
+    required this.icon,
+    required this.bg,
+    required this.color,
+    required this.onTap,
+    this.showDivider = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          border: showDivider ? const Border(bottom: BorderSide(color: Color(0x0C0E1116))) : null,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(icon, color: color, size: 17),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: _pjs(size: 14.5, weight: FontWeight.w700, color: _kInk, letterSpacing: -0.2),
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: _kSoft, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EditProfileCard extends StatelessWidget {
+  final TextEditingController nomeController;
+  final TextEditingController pesoController;
+  final TextEditingController alturaController;
+  final TextEditingController academiaController;
+
+  const _EditProfileCard({
+    required this.nomeController,
+    required this.pesoController,
+    required this.alturaController,
+    required this.academiaController,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: _whiteDecoration(20),
+      child: Column(
+        children: [
+          _ProfileField(
+            controller: nomeController,
             label: 'Nome completo',
             icon: Icons.badge_outlined,
-            readOnly: !_isEditing,
-            validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null,
+            validator: (value) => value == null || value.trim().isEmpty ? 'Campo obrigat\u00F3rio' : null,
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
-                child: _buildField(
-                  controller: _pesoController,
-                  label: 'Peso (kg)',
+                child: _ProfileField(
+                  controller: pesoController,
+                  label: 'Peso',
                   icon: Icons.monitor_weight_outlined,
-                  readOnly: !_isEditing,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
-                child: _buildField(
-                  controller: _alturaController,
-                  label: 'Altura (cm)',
+                child: _ProfileField(
+                  controller: alturaController,
+                  label: 'Altura',
                   icon: Icons.height_rounded,
-                  readOnly: !_isEditing,
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          _buildField(
-            controller: _academiaController,
+          const SizedBox(height: 12),
+          _ProfileField(
+            controller: academiaController,
             label: 'Academia',
-            icon: Icons.store_outlined,
+            icon: Icons.storefront_rounded,
             readOnly: true,
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    bool readOnly = false,
-    String? Function(String?)? validator,
-    TextInputType? keyboardType,
-    List<TextInputFormatter>? inputFormatters,
-  }) {
+class _ProfileField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final IconData icon;
+  final bool readOnly;
+  final TextInputType? keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
+  final String? Function(String?)? validator;
+
+  const _ProfileField({
+    required this.controller,
+    required this.label,
+    required this.icon,
+    this.readOnly = false,
+    this.keyboardType,
+    this.inputFormatters,
+    this.validator,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return TextFormField(
       controller: controller,
       readOnly: readOnly,
       validator: validator,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
-      style: const TextStyle(fontSize: 14, color: Color(0xFF1E293B)),
+      style: _pjs(size: 14, weight: FontWeight.w600, color: _kInk),
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: Icon(icon, size: 18,
-            color: readOnly ? const Color(0xFFCBD5E1) : const Color(0xFF94A3B8)),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        prefixIcon: Icon(icon, size: 18, color: readOnly ? _kSoft : _kMuted),
+        filled: true,
+        fillColor: readOnly ? const Color(0xFFF7F9FC) : Colors.white,
+        labelStyle: _pjs(size: 13, weight: FontWeight.w600, color: _kSoft),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFE4E8F0)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _kBlue, width: 1.5),
-        ),
-        disabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFF1F5F9)),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: _kBlue, width: 1.4),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppColors.error),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: _kRed),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppColors.error, width: 1.5),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: _kRed, width: 1.4),
         ),
-        filled: true,
-        fillColor: readOnly ? const Color(0xFFF8FAFC) : Colors.white,
-        labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       ),
     );
   }
+}
 
-  // ── Gradient button ─────────────────────────────────────────────────────────
+class _SaveButton extends StatelessWidget {
+  final bool loading;
+  final VoidCallback onTap;
 
-  Widget _buildGradientButton({
-    required String label,
-    required VoidCallback onTap,
-    bool loading = false,
-  }) {
+  const _SaveButton({required this.loading, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
     return GestureDetector(
       onTap: loading ? null : onTap,
       child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 200),
-        opacity: loading ? 0.7 : 1.0,
+        duration: const Duration(milliseconds: 180),
+        opacity: loading ? 0.72 : 1,
         child: Container(
-          height: 52,
+          height: 50,
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [_kBlue, _kBlueDark],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(14),
+            gradient: const LinearGradient(colors: [_kBlue, _kBlue2]),
+            borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
                 color: _kBlue.withValues(alpha: 0.28),
-                blurRadius: 16,
+                blurRadius: 14,
                 offset: const Offset(0, 6),
               ),
             ],
           ),
-          child: Center(
-            child: loading
-                ? const SizedBox(
-                    height: 22, width: 22,
-                    child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2.5))
-                : Text(label,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16)),
-          ),
+          alignment: Alignment.center,
+          child: loading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.4),
+                )
+              : Text(
+                  'Salvar altera\u00E7\u00F5es',
+                  style: _pjs(size: 14, weight: FontWeight.w800, color: Colors.white, letterSpacing: -0.2),
+                ),
         ),
       ),
     );
   }
+}
 
-  // ── Sign Out ────────────────────────────────────────────────────────────────
+class _SignOutButton extends StatelessWidget {
+  final VoidCallback onTap;
 
-  Widget _buildSignOutButton(BuildContext context) {
+  const _SignOutButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () async {
-        await context.read<AuthService>().signOut();
-        if (context.mounted) {
-          Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-        }
-      },
+      onTap: onTap,
       child: Container(
-        height: 52,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
-          color: AppColors.error.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.error.withValues(alpha: 0.20)),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _kRed.withValues(alpha: 0.18)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.logout_rounded, color: AppColors.error, size: 18),
+            const Icon(Icons.logout_rounded, color: _kRed, size: 16),
             const SizedBox(width: 8),
-            Text('Sair da conta',
-                style: TextStyle(
-                    color: AppColors.error,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15)),
+            Text(
+              'Sair da conta',
+              style: _pjs(size: 13.5, weight: FontWeight.w700, color: _kRed, letterSpacing: -0.2),
+            ),
           ],
         ),
       ),
     );
   }
+}
 
-  // ── Goals Section ───────────────────────────────────────────────────────────
+class _ProfileError extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
 
-  Widget _buildGoalsSection() {
-    if (_goalData == null) {
-      return Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 32, height: 32,
-                  decoration: BoxDecoration(
-                    color: _kBlue.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.flag_outlined, color: _kBlue, size: 16),
-                ),
-                const SizedBox(width: 10),
-                const Text('Metas',
-                    style: TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w700,
-                        color: Color(0xFF1E293B))),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text('Você ainda não definiu uma meta pessoal.',
-                style: AppTypography.bodyMedium
-                    .copyWith(color: AppColors.textSecondary)),
-            const SizedBox(height: 16),
-            GestureDetector(
-              onTap: () {
-                final peso   = double.tryParse(_pesoController.text);
-                final altura = double.tryParse(_alturaController.text);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => CreateGoalPage(
-                      initialWeight: peso,
-                      initialHeight: altura,
-                    ),
-                  ),
-                ).then((_) => setState(() { _profileFuture = _loadProfile(); }));
-              },
-              child: Container(
-                height: 44,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [_kBlue, _kBlueDark]),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _kBlue.withValues(alpha: 0.20),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: const Center(
-                  child: Text('Definir meta',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14)),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+  const _ProfileError({required this.message, required this.onRetry});
 
-    final goal      = _goalData!;
-    final nowWeight = _currentWeight ?? goal.startWeight;
-    final faltam    = (goal.targetWeight - nowWeight).abs();
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Container(
+          padding: const EdgeInsets.all(22),
+          decoration: _whiteDecoration(22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 32, height: 32,
-                decoration: BoxDecoration(
-                  color: _kGreen.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.flag_rounded, color: _kGreen, size: 16),
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(color: _kRed.withValues(alpha: 0.08), shape: BoxShape.circle),
+                child: const Icon(Icons.wifi_off_rounded, color: _kRed, size: 28),
               ),
-              const SizedBox(width: 10),
-              const Text('Meta atual',
-                  style: TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w700,
-                      color: Color(0xFF1E293B))),
+              const SizedBox(height: 14),
+              Text('Erro ao carregar perfil', style: _pjs(size: 16, weight: FontWeight.w800, color: _kInk)),
+              const SizedBox(height: 8),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: _pjs(size: 12.5, weight: FontWeight.w500, color: _kMuted, height: 1.4),
+              ),
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: onRetry,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                  decoration: BoxDecoration(color: _kBlue, borderRadius: BorderRadius.circular(14)),
+                  child: Text('Tentar novamente', style: _pjs(size: 13, weight: FontWeight.w800, color: Colors.white)),
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(goal.goalTypeLabel,
-              style: const TextStyle(
-                  fontSize: 14, fontWeight: FontWeight.w600,
-                  color: Color(0xFF1E293B))),
-          const SizedBox(height: 4),
-          Text(
-            '${nowWeight.toStringAsFixed(1)} kg → ${goal.targetWeight.toStringAsFixed(1)} kg  '
-            '(faltam ${faltam.toStringAsFixed(1)} kg)',
-            style: AppTypography.bodyMedium
-                .copyWith(color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 16),
-          GestureDetector(
-            onTap: () => Navigator.pushNamed(context, '/goals')
-                .then((_) => setState(() { _profileFuture = _loadProfile(); })),
-            child: Container(
-              height: 44,
-              decoration: BoxDecoration(
-                border: Border.all(color: _kBlue),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.bar_chart_rounded, color: _kBlue, size: 16),
-                    SizedBox(width: 6),
-                    Text('Ver progresso',
-                        style: TextStyle(
-                            color: _kBlue,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14)),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
+}
+
+BoxDecoration _whiteDecoration(double radius) {
+  return BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(radius),
+    boxShadow: _shadow(),
+  );
+}
+
+List<BoxShadow> _shadow({bool tight = false}) {
+  return [
+    BoxShadow(
+      color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+      blurRadius: 6,
+      offset: const Offset(0, 2),
+    ),
+    if (!tight)
+      BoxShadow(
+        color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+        blurRadius: 24,
+        offset: const Offset(0, 8),
+      ),
+  ];
+}
+
+String _formatNumber(int value) => NumberFormat.decimalPattern('pt_BR').format(value);
+
+TextStyle _pjs({
+  required double size,
+  required FontWeight weight,
+  required Color color,
+  double? height,
+  double? letterSpacing,
+}) {
+  return TextStyle(
+    fontFamily: 'Plus Jakarta Sans',
+    fontSize: size,
+    fontWeight: weight,
+    color: color,
+    height: height,
+    letterSpacing: letterSpacing,
+  );
+}
+
+TextStyle _sg({
+  required double size,
+  required FontWeight weight,
+  required Color color,
+  double? height,
+  double? letterSpacing,
+}) {
+  return TextStyle(
+    fontFamily: 'Space Grotesk',
+    fontSize: size,
+    fontWeight: weight,
+    color: color,
+    height: height,
+    letterSpacing: letterSpacing,
+  );
 }

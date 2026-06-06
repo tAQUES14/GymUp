@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/gym_card.dart';
 
 class DailyStreakCard extends StatelessWidget {
   final int streak;
   final int bestStreak;
-
-  /// Nome do plano de treino ativo, se houver.
-  /// Null indica que o aluno ainda não tem plano atribuído.
   final String? planName;
 
   const DailyStreakCard({
@@ -19,23 +17,12 @@ class DailyStreakCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    return GymCard(
+      radius: 18,
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header: chama + contador ──────────────────────────────
           Row(
             children: [
               const Text('🔥', style: TextStyle(fontSize: 28)),
@@ -45,40 +32,29 @@ class DailyStreakCard extends StatelessWidget {
                 children: [
                   Text(
                     '$streak ${streak == 1 ? 'dia' : 'dias'} consecutivos',
-                    style: AppTypography.h3.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary,
-                    ),
+                    style: AppText.pjs(size: 16, weight: FontWeight.w800, color: AppColors.ink),
                   ),
                   if (bestStreak > 0)
                     Text(
                       '🏆 Recorde: $bestStreak ${bestStreak == 1 ? 'dia' : 'dias'}',
-                      style: AppTypography.caption.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
+                      style: AppText.subtitle,
                     ),
                 ],
               ),
             ],
           ),
-
-          // ── Info do plano ─────────────────────────────────────────
           const SizedBox(height: 10),
           if (planName != null)
             Text(
               'Plano: $planName',
-              style: AppTypography.caption.copyWith(
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w600,
+              style: AppText.subtitle.copyWith(
+                color: AppColors.inkMuted, fontWeight: FontWeight.w600,
               ),
             )
           else
             Text(
               'Sem plano de treino — aguarde seu treinador atribuir um plano.',
-              style: AppTypography.caption.copyWith(
-                color: AppColors.textSecondary,
-                fontStyle: FontStyle.italic,
-              ),
+              style: AppText.subtitle.copyWith(fontStyle: FontStyle.italic),
             ),
         ],
       ),

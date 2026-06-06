@@ -32,6 +32,45 @@ class AuthApiService {
     return data;
   }
 
+  Future<Map<String, dynamic>> googleAuth({
+    required String idToken,
+    String? inviteCode,
+  }) async {
+    final body = <String, dynamic>{'id_token': idToken};
+    if (inviteCode != null && inviteCode.isNotEmpty) {
+      body['invite_code'] = inviteCode.trim().toUpperCase();
+    }
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/google'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: jsonEncode(body),
+    );
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+    if (response.statusCode == 422) {
+      final errors = data['errors'] as Map<String, dynamic>?;
+      final firstMessage = errors?.values.first is List
+          ? (errors!.values.first as List).first as String
+          : (data['message'] as String? ?? 'Dados invalidos');
+      throw Exception(firstMessage);
+    }
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception(data['message'] ?? 'Erro ao entrar com Google');
+    }
+
+    if (data['needs_invite'] != true) {
+      await _saveSession(data);
+    }
+
+    return data;
+  }
+
   Future<Map<String, dynamic>> register({
     required String name,
     required String email,
