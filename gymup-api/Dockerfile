@@ -1,5 +1,5 @@
-# Imagem base com PHP 8.2
-FROM php:8.2-cli
+# Imagem base com PHP 8.4
+FROM php:8.4-cli
 
 # Instala bibliotecas do sistema e as extensões do PHP que o Laravel + PostgreSQL precisam
 RUN apt-get update && apt-get install -y \
