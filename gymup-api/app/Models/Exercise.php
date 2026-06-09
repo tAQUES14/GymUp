@@ -63,7 +63,19 @@ class Exercise extends Model
         }
 
         $encoded = implode('/', array_map('rawurlencode', explode('/', $relative)));
-        $publicUrl = config('filesystems.disks.public.url');
+        $publicDisk = config('filesystems.disks.public', []);
+        $publicUrl = env('PUBLIC_DISK_URL');
+
+        if (!$publicUrl && ($publicDisk['driver'] ?? null) === 's3') {
+            $endpoint = $publicDisk['endpoint'] ?? null;
+            $bucket = $publicDisk['bucket'] ?? null;
+
+            if ($endpoint && $bucket) {
+                $publicUrl = rtrim($endpoint, '/') . '/' . $bucket;
+            }
+        }
+
+        $publicUrl ??= $publicDisk['url'] ?? null;
 
         if ($publicUrl) {
             return rtrim($publicUrl, '/') . '/exercises/' . $encoded;
