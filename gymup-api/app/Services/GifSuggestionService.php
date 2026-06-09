@@ -11,7 +11,7 @@ class GifSuggestionService
 {
     public function __construct(private readonly ExerciseGifCatalog $catalog) {}
 
-    private const ALGO_VERSION = 'v4';
+    private const ALGO_VERSION = 'v5';
 
     /** Maps exercise.muscle_group to the GIF storage folder name. */
     private const FOLDER_MAP = [
