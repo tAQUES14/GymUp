@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -7,11 +8,14 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/gymup_loading.dart';
 
-const _kBlue     = Color(0xFF2563EB);
-const _kBlueDark = Color(0xFF1D4ED8);
-const _kGreen    = Color(0xFF10B981);
-const _kAmber    = Color(0xFFF59E0B);
-const _kRed      = Color(0xFFEF4444);
+const _kBg = Color(0xFFF3F5F9);
+const _kInk = Color(0xFF0E1116);
+const _kMuted = Color(0xFF5B6472);
+const _kSoft = Color(0xFF9AA3B0);
+const _kLine = Color(0x140E1116);
+const _kGreen = Color(0xFF12B981);
+const _kRed = Color(0xFFEF4444);
+const _kAmber = Color(0xFFE5A300);
 
 class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key});
@@ -22,7 +26,6 @@ class HistoryPage extends StatefulWidget {
 
 class _HistoryPageState extends State<HistoryPage> {
   List<Map<String, dynamic>>? _history;
-  // redemption_id → status ('pending' | 'approved' | 'rejected')
   Map<int, String> _redemptionStatus = {};
   String? _error;
   bool _loading = true;
@@ -34,7 +37,11 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 
   Future<void> _loadData() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
     try {
       final api = ApiService();
       final results = await Future.wait([
@@ -42,8 +49,8 @@ class _HistoryPageState extends State<HistoryPage> {
         api.get('/user/redemptions?per_page=50'),
       ]);
 
-      final historyResp    = results[0];
-      final redemptResp    = results[1];
+      final historyResp = results[0];
+      final redemptResp = results[1];
 
       if (historyResp.statusCode == 401 || redemptResp.statusCode == 401) {
         throw Exception('401');
@@ -52,55 +59,52 @@ class _HistoryPageState extends State<HistoryPage> {
         throw Exception('Erro ao carregar histórico');
       }
 
-      // Parse redemptions → build status map
-      final Map<int, String> statusMap = {};
+      final statusMap = <int, String>{};
       if (redemptResp.statusCode == 200) {
         final rb = jsonDecode(redemptResp.body);
-        final List<dynamic> rList =
-            rb is List ? rb : (rb['data'] as List<dynamic>? ?? []);
+        final rList = rb is List ? rb : (rb['data'] as List<dynamic>? ?? []);
+
         for (final r in rList) {
-          final id     = (r['id'] as num).toInt();
+          final id = (r['id'] as num).toInt();
           final status = r['status'] as String? ?? 'pending';
           statusMap[id] = status;
         }
       }
 
-      // Parse history transactions
       final body = jsonDecode(historyResp.body);
-      final List<dynamic> items =
-          body is List ? body : (body['data'] as List<dynamic>? ?? []);
+      final items = body is List ? body : (body['data'] as List<dynamic>? ?? []);
 
       final history = items.map<Map<String, dynamic>>((item) {
-        final bool isEarn   = (item['type'] as String?) == 'earn';
-        final category      = item['category'] as String?;
-        final referenceId   = (item['reference_id'] as num?)?.toInt();
+        final isEarn = (item['type'] as String?) == 'earn';
+        final category = item['category'] as String?;
+        final referenceId = (item['reference_id'] as num?)?.toInt();
 
         return {
-          'title':        item['description'] as String? ?? 'Movimentação',
-          'points':       (item['points'] as num?)?.toInt() ?? 0,
-          'date':         DateTime.parse(item['created_at'] as String),
-          'isPositive':   isEarn,
-          'category':     category,
+          'title': item['description'] as String? ?? 'Movimentação',
+          'points': (item['points'] as num?)?.toInt() ?? 0,
+          'date': DateTime.parse(item['created_at'] as String),
+          'isPositive': isEarn,
+          'category': category,
           'reference_id': referenceId,
         };
       }).toList()
-        ..sort((a, b) =>
-            (b['date'] as DateTime).compareTo(a['date'] as DateTime));
+        ..sort((a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime));
 
       if (!mounted) return;
       setState(() {
-        _history          = history;
+        _history = history;
         _redemptionStatus = statusMap;
-        _loading          = false;
+        _loading = false;
       });
     } catch (e) {
       if (e.toString().contains('401') && mounted) {
         Navigator.pushReplacementNamed(context, '/login');
         return;
       }
+
       if (!mounted) return;
       setState(() {
-        _error   = e.toString().replaceFirst('Exception: ', '');
+        _error = e.toString().replaceFirst('Exception: ', '');
         _loading = false;
       });
     }
@@ -109,24 +113,16 @@ class _HistoryPageState extends State<HistoryPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: _kBlue,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'Histórico de Pontos',
-          style: AppTypography.h3.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.3,
-          ),
+      backgroundColor: _kBg,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            _TopBar(onBack: () => Navigator.pop(context)),
+            Expanded(child: _buildBody()),
+          ],
         ),
       ),
-      body: _buildBody(),
     );
   }
 
@@ -134,83 +130,24 @@ class _HistoryPageState extends State<HistoryPage> {
     if (_loading) return const GymUpLoading();
 
     if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 64, height: 64,
-                decoration: BoxDecoration(
-                  color: AppColors.error.withValues(alpha: 0.08),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.wifi_off_rounded,
-                    color: AppColors.error, size: 28),
-              ),
-              const SizedBox(height: 16),
-              Text('Erro ao carregar',
-                  style: AppTypography.bodyLarge
-                      .copyWith(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 8),
-              Text(_error!,
-                  textAlign: TextAlign.center,
-                  style: AppTypography.bodyMedium
-                      .copyWith(color: AppColors.textSecondary)),
-              const SizedBox(height: 20),
-              GestureDetector(
-                onTap: _loadData,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 24, vertical: 12),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                        colors: [_kBlue, _kBlueDark]),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text('Tentar novamente',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600)),
-                ),
-              ),
-            ],
-          ),
-        ),
+      return _StateMessage(
+        icon: Icons.wifi_off_rounded,
+        iconColor: AppColors.error,
+        title: 'Erro ao carregar',
+        message: _error!,
+        actionLabel: 'Tentar novamente',
+        onAction: _loadData,
       );
     }
 
     final history = _history ?? [];
 
     if (history.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 64, height: 64,
-                decoration: BoxDecoration(
-                  color: _kBlue.withValues(alpha: 0.08),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.history_rounded,
-                    color: _kBlue, size: 28),
-              ),
-              const SizedBox(height: 16),
-              Text('Sem histórico',
-                  style: AppTypography.bodyLarge
-                      .copyWith(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 8),
-              Text('Nenhuma movimentação de pontos encontrada.',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.bodyMedium
-                      .copyWith(color: AppColors.textSecondary)),
-            ],
-          ),
-        ),
+      return const _StateMessage(
+        icon: Icons.history_rounded,
+        iconColor: AppColors.blue,
+        title: 'Sem movimentações',
+        message: 'Nenhuma movimentação de pontos encontrada.',
       );
     }
 
@@ -223,71 +160,144 @@ class _HistoryPageState extends State<HistoryPage> {
 
     return RefreshIndicator(
       onRefresh: _loadData,
-      color: _kBlue,
-      child: ListView.builder(
+      color: AppColors.blue,
+      child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
-        itemCount: history.length + 1,
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 34),
+        itemCount: history.length + 2,
+        separatorBuilder: (_, index) => SizedBox(height: index == 0 ? 18 : 8),
         itemBuilder: (context, index) {
           if (index == 0) {
-            return _buildSummaryHeader(
-                totalEarned, totalSpent, history.length);
+            return _SummarySection(
+              earned: totalEarned,
+              spent: totalSpent,
+              count: history.length,
+            );
           }
-          return _buildTransactionItem(history[index - 1]);
+
+          if (index == 1) {
+            return Text(
+              'Movimentações',
+              style: AppTypography.h3.copyWith(
+                color: _kInk,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.3,
+              ),
+            );
+          }
+
+          return _TransactionItem(
+            item: history[index - 2],
+            redemptionStatus: _redemptionStatus,
+          );
         },
       ),
     );
   }
+}
 
-  // ── Summary hero ──────────────────────────────────────────────────────────────
+class _TopBar extends StatelessWidget {
+  final VoidCallback onBack;
 
-  Widget _buildSummaryHeader(int earned, int spent, int count) {
+  const _TopBar({required this.onBack});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
+      child: Row(
+        children: [
+          _CircleButton(
+            icon: Icons.arrow_back_rounded,
+            onTap: onBack,
+          ),
+          Expanded(
+            child: Text(
+              'Histórico de Pontos',
+              textAlign: TextAlign.center,
+              style: AppTypography.h3.copyWith(
+                color: _kInk,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.3,
+              ),
+            ),
+          ),
+          const SizedBox(width: 40, height: 40),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummarySection extends StatelessWidget {
+  final int earned;
+  final int spent;
+  final int count;
+
+  const _SummarySection({
+    required this.earned,
+    required this.spent,
+    required this.count,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          padding: const EdgeInsets.all(20),
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [_kBlue, _kBlueDark],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(16),
+            gradient: AppColors.gradientPrimaryDark,
+            borderRadius: BorderRadius.circular(22),
             boxShadow: [
               BoxShadow(
-                color: _kBlue.withValues(alpha: 0.28),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
+                color: AppColors.blue.withValues(alpha: 0.26),
+                blurRadius: 28,
+                offset: const Offset(0, 14),
               ),
             ],
           ),
           child: Row(
             children: [
               Container(
-                width: 52, height: 52,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(14),
+                  color: Colors.white.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
                 ),
-                child: const Icon(Icons.history_rounded,
-                    color: Colors.white, size: 26),
+                child: const Icon(Icons.bolt_rounded, color: Colors.white, size: 25),
               ),
-              const SizedBox(width: 16),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('$count',
-                      style: const TextStyle(
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$count',
+                      style: AppTypography.h1.copyWith(
                         color: Colors.white,
-                        fontSize: 32,
+                        fontSize: 34,
                         fontWeight: FontWeight.w800,
+                        height: 1,
                         letterSpacing: -1,
-                      )),
-                  const Text('Movimentações',
-                      style:
-                          TextStyle(color: Colors.white70, fontSize: 13)),
-                ],
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      count == 1 ? 'movimentação registrada' : 'movimentações registradas',
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: Colors.white.withValues(alpha: 0.78),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -296,67 +306,94 @@ class _HistoryPageState extends State<HistoryPage> {
         Row(
           children: [
             Expanded(
-              child: _statPill('+$earned pts', 'Ganhos', _kGreen,
-                  Icons.arrow_upward_rounded),
+              child: _StatCard(
+                value: '+${_fmt(earned)} pts',
+                label: 'Ganhos',
+                color: _kGreen,
+                icon: Icons.arrow_upward_rounded,
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: _statPill('-$spent pts', 'Gastos', AppColors.error,
-                  Icons.arrow_downward_rounded),
+              child: _StatCard(
+                value: '-${_fmt(spent)} pts',
+                label: 'Gastos',
+                color: _kRed,
+                icon: Icons.arrow_downward_rounded,
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 24),
-        const Text('Movimentações',
-            style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1E293B))),
-        const SizedBox(height: 12),
       ],
     );
   }
+}
 
-  Widget _statPill(
-      String value, String label, Color color, IconData icon) {
+class _StatCard extends StatelessWidget {
+  final String value;
+  final String label;
+  final Color color;
+  final IconData icon;
+
+  const _StatCard({
+    required this.value,
+    required this.label,
+    required this.color,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
-        boxShadow: [
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _kLine),
+        boxShadow: const [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Color(0x0A0F172A),
+            blurRadius: 6,
+            offset: Offset(0, 2),
           ),
         ],
       ),
       child: Row(
         children: [
           Container(
-            width: 32, height: 32,
+            width: 34,
+            height: 34,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              shape: BoxShape.circle,
+              color: color.withValues(alpha: 0.11),
+              borderRadius: BorderRadius.circular(11),
             ),
-            child: Icon(icon, color: color, size: 16),
+            child: Icon(icon, color: color, size: 17),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(value,
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: color),
-                    overflow: TextOverflow.ellipsis),
-                Text(label,
-                    style: const TextStyle(
-                        fontSize: 11, color: Color(0xFF94A3B8))),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: AppTypography.caption.copyWith(
+                    color: _kSoft,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 11,
+                  ),
+                ),
               ],
             ),
           ),
@@ -364,133 +401,257 @@ class _HistoryPageState extends State<HistoryPage> {
       ),
     );
   }
+}
 
-  // ── Transaction item ──────────────────────────────────────────────────────────
+class _TransactionItem extends StatelessWidget {
+  final Map<String, dynamic> item;
+  final Map<int, String> redemptionStatus;
 
-  Widget _buildTransactionItem(Map<String, dynamic> item) {
-    final bool   isPositive  = item['isPositive'] as bool;
-    final int    points      = item['points'] as int;
-    final DateTime date      = item['date'] as DateTime;
-    final String formatted   = DateFormat('dd/MM/yyyy HH:mm').format(date);
-    final String? category   = item['category'] as String?;
-    final int? referenceId   = item['reference_id'] as int?;
+  const _TransactionItem({
+    required this.item,
+    required this.redemptionStatus,
+  });
 
-    // Resolve status for spend-redemption transactions
-    String? redemptionStatus;
-    if (category == 'redemption' && !isPositive && referenceId != null) {
-      redemptionStatus = _redemptionStatus[referenceId];
-    }
+  @override
+  Widget build(BuildContext context) {
+    final isPositive = item['isPositive'] as bool;
+    final points = item['points'] as int;
+    final date = item['date'] as DateTime;
+    final category = item['category'] as String?;
+    final referenceId = item['reference_id'] as int?;
+    final status = category == 'redemption' && !isPositive && referenceId != null
+        ? redemptionStatus[referenceId]
+        : null;
 
-    // Override title based on redemption status
-    String title = item['title'] as String;
-    if (redemptionStatus == 'approved') {
+    final color = isPositive ? _kGreen : _kRed;
+    final icon = isPositive ? Icons.arrow_upward_rounded : Icons.shopping_bag_rounded;
+    final formatted = DateFormat('dd/MM/yyyy HH:mm').format(date);
+
+    var title = item['title'] as String;
+    if (status == 'approved') {
       title = 'Resgate aprovado';
-    } else if (redemptionStatus == 'rejected') {
+    } else if (status == 'rejected') {
       title = 'Resgate rejeitado';
     }
 
-    final Color color = isPositive ? _kGreen : AppColors.error;
-    final IconData icon = isPositive
-        ? Icons.arrow_upward_rounded
-        : Icons.shopping_bag_rounded;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _kLine),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A0F172A),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.11),
+              borderRadius: BorderRadius.circular(14),
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44, height: 44,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.10),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1E293B))),
-                  const SizedBox(height: 3),
-                  if (redemptionStatus != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 3),
-                      child: Row(
-                        children: [
-                          Text(formatted,
-                              style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFF94A3B8))),
-                          const SizedBox(width: 8),
-                          _RedemptionStatusChip(
-                              status: redemptionStatus),
-                        ],
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodyLarge.copyWith(
+                    color: _kInk,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Wrap(
+                  spacing: 7,
+                  runSpacing: 5,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      formatted,
+                      style: AppTypography.caption.copyWith(
+                        color: _kSoft,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
                       ),
-                    )
-                  else
-                    Text(formatted,
-                        style: const TextStyle(
-                            fontSize: 12, color: Color(0xFF94A3B8))),
-                ],
-              ),
+                    ),
+                    if (status != null) _RedemptionStatusChip(status: status),
+                  ],
+                ),
+              ],
             ),
-            Text(
-              isPositive ? '+$points pts' : '-$points pts',
-              style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: color),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            isPositive ? '+${_fmt(points)} pts' : '-${_fmt(points)} pts',
+            style: AppTypography.bodyMedium.copyWith(
+              color: color,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.2,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-// ── Redemption Status Chip ────────────────────────────────────────────────────
-
 class _RedemptionStatusChip extends StatelessWidget {
   final String status;
+
   const _RedemptionStatusChip({required this.status});
 
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (status) {
-      'approved' => ('Aprovado ✓', _kGreen),
-      'rejected' => ('Rejeitado ✗', _kRed),
-      _          => ('Aguardando',  _kAmber),
+      'approved' => ('Aprovado', _kGreen),
+      'rejected' => ('Rejeitado', _kRed),
+      _ => ('Aguardando', _kAmber),
     };
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(100),
       ),
       child: Text(
         label,
-        style: TextStyle(
-            color: color, fontSize: 10, fontWeight: FontWeight.w700),
+        style: AppTypography.caption.copyWith(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
 }
+
+class _CircleButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _CircleButton({
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0F0F172A),
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Icon(icon, color: _kInk, size: 21),
+        ),
+      ),
+    );
+  }
+}
+
+class _StateMessage extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  const _StateMessage({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 62,
+              height: 62,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(icon, color: iconColor, size: 28),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: AppTypography.h3.copyWith(
+                color: _kInk,
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: AppTypography.bodyMedium.copyWith(
+                color: _kMuted,
+                height: 1.4,
+              ),
+            ),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: onAction,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.blue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: Text(actionLabel!),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _fmt(int value) => NumberFormat.decimalPattern('pt_BR').format(value);
