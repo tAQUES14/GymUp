@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Database\Eloquent\Model;
 
 class Reward extends Model
 {
     use HasFactory;
+
+    private const FALLBACK_PUBLIC_STORAGE_BASE_URL = 'https://s3.us-west-004.backblazeb2.com/gymup-storage';
 
     protected $fillable = [
         'gym_id',
@@ -26,25 +27,63 @@ class Reward extends Model
         'active' => 'boolean',
     ];
 
-    /**
-     * Retorna a URL pública completa da imagem a partir do path relativo salvo no banco.
-     * Banco armazena: "rewards/uuid.webp"
-     * API retorna:    "http://host/storage/rewards/uuid.webp"
-     */
     public function getImageUrlAttribute(?string $value): ?string
     {
-        if (!$value) return null;
+        if (!$value) {
+            return null;
+        }
 
-        // Extrai o path relativo tanto de URLs antigas quanto de paths puros
-        // "rewards/uuid.webp"                          → rewards/uuid.webp
-        // "http://host/storage/rewards/uuid.webp"      → rewards/uuid.webp
-        // "http://host/img/rewards/uuid.webp"          → rewards/uuid.webp
-        $path = str_starts_with($value, 'http')
-            ? ltrim(preg_replace('#^.+/(storage|img)/#', '', $value), '/')
-            : $value;
+        $path = self::normalizeImagePath($value);
 
-        // Serve via /img/{path} — passa pelo Laravel (CORS headers aplicados)
-        return url('/img/' . $path);
+        if (!$path) {
+            return null;
+        }
+
+        $encoded = implode('/', array_map('rawurlencode', explode('/', $path)));
+
+        return rtrim(self::publicStorageBaseUrl(), '/') . '/' . $encoded;
+    }
+
+    public static function normalizeImagePath(string $value): string
+    {
+        if (!str_starts_with($value, 'http')) {
+            return ltrim($value, '/');
+        }
+
+        $path = rawurldecode(parse_url($value, PHP_URL_PATH) ?: '');
+
+        if (preg_match('#/(?:storage|img)/(.+)$#', $path, $matches)) {
+            return ltrim($matches[1], '/');
+        }
+
+        if (preg_match('#/(rewards/.+)$#', $path, $matches)) {
+            return ltrim($matches[1], '/');
+        }
+
+        return ltrim($path, '/');
+    }
+
+    private static function publicStorageBaseUrl(): string
+    {
+        $publicDisk = config('filesystems.disks.public', []);
+        $publicUrl = env('PUBLIC_DISK_URL');
+
+        if (!$publicUrl && ($publicDisk['driver'] ?? null) === 's3') {
+            $endpoint = $publicDisk['endpoint'] ?? null;
+            $bucket = $publicDisk['bucket'] ?? null;
+
+            if ($endpoint && $bucket) {
+                $publicUrl = rtrim($endpoint, '/') . '/' . $bucket;
+            }
+        }
+
+        $publicUrl ??= $publicDisk['url'] ?? null;
+
+        if (!$publicUrl || str_contains($publicUrl, 'gymup-api.onrender.com/storage')) {
+            return self::FALLBACK_PUBLIC_STORAGE_BASE_URL;
+        }
+
+        return $publicUrl;
     }
 
     public function gym()

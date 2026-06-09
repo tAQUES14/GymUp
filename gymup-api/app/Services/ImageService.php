@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Reward;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -72,9 +73,7 @@ class ImageService
      */
     public function delete(string $pathOrUrl): void
     {
-        $path = str_starts_with($pathOrUrl, 'http')
-            ? ltrim(str_replace('/storage', '', parse_url($pathOrUrl, PHP_URL_PATH)), '/')
-            : $pathOrUrl;
+        $path = Reward::normalizeImagePath($pathOrUrl);
 
         if ($path) {
             Storage::disk('public')->delete($path);
