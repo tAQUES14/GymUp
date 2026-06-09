@@ -400,12 +400,25 @@ class AdminExerciseController extends Controller
         $disk = Storage::disk('public');
         $files = [];
 
-        foreach ($disk->allFiles('exercises') as $file) {
-            if (! preg_match('/\.gif$/i', $file)) {
-                continue;
-            }
+        try {
+            foreach ($disk->allFiles('exercises') as $file) {
+                if (! preg_match('/\.gif$/i', $file)) {
+                    continue;
+                }
 
-            $files[] = Str::after($file, 'exercises/');
+                $files[] = Str::after($file, 'exercises/');
+            }
+        } catch (\Throwable) {
+            $files = [];
+        }
+
+        if ($files === []) {
+            $files = Exercise::whereNotNull('gif_file')
+                ->distinct()
+                ->pluck('gif_file')
+                ->filter()
+                ->values()
+                ->all();
         }
 
         return $files;

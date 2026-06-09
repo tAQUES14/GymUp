@@ -190,11 +190,22 @@ const linkError          = ref('')
 
 const filteredGifs = computed(() => {
   const q = gifSearch.value.trim().toLowerCase()
-  if (!q) return gifs.value
-  return gifs.value.filter((g) =>
+  const source = gifs.value.length > 0 ? gifs.value : suggestionGifs.value
+  if (!q) return source
+  return source.filter((g) =>
     g.filename.toLowerCase().includes(q) || g.folder.toLowerCase().includes(q)
   )
 })
+
+const suggestionGifs = computed(() =>
+  suggestions.value.map((sug) => ({
+    path:        sug.file,
+    url:         sug.url,
+    folder:      sug.folder,
+    filename:    sug.file.split('/').pop().replace(/\.gif$/i, ''),
+    usage_count: 0,
+  }))
+)
 
 onMounted(() => {
   loadGifsAndSuggestions()
