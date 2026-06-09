@@ -94,6 +94,36 @@
 
           <!-- GIF grid -->
           <div class="flex-1 overflow-y-auto p-4" :class="{ 'pt-0': displaySuggestions.length > 0 && !gifSearch }">
+            <div v-if="gifCategories.length > 1" class="mb-4 -mx-1 overflow-x-auto pb-1">
+              <div class="flex items-center gap-2 px-1">
+                <button
+                  type="button"
+                  @click="selectedFolder = 'all'"
+                  :class="[
+                    'whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-bold transition-colors',
+                    selectedFolder === 'all'
+                      ? 'bg-brand-600 text-white shadow-sm'
+                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700',
+                  ]">
+                  Todos
+                  <span class="ml-1 opacity-75">{{ gifCategoryTotal }}</span>
+                </button>
+                <button
+                  v-for="category in gifCategories"
+                  :key="category.folder"
+                  type="button"
+                  @click="selectedFolder = category.folder"
+                  :class="[
+                    'whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-bold transition-colors',
+                    selectedFolder === category.folder
+                      ? 'bg-brand-600 text-white shadow-sm'
+                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700',
+                  ]">
+                  {{ category.label }}
+                  <span class="ml-1 opacity-75">{{ category.count }}</span>
+                </button>
+              </div>
+            </div>
             <div v-if="gifsLoading" class="flex items-center justify-center py-16 text-slate-400 gap-2">
               <svg class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
@@ -184,18 +214,48 @@ const suggestions        = ref([])
 const gifsLoading        = ref(false)
 const suggestionsLoading = ref(false)
 const gifSearch          = ref('')
+const selectedFolder     = ref('all')
 const selectedGif        = ref(null)
 const saving             = ref(false)
 const linkError          = ref('')
 
+const gifSource = computed(() =>
+  gifs.value.length > 0 ? gifs.value : suggestionGifs.value
+)
+
 const filteredGifs = computed(() => {
   const q = gifSearch.value.trim().toLowerCase()
-  const source = gifs.value.length > 0 ? gifs.value : suggestionGifs.value
+  const source = selectedFolder.value === 'all'
+    ? gifSource.value
+    : gifSource.value.filter((g) => g.folder === selectedFolder.value)
+
   if (!q) return source
+
   return source.filter((g) =>
     g.filename.toLowerCase().includes(q) || g.folder.toLowerCase().includes(q)
   )
 })
+
+const gifCategories = computed(() => {
+  const counts = new Map()
+
+  for (const gif of gifSource.value) {
+    if (!gif.folder) continue
+    counts.set(gif.folder, (counts.get(gif.folder) ?? 0) + 1)
+  }
+
+  return Array.from(counts.entries())
+    .map(([folder, count]) => ({
+      folder,
+      count,
+      label: folder.replace(/^Gifs -\s*/i, ''),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'))
+})
+
+const gifCategoryTotal = computed(() =>
+  gifCategories.value.reduce((total, category) => total + category.count, 0)
+)
 
 const displaySuggestions = computed(() =>
   suggestions.value.map((sug) => {
