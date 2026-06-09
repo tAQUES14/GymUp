@@ -63,6 +63,11 @@ class Exercise extends Model
         }
 
         $encoded = implode('/', array_map('rawurlencode', explode('/', $relative)));
+        $publicUrl = config('filesystems.disks.public.url');
+
+        if ($publicUrl) {
+            return rtrim($publicUrl, '/') . '/exercises/' . $encoded;
+        }
 
         return url('storage/exercises/' . $encoded);
     }
