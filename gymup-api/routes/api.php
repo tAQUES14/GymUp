@@ -469,6 +469,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::middleware('role:super_admin')->prefix('super')->group(function () {
+        Route::get('/gyms',                            [SuperChainController::class, 'gyms']);
         Route::get('/chains',                          [SuperChainController::class, 'index']);
         Route::post('/chains',                         [SuperChainController::class, 'store']);
         Route::get('/chains/{id}',                     [SuperChainController::class, 'show']);

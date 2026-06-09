@@ -174,6 +174,63 @@ class SuperChainController extends Controller
 
     // ── HELPERS ───────────────────────────────────────────────────────────────
 
+    public function gyms(Request $request): JsonResponse
+    {
+        $search = trim($request->query('search', ''));
+
+        $query = Gym::query()
+            ->with('chain:id,name')
+            ->withCount([
+                'users as students_count' => fn ($q) => $q->where('role', 'user'),
+                'users as admins_count' => fn ($q) => $q->where('role', 'gym_admin'),
+                'trainers as trainers_count',
+            ])
+            ->when($search, function ($q) use ($search) {
+                $q->where(function ($inner) use ($search) {
+                    $inner->where('name', 'ilike', "%{$search}%")
+                        ->orWhere('city', 'ilike', "%{$search}%")
+                        ->orWhere('email', 'ilike', "%{$search}%")
+                        ->orWhereHas('chain', fn ($chain) => $chain->where('name', 'ilike', "%{$search}%"));
+                });
+            })
+            ->orderBy('name');
+
+        $paginated = $query->paginate($request->integer('per_page', 20));
+
+        return response()->json([
+            'data' => $paginated->map(fn ($g) => [
+                'id'             => $g->id,
+                'name'           => $g->name,
+                'email'          => $g->email,
+                'phone'          => $g->phone,
+                'address'        => $g->address,
+                'city'           => $g->city,
+                'active'         => (bool) $g->active,
+                'invite_code'    => $g->invite_code,
+                'chain'          => $g->chain ? [
+                    'id'   => $g->chain->id,
+                    'name' => $g->chain->name,
+                ] : null,
+                'students_count' => $g->students_count ?? 0,
+                'admins_count'   => $g->admins_count ?? 0,
+                'trainers_count' => $g->trainers_count ?? 0,
+                'created_at'     => $g->created_at?->format('Y-m-d'),
+            ]),
+            'meta' => [
+                'current_page' => $paginated->currentPage(),
+                'last_page'    => $paginated->lastPage(),
+                'per_page'     => $paginated->perPage(),
+                'total'        => $paginated->total(),
+            ],
+            'summary' => [
+                'total'       => Gym::count(),
+                'active'      => Gym::where('active', true)->count(),
+                'independent' => Gym::whereNull('chain_id')->count(),
+                'in_chains'   => Gym::whereNotNull('chain_id')->count(),
+            ],
+        ]);
+    }
+
     private function format(GymChain $chain): array
     {
         return [

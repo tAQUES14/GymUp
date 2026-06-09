@@ -151,8 +151,7 @@ const router = createRouter({
         {
           path: 'gyms',
           name: 'gyms',
-          component: () => import('../views/PlaceholderView.vue'),
-          props: { page: 'Academias', icon: '🏢', description: 'Gerencie as academias da plataforma.' },
+          component: () => import('../views/SuperGymsView.vue'),
           meta: { title: 'Academias', superAdminOnly: true },
         },
         // ── Relatórios (gym_admin+) ──────────────────────────────────────────
