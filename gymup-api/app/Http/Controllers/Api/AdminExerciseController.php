@@ -6,12 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Exercise;
 use App\Models\ExerciseSubstitution;
 use App\Models\GifFeedback;
+use App\Services\ExerciseGifCatalog;
 use App\Services\GifSuggestionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 class AdminExerciseController extends Controller
 {
@@ -235,7 +235,7 @@ class AdminExerciseController extends Controller
 
         $gifs = [];
 
-        foreach ($this->listExerciseGifFiles() as $relative) {
+        foreach (app(ExerciseGifCatalog::class)->all() as $relative) {
             $folder = dirname($relative);
             $filename = basename($relative);
 
@@ -394,33 +394,4 @@ class AdminExerciseController extends Controller
         return response()->json(['message' => 'Substituição removida.']);
     }
 
-    /** @return list<string> */
-    private function listExerciseGifFiles(): array
-    {
-        $disk = Storage::disk('public');
-        $files = [];
-
-        try {
-            foreach ($disk->allFiles('exercises') as $file) {
-                if (! preg_match('/\.gif$/i', $file)) {
-                    continue;
-                }
-
-                $files[] = Str::after($file, 'exercises/');
-            }
-        } catch (\Throwable) {
-            $files = [];
-        }
-
-        if ($files === []) {
-            $files = Exercise::whereNotNull('gif_file')
-                ->distinct()
-                ->pluck('gif_file')
-                ->filter()
-                ->values()
-                ->all();
-        }
-
-        return $files;
-    }
 }

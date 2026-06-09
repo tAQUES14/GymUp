@@ -5,11 +5,11 @@ namespace App\Services;
 use App\Models\Exercise;
 use App\Models\GifFeedback;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Storage;
 
 
 class GifSuggestionService
 {
+    public function __construct(private readonly ExerciseGifCatalog $catalog) {}
 
     private const ALGO_VERSION = 'v4';
 
@@ -429,19 +429,14 @@ class GifSuggestionService
 
         $candidates = [];
 
-        foreach (Storage::disk('public')->allFiles('exercises') as $gifPath) {
-            if (! preg_match('/\.gif$/i', $gifPath)) {
-                continue;
-            }
-
-            $relative = preg_replace('#^exercises/#', '', $gifPath);
+        foreach ($this->catalog->all() as $relative) {
             $folder = dirname($relative);
 
             if (stripos($folder, 'bonus') !== false || stripos($folder, 'gifs -') !== false) {
                 continue;
             }
 
-            $filename = pathinfo(basename($gifPath), PATHINFO_FILENAME);
+            $filename = pathinfo(basename($relative), PATHINFO_FILENAME);
             $candidates[$relative] = [
                 'filename' => $filename,
                 'folder'   => $folder,
@@ -456,14 +451,9 @@ class GifSuggestionService
     {
         $result = [];
 
-        foreach (Storage::disk('public')->allFiles('exercises/' . $folder) as $gifPath) {
-            if (! preg_match('/\.gif$/i', $gifPath)) {
-                continue;
-            }
-
-            $relative          = $folder . '/' . basename($gifPath);
+        foreach ($this->catalog->inFolder($folder) as $relative) {
             $result[$relative] = [
-                'filename' => pathinfo(basename($gifPath), PATHINFO_FILENAME),
+                'filename' => pathinfo(basename($relative), PATHINFO_FILENAME),
                 'folder'   => $folder,
             ];
         }
