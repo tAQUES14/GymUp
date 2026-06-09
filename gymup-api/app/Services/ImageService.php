@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Reward;
+use Aws\S3\S3Client;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -62,12 +63,7 @@ class ImageService
         // 3. Salva e retorna apenas o path relativo (ex: rewards/uuid.webp)
         $path = $folder . '/' . Str::uuid() . '.webp';
 
-        $stored = Storage::disk('public')->put($path, (string) $encoded, [
-            'visibility'  => 'public',
-            'ContentType' => 'image/webp',
-        ]);
-
-        if (!$stored) {
+        if (!$this->put($path, (string) $encoded)) {
             throw new \RuntimeException('Nao foi possivel enviar a imagem para o storage publico.');
         }
 
@@ -83,7 +79,89 @@ class ImageService
         $path = Reward::normalizeImagePath($pathOrUrl);
 
         if ($path) {
-            Storage::disk('public')->delete($path);
+            $this->deletePath($path);
         }
+    }
+
+    private function put(string $path, string $contents): bool
+    {
+        $client = $this->s3Client();
+        $bucket = $this->publicDiskConfig()['bucket'] ?? null;
+
+        if ($client && $bucket) {
+            try {
+                $client->putObject([
+                    'Bucket'      => $bucket,
+                    'Key'         => $path,
+                    'Body'        => $contents,
+                    'ContentType' => 'image/webp',
+                ]);
+
+                $client->headObject([
+                    'Bucket' => $bucket,
+                    'Key'    => $path,
+                ]);
+
+                return true;
+            } catch (\Throwable) {
+                return false;
+            }
+        }
+
+        return (bool) Storage::disk('public')->put($path, $contents, [
+            'visibility'  => 'public',
+            'ContentType' => 'image/webp',
+        ]);
+    }
+
+    private function deletePath(string $path): void
+    {
+        $client = $this->s3Client();
+        $bucket = $this->publicDiskConfig()['bucket'] ?? null;
+
+        if ($client && $bucket) {
+            try {
+                $client->deleteObject([
+                    'Bucket' => $bucket,
+                    'Key'    => $path,
+                ]);
+
+                return;
+            } catch (\Throwable) {
+                // Fall through to the Laravel disk fallback.
+            }
+        }
+
+        Storage::disk('public')->delete($path);
+    }
+
+    private function s3Client(): ?S3Client
+    {
+        $disk = $this->publicDiskConfig();
+        $bucket = $disk['bucket'] ?? null;
+        $endpoint = $disk['endpoint'] ?? null;
+        $key = $disk['key'] ?? null;
+        $secret = $disk['secret'] ?? null;
+
+        if (!$bucket || !$endpoint || !$key || !$secret) {
+            return null;
+        }
+
+        return new S3Client([
+            'version' => 'latest',
+            'region' => $disk['region'] ?? 'us-east-1',
+            'endpoint' => $endpoint,
+            'use_path_style_endpoint' => (bool) ($disk['use_path_style_endpoint'] ?? false),
+            'credentials' => [
+                'key' => $key,
+                'secret' => $secret,
+            ],
+        ]);
+    }
+
+    /** @return array<string, mixed> */
+    private function publicDiskConfig(): array
+    {
+        return config('filesystems.disks.public', []);
     }
 }
