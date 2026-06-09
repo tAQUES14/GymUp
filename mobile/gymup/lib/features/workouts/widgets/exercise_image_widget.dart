@@ -197,12 +197,19 @@ String? _safeUri(String raw) {
   if (raw.isEmpty) return null;
   try {
     final gifUri = Uri.parse(raw);
+    if (gifUri.hasScheme &&
+        gifUri.host.isNotEmpty &&
+        gifUri.host != 'localhost' &&
+        gifUri.host != '127.0.0.1') {
+      return gifUri.toString();
+    }
+
     final apiUri = Uri.parse(ApiService.baseUrl);
     // Replace origin with the API origin; keep path/query/fragment unchanged.
     final fixed = gifUri.replace(
       scheme: apiUri.scheme,
-      host:   apiUri.host,
-      port:   apiUri.port,
+      host: apiUri.host,
+      port: apiUri.port,
     );
     return fixed.toString();
   } catch (_) {
