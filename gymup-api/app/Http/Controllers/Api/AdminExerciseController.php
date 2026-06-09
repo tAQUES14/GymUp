@@ -11,7 +11,6 @@ use App\Services\GifSuggestionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 class AdminExerciseController extends Controller
 {
@@ -260,7 +259,12 @@ class AdminExerciseController extends Controller
      * Sets gif_is_auto = false to protect from future auto-overrides.
      * Logs the selection to gif_feedback and busts the suggestion cache.
      */
-    public function linkGif(Request $request, int $id, GifSuggestionService $suggester): JsonResponse
+    public function linkGif(
+        Request $request,
+        int $id,
+        GifSuggestionService $suggester,
+        ExerciseGifCatalog $gifCatalog,
+    ): JsonResponse
     {
         $request->validate([
             'gif_file' => 'nullable|string|max:500',
@@ -276,7 +280,7 @@ class AdminExerciseController extends Controller
 
         // Validate the file physically exists before saving
         if ($gifFile !== null) {
-            if (! Storage::disk('public')->exists('exercises/' . $gifFile)) {
+            if (! $gifCatalog->exists($gifFile)) {
                 return response()->json(['message' => 'Arquivo GIF não encontrado no servidor.'], 422);
             }
         }

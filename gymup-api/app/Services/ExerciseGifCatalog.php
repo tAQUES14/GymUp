@@ -33,6 +33,13 @@ class ExerciseGifCatalog
         ));
     }
 
+    public function exists(string $relative): bool
+    {
+        $normalized = ltrim($relative, '/');
+
+        return in_array($normalized, $this->all(), true);
+    }
+
     /** @return list<string> */
     private function fromS3Client(): array
     {
