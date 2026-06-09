@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Exercise extends Model
 {
+    private const FALLBACK_PUBLIC_GIF_BASE_URL = 'https://s3.us-west-004.backblazeb2.com/gymup-storage';
+
     protected $fillable = [
         'name',
         'type',
@@ -76,6 +78,10 @@ class Exercise extends Model
         }
 
         $publicUrl ??= $publicDisk['url'] ?? null;
+
+        if (!$publicUrl || str_contains($publicUrl, 'gymup-api.onrender.com/storage')) {
+            $publicUrl = self::FALLBACK_PUBLIC_GIF_BASE_URL;
+        }
 
         if ($publicUrl) {
             return rtrim($publicUrl, '/') . '/exercises/' . $encoded;
