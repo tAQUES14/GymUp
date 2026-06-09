@@ -429,13 +429,23 @@ class GifSuggestionService
 
         $candidates = [];
 
-        foreach (Storage::disk('public')->directories('exercises') as $directory) {
-            $folder = basename($directory);
+        foreach (Storage::disk('public')->allFiles('exercises') as $gifPath) {
+            if (! preg_match('/\.gif$/i', $gifPath)) {
+                continue;
+            }
+
+            $relative = preg_replace('#^exercises/#', '', $gifPath);
+            $folder = dirname($relative);
+
             if (stripos($folder, 'bonus') !== false || stripos($folder, 'gifs -') !== false) {
                 continue;
             }
 
-            $candidates += $this->scanFolder($folder);
+            $filename = pathinfo(basename($gifPath), PATHINFO_FILENAME);
+            $candidates[$relative] = [
+                'filename' => $filename,
+                'folder'   => $folder,
+            ];
         }
 
         return $candidates;
@@ -446,7 +456,7 @@ class GifSuggestionService
     {
         $result = [];
 
-        foreach (Storage::disk('public')->files('exercises/' . $folder) as $gifPath) {
+        foreach (Storage::disk('public')->allFiles('exercises/' . $folder) as $gifPath) {
             if (! preg_match('/\.gif$/i', $gifPath)) {
                 continue;
             }

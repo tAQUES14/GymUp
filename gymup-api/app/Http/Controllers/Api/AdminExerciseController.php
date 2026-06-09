@@ -400,14 +400,12 @@ class AdminExerciseController extends Controller
         $disk = Storage::disk('public');
         $files = [];
 
-        foreach ($disk->directories('exercises') as $directory) {
-            foreach ($disk->files($directory) as $file) {
-                if (! preg_match('/\.gif$/i', $file)) {
-                    continue;
-                }
-
-                $files[] = Str::after($file, 'exercises/');
+        foreach ($disk->allFiles('exercises') as $file) {
+            if (! preg_match('/\.gif$/i', $file)) {
+                continue;
             }
+
+            $files[] = Str::after($file, 'exercises/');
         }
 
         return $files;
