@@ -5,10 +5,15 @@ FROM php:8.4-cli
 RUN apt-get update && apt-get install -y \
     git \
     unzip \
+    libfreetype6-dev \
+    libjpeg62-turbo-dev \
     libpq-dev \
+    libpng-dev \
+    libwebp-dev \
     libzip-dev \
     libonig-dev \
- && docker-php-ext-install pdo_pgsql pgsql mbstring zip bcmath \
+ && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
+ && docker-php-ext-install pdo_pgsql pgsql mbstring zip bcmath gd \
  && rm -rf /var/lib/apt/lists/*
 
 # Instala o Composer (gerenciador de pacotes do PHP)
