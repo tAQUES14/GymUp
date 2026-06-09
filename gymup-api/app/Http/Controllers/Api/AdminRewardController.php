@@ -43,7 +43,13 @@ class AdminRewardController extends Controller
 
         $imageUrl = null;
         if ($request->hasFile('image')) {
-            $imageUrl = $this->images->store($request->file('image'), 'rewards');
+            try {
+                $imageUrl = $this->images->store($request->file('image'), 'rewards');
+            } catch (\Throwable) {
+                return response()->json([
+                    'message' => 'Nao foi possivel enviar a imagem da recompensa para o storage.',
+                ], 422);
+            }
         }
 
         $reward = Reward::create([
@@ -82,7 +88,13 @@ class AdminRewardController extends Controller
             if ($reward->image_url) {
                 $this->images->delete($reward->image_url);
             }
-            $data['image_url'] = $this->images->store($request->file('image'), 'rewards');
+            try {
+                $data['image_url'] = $this->images->store($request->file('image'), 'rewards');
+            } catch (\Throwable) {
+                return response()->json([
+                    'message' => 'Nao foi possivel enviar a imagem da recompensa para o storage.',
+                ], 422);
+            }
         } elseif (!empty($data['remove_image'])) {
             if ($reward->image_url) {
                 $this->images->delete($reward->image_url);

@@ -62,7 +62,14 @@ class ImageService
         // 3. Salva e retorna apenas o path relativo (ex: rewards/uuid.webp)
         $path = $folder . '/' . Str::uuid() . '.webp';
 
-        Storage::disk('public')->put($path, (string) $encoded);
+        $stored = Storage::disk('public')->put($path, (string) $encoded, [
+            'visibility'  => 'public',
+            'ContentType' => 'image/webp',
+        ]);
+
+        if (!$stored) {
+            throw new \RuntimeException('Nao foi possivel enviar a imagem para o storage publico.');
+        }
 
         return $path;
     }
