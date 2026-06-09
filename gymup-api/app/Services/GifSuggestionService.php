@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Exercise;
 use App\Models\GifFeedback;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 
 
 class GifSuggestionService
@@ -420,39 +421,39 @@ class GifSuggestionService
      */
     private function getCandidates(?string $muscleGroup): array
     {
-        $basePath       = storage_path('app/public/exercises');
         $expectedFolder = $muscleGroup ? (self::FOLDER_MAP[$muscleGroup] ?? null) : null;
 
         if ($expectedFolder) {
-            $folderPath = $basePath . '/' . $expectedFolder;
-
-            return is_dir($folderPath) ? $this->scanFolder($folderPath, $expectedFolder) : [];
+            return $this->scanFolder($expectedFolder);
         }
 
         $candidates = [];
 
-        foreach (glob($basePath . '/*', GLOB_ONLYDIR) ?: [] as $folderPath) {
-            $folder = basename($folderPath);
-
+        foreach (Storage::disk('public')->directories('exercises') as $directory) {
+            $folder = basename($directory);
             if (stripos($folder, 'bonus') !== false || stripos($folder, 'gifs -') !== false) {
                 continue;
             }
 
-            $candidates += $this->scanFolder($folderPath, $folder);
+            $candidates += $this->scanFolder($folder);
         }
 
         return $candidates;
     }
 
     /** @return array<string, array{filename: string, folder: string}> */
-    private function scanFolder(string $folderPath, string $folder): array
+    private function scanFolder(string $folder): array
     {
         $result = [];
 
-        foreach (glob($folderPath . '/*.{gif,GIF}', GLOB_BRACE) ?: [] as $gifPath) {
+        foreach (Storage::disk('public')->files('exercises/' . $folder) as $gifPath) {
+            if (! preg_match('/\.gif$/i', $gifPath)) {
+                continue;
+            }
+
             $relative          = $folder . '/' . basename($gifPath);
             $result[$relative] = [
-                'filename' => pathinfo($gifPath, PATHINFO_FILENAME),
+                'filename' => pathinfo(basename($gifPath), PATHINFO_FILENAME),
                 'folder'   => $folder,
             ];
         }

@@ -10,6 +10,7 @@ use App\Services\GifSuggestionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class AdminExerciseController extends Controller
@@ -225,9 +226,6 @@ class AdminExerciseController extends Controller
      */
     public function availableGifs(): JsonResponse
     {
-        $basePath = storage_path('app/public/exercises');
-        $folders  = glob($basePath . '/*', GLOB_ONLYDIR) ?: [];
-
         // Build usage map: gif_file path → count of exercises using it
         $usageMap = Exercise::whereNotNull('gif_file')
             ->selectRaw('gif_file, count(*) as cnt')
@@ -237,22 +235,17 @@ class AdminExerciseController extends Controller
 
         $gifs = [];
 
-        foreach ($folders as $folderPath) {
-            $folder   = basename($folderPath);
-            $gifFiles = glob($folderPath . '/*.{gif,GIF}', GLOB_BRACE) ?: [];
+        foreach ($this->listExerciseGifFiles() as $relative) {
+            $folder = dirname($relative);
+            $filename = basename($relative);
 
-            foreach ($gifFiles as $gifPath) {
-                $filename = basename($gifPath);
-                $relative = $folder . '/' . $filename;
-
-                $gifs[] = [
-                    'path'        => $relative,
-                    'url'         => Exercise::gifPathToUrl($relative),
-                    'folder'      => $folder,
-                    'filename'    => pathinfo($filename, PATHINFO_FILENAME),
-                    'usage_count' => $usageMap[$relative] ?? 0,
-                ];
-            }
+            $gifs[] = [
+                'path'        => $relative,
+                'url'         => Exercise::gifPathToUrl($relative),
+                'folder'      => $folder,
+                'filename'    => pathinfo($filename, PATHINFO_FILENAME),
+                'usage_count' => $usageMap[$relative] ?? 0,
+            ];
         }
 
         // Sort: folder ASC, filename ASC
@@ -283,8 +276,7 @@ class AdminExerciseController extends Controller
 
         // Validate the file physically exists before saving
         if ($gifFile !== null) {
-            $fullPath = storage_path('app/public/exercises/' . $gifFile);
-            if (! file_exists($fullPath)) {
+            if (! Storage::disk('public')->exists('exercises/' . $gifFile)) {
                 return response()->json(['message' => 'Arquivo GIF não encontrado no servidor.'], 422);
             }
         }
@@ -400,5 +392,24 @@ class AdminExerciseController extends Controller
             ->delete();
 
         return response()->json(['message' => 'Substituição removida.']);
+    }
+
+    /** @return list<string> */
+    private function listExerciseGifFiles(): array
+    {
+        $disk = Storage::disk('public');
+        $files = [];
+
+        foreach ($disk->directories('exercises') as $directory) {
+            foreach ($disk->files($directory) as $file) {
+                if (! preg_match('/\.gif$/i', $file)) {
+                    continue;
+                }
+
+                $files[] = Str::after($file, 'exercises/');
+            }
+        }
+
+        return $files;
     }
 }
