@@ -98,7 +98,7 @@
               <div class="flex items-center gap-2 px-1">
                 <button
                   type="button"
-                  @click="selectedFolder = 'all'"
+                  @click="selectFolder('all', $event)"
                   :class="[
                     'whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-bold transition-colors',
                     selectedFolder === 'all'
@@ -112,7 +112,7 @@
                   v-for="category in gifCategories"
                   :key="category.folder"
                   type="button"
-                  @click="selectedFolder = category.folder"
+                  @click="selectFolder(category.folder, $event)"
                   :class="[
                     'whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-bold transition-colors',
                     selectedFolder === category.folder
@@ -325,6 +325,15 @@ function selectSuggestion(sug) {
     filename:    sug.file.split('/').pop().replace(/\.gif$/i, ''),
     usage_count: 0,
   }
+}
+
+function selectFolder(folder, event) {
+  selectedFolder.value = folder
+  event?.currentTarget?.scrollIntoView?.({
+    behavior: 'smooth',
+    block:    'nearest',
+    inline:   'center',
+  })
 }
 
 async function saveLink() {
