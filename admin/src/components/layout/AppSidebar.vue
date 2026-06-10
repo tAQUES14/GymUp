@@ -224,10 +224,10 @@ const gymManagementNav = computed(() => {
   if (auth.isGymAdmin) {
     items.push(
       { to: '/reports',  label: 'Relatórios',      icon: icons.reports  },
-      { to: '/settings', label: 'Configurações',  icon: icons.settings },
       { to: '/invite',   label: 'Convidar',        icon: icons.invite   },
       { to: '/checkin',  label: 'Check-in',         icon: icons.checkin  },
       { to: '/team',     label: 'Equipe e Acessos', icon: icons.team     },
+      { to: '/settings', label: 'Configurações',  icon: icons.settings },
     )
   }
 
