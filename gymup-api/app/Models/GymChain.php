@@ -13,6 +13,12 @@ class GymChain extends Model
         'name',
         'slug',
         'logo_url',
+        'status',
+        'closed_at',
+    ];
+
+    protected $casts = [
+        'closed_at' => 'datetime',
     ];
 
     public function gyms()

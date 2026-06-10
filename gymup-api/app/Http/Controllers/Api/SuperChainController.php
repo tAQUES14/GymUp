@@ -7,6 +7,7 @@ use App\Models\Gym;
 use App\Models\GymChain;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -30,6 +31,8 @@ class SuperChainController extends Controller
                 'name'       => $c->name,
                 'slug'       => $c->slug,
                 'logo_url'   => $c->logo_url,
+                'status'     => $c->status ?? 'active',
+                'closed_at'  => $c->closed_at?->format('Y-m-d'),
                 'gyms_count' => $c->gyms_count,
                 'created_at' => $c->created_at->format('Y-m-d'),
             ]),
@@ -89,6 +92,8 @@ class SuperChainController extends Controller
             'name'       => $chain->name,
             'slug'       => $chain->slug,
             'logo_url'   => $chain->logo_url,
+            'status'     => $chain->status ?? 'active',
+            'closed_at'  => $chain->closed_at?->format('Y-m-d'),
             'gyms_count' => $chain->gyms_count,
             'created_at' => $chain->created_at->format('Y-m-d'),
             'gyms'       => $gyms,
@@ -117,9 +122,29 @@ class SuperChainController extends Controller
     public function destroy(int $id): JsonResponse
     {
         $chain = GymChain::findOrFail($id);
-        $chain->delete();
 
-        return response()->json(['message' => 'Rede removida. As filiais ficaram independentes.']);
+        DB::transaction(function () use ($chain) {
+            Gym::where('chain_id', $chain->id)->update(['chain_id' => null]);
+
+            $chain->update([
+                'status'    => 'closed',
+                'closed_at' => now(),
+            ]);
+        });
+
+        return response()->json(['message' => 'Rede encerrada. As filiais ficaram independentes.']);
+    }
+
+    public function reactivate(int $id): JsonResponse
+    {
+        $chain = GymChain::findOrFail($id);
+
+        $chain->update([
+            'status'    => 'active',
+            'closed_at' => null,
+        ]);
+
+        return response()->json(['chain' => $this->format($chain->loadCount('gyms'))]);
     }
 
     // ── LINK GYM ─────────────────────────────────────────────────────────────
@@ -127,6 +152,12 @@ class SuperChainController extends Controller
     public function linkGym(Request $request, int $id): JsonResponse
     {
         $chain = GymChain::findOrFail($id);
+
+        if (($chain->status ?? 'active') === 'closed') {
+            return response()->json([
+                'message' => 'Reative a rede antes de vincular novas academias.',
+            ], 422);
+        }
 
         $data = $request->validate([
             'gym_id' => 'required|integer|exists:gyms,id',
@@ -238,6 +269,8 @@ class SuperChainController extends Controller
             'name'       => $chain->name,
             'slug'       => $chain->slug,
             'logo_url'   => $chain->logo_url,
+            'status'     => $chain->status ?? 'active',
+            'closed_at'  => $chain->closed_at?->format('Y-m-d'),
             'gyms_count' => $chain->gyms_count ?? 0,
             'created_at' => $chain->created_at->format('Y-m-d'),
         ];

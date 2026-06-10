@@ -66,6 +66,7 @@
             <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Nome</th>
             <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide hidden md:table-cell">Slug</th>
             <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Filiais</th>
+            <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide hidden sm:table-cell">Status</th>
             <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide hidden sm:table-cell">Criada em</th>
             <th class="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">Ações</th>
           </tr>
@@ -92,6 +93,14 @@
                 {{ chain.gyms_count }}
               </span>
             </td>
+            <td class="px-5 py-3.5 hidden sm:table-cell">
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
+                    :class="chain.status === 'closed' ? 'bg-slate-100 text-slate-500' : 'bg-emerald-50 text-emerald-700'">
+                <span class="w-1.5 h-1.5 rounded-full"
+                      :class="chain.status === 'closed' ? 'bg-slate-400' : 'bg-emerald-500'" />
+                {{ chain.status === 'closed' ? 'Encerrada' : 'Ativa' }}
+              </span>
+            </td>
             <td class="px-5 py-3.5 hidden sm:table-cell text-slate-500">{{ chain.created_at }}</td>
             <td class="px-5 py-3.5 text-right">
               <div class="inline-flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -110,12 +119,15 @@
                     <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" />
                   </svg>
                 </button>
-                <button @click="confirmDelete(chain)"
-                  class="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  title="Excluir">
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                  </svg>
+                <button v-if="chain.status === 'closed'" @click="doReactivate(chain)"
+                  class="px-2.5 py-1.5 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                  title="Reativar rede">
+                  Reativar
+                </button>
+                <button v-else @click="confirmClose(chain)"
+                  class="px-2.5 py-1.5 text-xs font-semibold text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                  title="Encerrar rede">
+                  Encerrar
                 </button>
               </div>
             </td>
@@ -141,32 +153,33 @@
       </div>
     </div>
 
-    <!-- Delete Confirm Modal -->
+    <!-- Close Confirm Modal -->
     <Teleport to="body">
       <Transition name="modal">
-        <div v-if="deleteTarget"
+        <div v-if="closeTarget"
           class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <h2 class="text-lg font-bold text-slate-900 mb-1">Excluir rede</h2>
+            <h2 class="text-lg font-bold text-slate-900 mb-1">Encerrar rede</h2>
             <p class="text-sm text-slate-500 mb-3">
-              Tem certeza que deseja excluir <strong>{{ deleteTarget.name }}</strong>?
+              Tem certeza que deseja encerrar <strong>{{ closeTarget.name }}</strong>?
             </p>
             <div class="flex items-start gap-2.5 p-3 rounded-lg bg-amber-50 border border-amber-200 mb-5">
               <svg class="w-4 h-4 text-amber-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
               </svg>
               <p class="text-xs text-amber-700">
-                As <strong>{{ deleteTarget.gyms_count }}</strong> filiais desta rede ficarão independentes.
+                As <strong>{{ closeTarget.gyms_count }}</strong> filiais desta rede ficarão independentes.
+                Alunos, treinos, pontos, resgates e históricos serão preservados.
               </p>
             </div>
             <div class="flex justify-end gap-2">
-              <button @click="deleteTarget = null"
+              <button @click="closeTarget = null"
                 class="px-4 py-2 text-sm font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
                 Cancelar
               </button>
-              <button @click="doDelete" :disabled="deleting"
+              <button @click="doClose" :disabled="closing"
                 class="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-60">
-                {{ deleting ? 'Excluindo…' : 'Excluir' }}
+                {{ closing ? 'Encerrando...' : 'Encerrar rede' }}
               </button>
             </div>
           </div>
@@ -187,8 +200,8 @@ const loading     = ref(false)
 const error       = ref(null)
 const searchInput = ref('')
 const page        = ref(1)
-const deleteTarget = ref(null)
-const deleting    = ref(false)
+const closeTarget = ref(null)
+const closing     = ref(false)
 
 let searchTimer = null
 
@@ -217,22 +230,31 @@ async function load() {
   }
 }
 
-function confirmDelete(chain) {
-  deleteTarget.value = chain
+function confirmClose(chain) {
+  closeTarget.value = chain
 }
 
-async function doDelete() {
-  if (!deleteTarget.value) return
-  deleting.value = true
+async function doClose() {
+  if (!closeTarget.value) return
+  closing.value = true
   try {
-    await api.delete(`/super/chains/${deleteTarget.value.id}`)
-    deleteTarget.value = null
+    await api.delete(`/super/chains/${closeTarget.value.id}`)
+    closeTarget.value = null
     await load()
   } catch (e) {
-    error.value = e.response?.data?.message ?? 'Erro ao excluir rede.'
-    deleteTarget.value = null
+    error.value = e.response?.data?.message ?? 'Erro ao encerrar rede.'
+    closeTarget.value = null
   } finally {
-    deleting.value = false
+    closing.value = false
+  }
+}
+
+async function doReactivate(chain) {
+  try {
+    await api.patch(`/super/chains/${chain.id}/reactivate`)
+    await load()
+  } catch (e) {
+    error.value = e.response?.data?.message ?? 'Erro ao reativar rede.'
   }
 }
 </script>

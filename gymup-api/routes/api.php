@@ -475,6 +475,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/chains/{id}',                     [SuperChainController::class, 'show']);
         Route::put('/chains/{id}',                     [SuperChainController::class, 'update']);
         Route::delete('/chains/{id}',                  [SuperChainController::class, 'destroy']);
+        Route::patch('/chains/{id}/reactivate',         [SuperChainController::class, 'reactivate']);
         Route::post('/chains/{id}/gyms',               [SuperChainController::class, 'linkGym']);
         Route::delete('/chains/{id}/gyms/{gymId}',     [SuperChainController::class, 'unlinkGym']);
         Route::get('/gyms/independent',                [SuperChainController::class, 'independentGyms']);

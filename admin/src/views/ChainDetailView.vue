@@ -53,10 +53,26 @@
                 <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-brand-50 text-brand-700">
                   {{ chain.gyms_count }} filial{{ chain.gyms_count !== 1 ? 'is' : '' }}
                 </span>
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                      :class="chain.status === 'closed' ? 'bg-slate-100 text-slate-500' : 'bg-emerald-50 text-emerald-700'">
+                  <span class="w-1.5 h-1.5 rounded-full"
+                        :class="chain.status === 'closed' ? 'bg-slate-400' : 'bg-emerald-500'" />
+                  {{ chain.status === 'closed' ? 'Encerrada' : 'Ativa' }}
+                </span>
               </div>
             </div>
           </div>
           <div class="flex items-center gap-2 flex-shrink-0">
+            <button v-if="chain.status === 'closed'" @click="doReactivate"
+              class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-emerald-600
+                     border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors">
+              Reativar rede
+            </button>
+            <button v-else @click="closeTarget = chain"
+              class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-red-500
+                     border border-red-200 rounded-lg hover:bg-red-50 transition-colors">
+              Encerrar rede
+            </button>
             <button @click="$router.push(`/chains/${chain.id}/edit`)"
               class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-slate-600
                      border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
@@ -73,9 +89,9 @@
       <div class="card overflow-hidden">
         <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <h2 class="text-sm font-semibold text-slate-800">Filiais vinculadas</h2>
-          <button @click="linkModalOpen = true"
+          <button @click="linkModalOpen = true" :disabled="chain.status === 'closed'"
             class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-brand-600
-                   border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors">
+                   border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
@@ -200,6 +216,40 @@
       </Transition>
     </Teleport>
 
+    <!-- Close Confirm -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div v-if="closeTarget"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <h2 class="text-lg font-bold text-slate-900 mb-1">Encerrar rede</h2>
+            <p class="text-sm text-slate-500 mb-3">
+              Tem certeza que deseja encerrar <strong>{{ closeTarget.name }}</strong>?
+            </p>
+            <div class="flex items-start gap-2.5 p-3 rounded-lg bg-amber-50 border border-amber-200 mb-5">
+              <svg class="w-4 h-4 text-amber-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+              <p class="text-xs text-amber-700">
+                As filiais desta rede ficarão independentes. Alunos, treinos, pontos,
+                resgates e históricos serão preservados.
+              </p>
+            </div>
+            <div class="flex justify-end gap-2">
+              <button @click="closeTarget = null"
+                class="px-4 py-2 text-sm font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                Cancelar
+              </button>
+              <button @click="doClose" :disabled="closing"
+                class="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-60">
+                {{ closing ? 'Encerrando...' : 'Encerrar rede' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
   </div>
 </template>
 
@@ -226,6 +276,10 @@ let gymSearchTimer     = null
 // Unlink
 const unlinkTarget = ref(null)
 const unlinking    = ref(false)
+
+// Close/reactivate
+const closeTarget = ref(null)
+const closing     = ref(false)
 
 onMounted(load)
 
@@ -304,6 +358,30 @@ async function doUnlink() {
     unlinkTarget.value = null
   } finally {
     unlinking.value = false
+  }
+}
+
+async function doClose() {
+  if (!closeTarget.value) return
+  closing.value = true
+  try {
+    await api.delete(`/super/chains/${id}`)
+    closeTarget.value = null
+    await load()
+  } catch (e) {
+    error.value = e.response?.data?.message ?? 'Erro ao encerrar rede.'
+    closeTarget.value = null
+  } finally {
+    closing.value = false
+  }
+}
+
+async function doReactivate() {
+  try {
+    await api.patch(`/super/chains/${id}/reactivate`)
+    await load()
+  } catch (e) {
+    error.value = e.response?.data?.message ?? 'Erro ao reativar rede.'
   }
 }
 </script>
