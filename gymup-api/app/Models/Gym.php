@@ -24,6 +24,7 @@ class Gym extends Model
     ];
 
     protected $casts = [
+        'active' => 'boolean',
         'qr_generated_at' => 'datetime',
     ];
 

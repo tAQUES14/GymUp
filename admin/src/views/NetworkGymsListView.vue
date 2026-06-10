@@ -1,10 +1,9 @@
 <template>
   <div>
-
     <div class="flex items-center justify-between mb-6">
       <div>
         <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Filiais da Rede</h1>
-        <p class="text-slate-500 text-sm mt-1">Gerencie as academias vinculadas à sua rede.</p>
+        <p class="text-slate-500 text-sm mt-1">Gerencie as academias vinculadas a sua rede.</p>
       </div>
       <button @click="$router.push('/network/gyms/new')"
         class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white
@@ -16,7 +15,6 @@
       </button>
     </div>
 
-    <!-- Loading -->
     <div v-if="loading" class="card animate-pulse">
       <div v-for="n in 4" :key="n" class="flex items-center gap-4 px-5 py-3.5 border-b border-slate-100 last:border-0">
         <div class="h-4 w-40 bg-slate-100 rounded" />
@@ -25,20 +23,17 @@
       </div>
     </div>
 
-    <!-- Error -->
     <div v-else-if="error" class="card p-8 text-center">
       <p class="text-sm font-semibold text-slate-700 mb-1">Erro ao carregar filiais</p>
       <p class="text-xs text-slate-400 mb-4">{{ error }}</p>
       <button @click="load" class="btn-secondary text-xs">Tentar novamente</button>
     </div>
 
-    <!-- Empty -->
     <div v-else-if="gyms.length === 0" class="card p-12 text-center">
       <p class="text-sm font-semibold text-slate-700">Nenhuma filial cadastrada</p>
       <p class="text-xs text-slate-400 mt-1">Crie a primeira filial clicando em "+ Nova filial".</p>
     </div>
 
-    <!-- Table -->
     <div v-else class="card overflow-hidden">
       <table class="w-full text-sm">
         <thead>
@@ -46,7 +41,8 @@
             <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Nome</th>
             <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide hidden sm:table-cell">Cidade</th>
             <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Alunos</th>
-            <th class="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">Ações</th>
+            <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+            <th class="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">Acoes</th>
           </tr>
         </thead>
         <tbody>
@@ -66,29 +62,72 @@
                 </div>
               </div>
             </td>
-            <td class="px-5 py-3.5 hidden sm:table-cell text-slate-500">{{ gym.city ?? '—' }}</td>
+            <td class="px-5 py-3.5 hidden sm:table-cell text-slate-500">{{ gym.city ?? '-' }}</td>
             <td class="px-5 py-3.5">
               <span class="inline-flex items-center justify-center min-w-[2rem] h-6 px-2 rounded-full text-xs font-semibold"
                     :class="gym.students_count > 0 ? 'bg-brand-50 text-brand-700' : 'bg-slate-100 text-slate-400'">
                 {{ gym.students_count }}
               </span>
             </td>
+            <td class="px-5 py-3.5">
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
+                    :class="gym.active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'">
+                <span class="w-1.5 h-1.5 rounded-full" :class="gym.active ? 'bg-emerald-500' : 'bg-slate-400'" />
+                {{ gym.active ? 'Ativa' : 'Congelada' }}
+              </span>
+            </td>
             <td class="px-5 py-3.5 text-right">
-              <button @click="$router.push(`/network/gyms/${gym.id}/edit`)"
-                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600
-                       border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors
-                       opacity-0 group-hover:opacity-100">
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" />
-                </svg>
-                Editar
-              </button>
+              <div class="inline-flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button @click="$router.push(`/network/gyms/${gym.id}/edit`)"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600
+                         border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                  Editar
+                </button>
+                <button v-if="gym.active" @click="confirmFreeze(gym)"
+                  class="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-red-500
+                         border border-red-200 rounded-lg hover:bg-red-50 transition-colors">
+                  Congelar
+                </button>
+                <button v-else @click="doReactivate(gym)"
+                  class="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-emerald-600
+                         border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors">
+                  Reativar
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
 
+    <Teleport to="body">
+      <Transition name="modal">
+        <div v-if="freezeTarget"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <h2 class="text-base font-bold text-slate-900 mb-1">Congelar filial</h2>
+            <p class="text-sm text-slate-500 mb-4">
+              Deseja congelar <strong>{{ freezeTarget.name }}</strong>?
+            </p>
+            <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-5">
+              <p class="text-xs font-medium text-amber-800 leading-relaxed">
+                A filial ficara inativa, mas alunos, treinos, pontos, check-ins e historico permanecem vinculados a ela.
+              </p>
+            </div>
+            <div class="flex justify-end gap-2">
+              <button @click="freezeTarget = null"
+                class="px-4 py-2 text-sm font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                Cancelar
+              </button>
+              <button @click="doFreeze" :disabled="freezing"
+                class="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-60">
+                {{ freezing ? 'Congelando...' : 'Congelar filial' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -96,15 +135,17 @@
 import { ref, onMounted } from 'vue'
 import api from '../services/api.js'
 
-const gyms    = ref([])
+const gyms = ref([])
 const loading = ref(true)
-const error   = ref(null)
+const error = ref(null)
+const freezeTarget = ref(null)
+const freezing = ref(false)
 
 onMounted(load)
 
 async function load() {
   loading.value = true
-  error.value   = null
+  error.value = null
   try {
     const { data } = await api.get('/network/gyms')
     gyms.value = data.gyms
@@ -114,4 +155,37 @@ async function load() {
     loading.value = false
   }
 }
+
+function confirmFreeze(gym) {
+  freezeTarget.value = gym
+}
+
+async function doFreeze() {
+  if (!freezeTarget.value) return
+  freezing.value = true
+  try {
+    await api.patch(`/network/gyms/${freezeTarget.value.id}/freeze`)
+    freezeTarget.value = null
+    await load()
+  } catch (e) {
+    error.value = e.response?.data?.message ?? 'Erro ao congelar filial.'
+    freezeTarget.value = null
+  } finally {
+    freezing.value = false
+  }
+}
+
+async function doReactivate(gym) {
+  try {
+    await api.patch(`/network/gyms/${gym.id}/reactivate`)
+    await load()
+  } catch (e) {
+    error.value = e.response?.data?.message ?? 'Erro ao reativar filial.'
+  }
+}
 </script>
+
+<style scoped>
+.modal-enter-active, .modal-leave-active { transition: opacity 0.2s ease; }
+.modal-enter-from, .modal-leave-to { opacity: 0; }
+</style>

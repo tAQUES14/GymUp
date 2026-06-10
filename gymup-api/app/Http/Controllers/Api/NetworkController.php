@@ -147,6 +147,36 @@ class NetworkController extends Controller
         return response()->json(['gym' => $this->formatGym($gym)]);
     }
 
+    public function freezeGym(Request $request, int $id): JsonResponse
+    {
+        $chainId = $this->resolveChainId($request);
+
+        $gym = Gym::where('id', $id)->where('chain_id', $chainId)->first();
+        abort_unless($gym, 403, 'Acesso negado. Filial nao pertence a sua rede.');
+
+        $gym->update(['active' => false]);
+
+        return response()->json([
+            'message' => 'Filial congelada. Alunos e historico foram preservados.',
+            'gym'     => $this->formatGym($gym->refresh()),
+        ]);
+    }
+
+    public function reactivateGym(Request $request, int $id): JsonResponse
+    {
+        $chainId = $this->resolveChainId($request);
+
+        $gym = Gym::where('id', $id)->where('chain_id', $chainId)->first();
+        abort_unless($gym, 403, 'Acesso negado. Filial nao pertence a sua rede.');
+
+        $gym->update(['active' => true]);
+
+        return response()->json([
+            'message' => 'Filial reativada com sucesso.',
+            'gym'     => $this->formatGym($gym->refresh()),
+        ]);
+    }
+
     // ── TRAINERS ──────────────────────────────────────────────────────────────
 
     public function listTrainers(Request $request): JsonResponse
