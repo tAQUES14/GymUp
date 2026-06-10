@@ -236,7 +236,6 @@ const gymManagementNav = computed(() => {
 
 // Rede — network_admin apenas
 const networkAdminNav = [
-  { to: '/network/dashboard', label: 'Painel da Rede', icon: icons.network },
   { to: '/network/gyms',      label: 'Filiais',        icon: icons.gyms    },
   { to: '/network/trainers',  label: 'Trainers',       icon: icons.users   },
 ]
