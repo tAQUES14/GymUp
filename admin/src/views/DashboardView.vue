@@ -82,6 +82,17 @@
             <p class="text-sm font-semibold text-slate-600">Nenhum treino conclu&iacute;do nesta semana</p>
             <p class="text-xs text-slate-400 mt-1">Assim que um treino for finalizado, ele aparece aqui.</p>
           </div>
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
+            <div
+              v-for="item in weeklyInsightCards"
+              :key="item.label"
+              class="rounded-2xl border border-slate-100 bg-slate-50/70 px-3 py-3"
+            >
+              <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">{{ item.label }}</p>
+              <p class="mt-1 text-lg font-bold text-slate-900 tracking-tight">{{ item.value }}</p>
+              <p class="text-[11px] font-medium text-slate-500 truncate">{{ item.detail }}</p>
+            </div>
+          </div>
         </div>
 
         <!-- Top Gyms -->
@@ -199,6 +210,17 @@
             <p class="text-sm font-semibold text-slate-600">Nenhum treino conclu&iacute;do nesta semana</p>
             <p class="text-xs text-slate-400 mt-1">Assim que um treino for finalizado, ele aparece aqui.</p>
           </div>
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
+            <div
+              v-for="item in weeklyInsightCards"
+              :key="item.label"
+              class="rounded-2xl border border-slate-100 bg-slate-50/70 px-3 py-3"
+            >
+              <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">{{ item.label }}</p>
+              <p class="mt-1 text-lg font-bold text-slate-900 tracking-tight">{{ item.value }}</p>
+              <p class="text-[11px] font-medium text-slate-500 truncate">{{ item.detail }}</p>
+            </div>
+          </div>
         </div>
 
         <!-- Top Students -->
@@ -275,6 +297,45 @@ const totalWeeklyWorkouts = computed(() => {
   if (!data.value?.weekly_activity) return 0
   return data.value.weekly_activity.reduce((s, d) => s + d.workouts, 0)
 })
+
+const weeklyInsightCards = computed(() => {
+  const activity = data.value?.weekly_activity ?? []
+  const total = totalWeeklyWorkouts.value
+  const today = activity.at(-1)
+  const bestDay = activity.reduce((best, day) => {
+    if (!best || day.workouts > best.workouts) return day
+    return best
+  }, null)
+  const activeDays = activity.filter((day) => day.workouts > 0).length
+  const average = activity.length ? total / activity.length : 0
+
+  return [
+    {
+      label: 'Hoje',
+      value: `${today?.workouts ?? 0}`,
+      detail: pluralizeWorkout(today?.workouts ?? 0),
+    },
+    {
+      label: 'Melhor dia',
+      value: bestDay?.day ?? '-',
+      detail: pluralizeWorkout(bestDay?.workouts ?? 0),
+    },
+    {
+      label: 'Media/dia',
+      value: average.toLocaleString('pt-BR', { maximumFractionDigits: 1 }),
+      detail: 'treinos por dia',
+    },
+    {
+      label: 'Dias ativos',
+      value: `${activeDays}/7`,
+      detail: activeDays === 1 ? 'dia com treino' : 'dias com treino',
+    },
+  ]
+})
+
+function pluralizeWorkout(count) {
+  return `${count} treino${count === 1 ? '' : 's'}`
+}
 
 function formatPoints(n) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
