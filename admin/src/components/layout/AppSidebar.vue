@@ -198,8 +198,10 @@ const icons = {
 
 const mainNav = computed(() => [
   {
-    to:    '/dashboard',
-    label: auth.isSuperAdmin ? 'Dashboard Global' : 'Dashboard',
+    to:    auth.user?.role === 'network_admin' ? '/network/dashboard' : '/dashboard',
+    label: auth.user?.role === 'network_admin'
+      ? 'Painel da Rede'
+      : (auth.isSuperAdmin ? 'Dashboard Global' : 'Dashboard'),
     icon:  icons.dashboard,
   },
 ])

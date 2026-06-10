@@ -240,16 +240,19 @@ router.beforeEach((to, _from, next) => {
     return next('/login')
   }
   if (to.meta.guest && auth.isAuthenticated) {
-    return next('/dashboard')
+    return next(auth.loginRedirect(auth.user?.role))
+  }
+  if (to.path === '/dashboard' && auth.user?.role === 'network_admin') {
+    return next('/network/dashboard')
   }
   if (to.meta.superAdminOnly && !auth.isSuperAdmin) {
-    return next('/dashboard')
+    return next(auth.loginRedirect(auth.user?.role))
   }
   if (to.meta.gymAdminOrAbove && !auth.isSuperAdmin && !auth.isGymAdmin) {
-    return next('/dashboard')
+    return next(auth.loginRedirect(auth.user?.role))
   }
   if (to.meta.networkAdminOnly && auth.user?.role !== 'network_admin') {
-    return next('/dashboard')
+    return next(auth.loginRedirect(auth.user?.role))
   }
 
   next()
