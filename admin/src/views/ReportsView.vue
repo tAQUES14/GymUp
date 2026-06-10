@@ -150,8 +150,30 @@
               {{ data.kpis.total_workouts.toLocaleString('pt-BR') }} total
             </span>
           </div>
-          <div class="h-48">
-            <canvas ref="workoutsChart" />
+          <div class="h-48 flex items-end gap-1.5 pt-5">
+            <div
+              v-for="day in workoutsBars"
+              :key="day.date"
+              class="flex-1 min-w-0 h-full flex flex-col justify-end gap-2 group"
+            >
+              <div class="relative flex-1 flex items-end">
+                <div
+                  class="w-full min-h-[6px] rounded-t-lg bg-gradient-to-t from-brand-100 to-brand-500 transition-all group-hover:from-brand-200 group-hover:to-brand-600"
+                  :style="{ height: `${day.height}%` }"
+                />
+                <div
+                  class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded-lg bg-slate-900 text-white text-[11px] font-semibold whitespace-nowrap shadow-lg"
+                >
+                  {{ day.workouts }} treino{{ day.workouts === 1 ? '' : 's' }}
+                </div>
+              </div>
+              <span class="text-[10px] font-semibold text-slate-400 text-center truncate">
+                {{ day.showLabel ? day.label : '' }}
+              </span>
+            </div>
+          </div>
+          <div v-if="!data.workouts_by_day?.some((d) => d.workouts > 0)" class="mt-3 rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
+            Ainda nao ha treinos finalizados neste periodo.
           </div>
         </div>
 
@@ -163,8 +185,42 @@
               <p class="text-xs text-slate-400 mt-0.5">Distribuição de presença</p>
             </div>
           </div>
-          <div class="h-48">
-            <canvas ref="checkinChart" />
+          <div class="h-48 flex items-end justify-between gap-3 pt-5">
+            <div
+              v-for="day in checkinBars"
+              :key="day.day"
+              class="flex-1 h-full flex flex-col justify-end gap-3 group"
+            >
+              <div class="relative flex-1 flex items-end justify-center">
+                <div
+                  class="w-full max-w-12 min-h-[8px] rounded-t-xl bg-gradient-to-t from-emerald-100 to-emerald-500 transition-all group-hover:from-emerald-200 group-hover:to-emerald-600"
+                  :style="{ height: `${day.height}%` }"
+                />
+                <div
+                  class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded-lg bg-slate-900 text-white text-[11px] font-semibold whitespace-nowrap shadow-lg"
+                >
+                  {{ day.checkins }} check-in{{ day.checkins === 1 ? '' : 's' }}
+                </div>
+              </div>
+              <div class="text-center">
+                <span class="block text-[11px] font-bold text-slate-600">{{ day.day }}</span>
+                <span class="block text-[10px] font-semibold text-slate-400">{{ day.checkins }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="mt-3 grid grid-cols-3 gap-2">
+            <div class="rounded-xl bg-slate-50 px-3 py-2">
+              <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Melhor dia</p>
+              <p class="text-sm font-bold text-slate-900">{{ bestCheckinDay.day }}</p>
+            </div>
+            <div class="rounded-xl bg-slate-50 px-3 py-2">
+              <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Media/dia</p>
+              <p class="text-sm font-bold text-slate-900">{{ checkinAverage }}</p>
+            </div>
+            <div class="rounded-xl bg-slate-50 px-3 py-2">
+              <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Total</p>
+              <p class="text-sm font-bold text-slate-900">{{ data.kpis.total_checkins }}</p>
+            </div>
           </div>
         </div>
 
@@ -256,11 +312,8 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { Chart, BarElement, LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Filler } from 'chart.js'
+import { computed, ref, onMounted } from 'vue'
 import api from '../services/api.js'
-
-Chart.register(BarElement, LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Filler)
 
 const periods = [
   { label: '7 dias',  value: '7'  },
@@ -273,10 +326,40 @@ const data         = ref(null)
 const loading      = ref(true)
 const error        = ref('')
 
-const workoutsChart = ref(null)
-const checkinChart  = ref(null)
-let workoutsInstance = null
-let checkinInstance  = null
+const workoutsBars = computed(() => {
+  const days = data.value?.workouts_by_day ?? []
+  const max = Math.max(...days.map((day) => day.workouts), 1)
+  const labelEvery = days.length <= 10 ? 1 : Math.ceil(days.length / 8)
+
+  return days.map((day, index) => ({
+    ...day,
+    height: day.workouts > 0 ? Math.max(10, Math.round((day.workouts / max) * 100)) : 4,
+    showLabel: index === 0 || index === days.length - 1 || index % labelEvery === 0,
+  }))
+})
+
+const checkinBars = computed(() => {
+  const days = data.value?.checkins_by_weekday ?? []
+  const max = Math.max(...days.map((day) => day.checkins), 1)
+
+  return days.map((day) => ({
+    ...day,
+    height: day.checkins > 0 ? Math.max(12, Math.round((day.checkins / max) * 100)) : 5,
+  }))
+})
+
+const bestCheckinDay = computed(() => {
+  const days = data.value?.checkins_by_weekday ?? []
+  return days.reduce(
+    (best, day) => (day.checkins > best.checkins ? day : best),
+    { day: '-', checkins: 0 },
+  )
+})
+
+const checkinAverage = computed(() => {
+  const total = data.value?.kpis?.total_checkins ?? 0
+  return (total / 7).toLocaleString('pt-BR', { maximumFractionDigits: 1 })
+})
 
 function fmtPts(n) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
@@ -294,13 +377,10 @@ function rankClass(idx) {
 async function loadData() {
   loading.value = true
   error.value   = ''
-  destroyCharts()
 
   try {
     const { data: res } = await api.get('/admin/reports', { params: { period: period.value } })
     data.value = res
-    await nextTick()
-    renderCharts()
   } catch (e) {
     error.value = e.response?.data?.message ?? 'Não foi possível carregar os relatórios.'
   } finally {
@@ -313,138 +393,5 @@ function selectPeriod(p) {
   loadData()
 }
 
-function destroyCharts() {
-  workoutsInstance?.destroy()
-  checkinInstance?.destroy()
-  workoutsInstance = null
-  checkinInstance  = null
-}
-
-function renderCharts() {
-  renderWorkoutsChart()
-  renderCheckinChart()
-}
-
-function renderWorkoutsChart() {
-  if (!workoutsChart.value || !data.value?.workouts_by_day) return
-
-  const days   = data.value.workouts_by_day
-  const labels = days.map(d => d.label)
-  const values = days.map(d => d.workouts)
-  const maxVal = Math.max(...values, 1)
-
-  workoutsInstance = new Chart(workoutsChart.value, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Treinos',
-        data: values,
-        backgroundColor: (ctx) => {
-          const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, ctx.chart.height)
-          gradient.addColorStop(0, 'rgba(99, 102, 241, 0.85)')
-          gradient.addColorStop(1, 'rgba(99, 102, 241, 0.20)')
-          return gradient
-        },
-        borderRadius: 6,
-        borderSkipped: false,
-        barPercentage: period.value === '7' ? 0.5 : 0.7,
-      }],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: { label: (ctx) => ` ${ctx.parsed.y} treino${ctx.parsed.y !== 1 ? 's' : ''}` },
-          backgroundColor: '#1e293b',
-          titleColor: '#94a3b8',
-          bodyColor: '#f1f5f9',
-          padding: 10,
-          cornerRadius: 8,
-          displayColors: false,
-        },
-      },
-      scales: {
-        x: {
-          grid: { display: false },
-          border: { display: false },
-          ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter' }, maxTicksLimit: 10 },
-        },
-        y: {
-          grid: { color: '#f1f5f9', drawTicks: false },
-          border: { display: false, dash: [4, 4] },
-          ticks: {
-            color: '#94a3b8',
-            font: { size: 11, family: 'Inter' },
-            padding: 8,
-            stepSize: Math.ceil(maxVal / 4) || 1,
-          },
-          min: 0,
-        },
-      },
-    },
-  })
-}
-
-function renderCheckinChart() {
-  if (!checkinChart.value || !data.value?.checkins_by_weekday) return
-
-  const days   = data.value.checkins_by_weekday
-  const labels = days.map(d => d.day)
-  const values = days.map(d => d.checkins)
-
-  checkinInstance = new Chart(checkinChart.value, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Check-ins',
-        data: values,
-        backgroundColor: (ctx) => {
-          const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, ctx.chart.height)
-          gradient.addColorStop(0, 'rgba(16, 185, 129, 0.80)')
-          gradient.addColorStop(1, 'rgba(16, 185, 129, 0.18)')
-          return gradient
-        },
-        borderRadius: 6,
-        borderSkipped: false,
-        barPercentage: 0.55,
-      }],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: { label: (ctx) => ` ${ctx.parsed.y} check-in${ctx.parsed.y !== 1 ? 's' : ''}` },
-          backgroundColor: '#1e293b',
-          titleColor: '#94a3b8',
-          bodyColor: '#f1f5f9',
-          padding: 10,
-          cornerRadius: 8,
-          displayColors: false,
-        },
-      },
-      scales: {
-        x: {
-          grid: { display: false },
-          border: { display: false },
-          ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter' } },
-        },
-        y: {
-          grid: { color: '#f1f5f9', drawTicks: false },
-          border: { display: false, dash: [4, 4] },
-          ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter' }, padding: 8 },
-          min: 0,
-        },
-      },
-    },
-  })
-}
-
 onMounted(loadData)
-onBeforeUnmount(destroyCharts)
 </script>
