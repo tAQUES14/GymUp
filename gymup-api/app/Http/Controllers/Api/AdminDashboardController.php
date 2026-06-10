@@ -34,14 +34,14 @@ class AdminDashboardController extends Controller
 
         $totalUsers = User::where('role', 'user')->count();
 
-        $workoutsToday = WorkoutSession::where('points_granted', true)
+        $workoutsToday = WorkoutSession::whereNotNull('finished_at')
             ->whereDate('finished_at', $today)
             ->count();
 
         $weeklyActivity = [];
         for ($i = 6; $i >= 0; $i--) {
             $date  = $today->copy()->subDays($i);
-            $count = WorkoutSession::where('points_granted', true)
+            $count = WorkoutSession::whereNotNull('finished_at')
                 ->whereDate('finished_at', $date)
                 ->count();
 
@@ -90,7 +90,7 @@ class AdminDashboardController extends Controller
         $totalUsers = $userIds->count();
 
         $workoutsToday = WorkoutSession::whereIn('user_id', $userIds)
-            ->where('points_granted', true)
+            ->whereNotNull('finished_at')
             ->whereDate('finished_at', $today)
             ->count();
 
@@ -106,7 +106,7 @@ class AdminDashboardController extends Controller
         for ($i = 6; $i >= 0; $i--) {
             $date  = $today->copy()->subDays($i);
             $count = WorkoutSession::whereIn('user_id', $userIds)
-                ->where('points_granted', true)
+                ->whereNotNull('finished_at')
                 ->whereDate('finished_at', $date)
                 ->count();
 

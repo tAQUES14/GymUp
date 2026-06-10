@@ -31,12 +31,12 @@ class AdminReportsController extends Controller
         // ── KPIs ──────────────────────────────────────────────────────────────
 
         $totalWorkouts = WorkoutSession::whereIn('user_id', $userIds)
-            ->where('points_granted', true)
+            ->whereNotNull('finished_at')
             ->whereBetween('finished_at', [$start, $end])
             ->count();
 
         $activeUsers = WorkoutSession::whereIn('user_id', $userIds)
-            ->where('points_granted', true)
+            ->whereNotNull('finished_at')
             ->whereBetween('finished_at', [$start, $end])
             ->distinct('user_id')
             ->count('user_id');
@@ -68,7 +68,7 @@ class AdminReportsController extends Controller
         while ($cursor->lte($end)) {
             $dayEnd = $cursor->copy()->endOfDay();
             $count  = WorkoutSession::whereIn('user_id', $userIds)
-                ->where('points_granted', true)
+                ->whereNotNull('finished_at')
                 ->whereBetween('finished_at', [$cursor->startOfDay(), $dayEnd])
                 ->count();
 
@@ -104,7 +104,7 @@ class AdminReportsController extends Controller
         // ── Top alunos por treinos ────────────────────────────────────────────
 
         $topByWorkouts = WorkoutSession::whereIn('user_id', $userIds)
-            ->where('points_granted', true)
+            ->whereNotNull('finished_at')
             ->whereBetween('finished_at', [$start, $end])
             ->selectRaw('user_id, COUNT(*) AS total')
             ->groupBy('user_id')
