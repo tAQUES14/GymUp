@@ -71,7 +71,25 @@
             </span>
           </div>
           <div v-if="totalWeeklyWorkouts > 0" class="h-52">
-            <canvas ref="chartCanvas" />
+            <div class="h-full flex items-end gap-3 rounded-2xl bg-slate-50/60 border border-slate-100 px-4 pt-4 pb-3">
+              <div
+                v-for="day in weeklyActivity"
+                :key="day.date"
+                class="flex-1 h-full flex flex-col justify-end items-center gap-2"
+              >
+                <div class="w-full flex-1 flex items-end justify-center">
+                  <div
+                    class="w-full max-w-12 min-h-[10px] rounded-t-xl bg-gradient-to-t from-brand-600 to-brand-400 shadow-sm shadow-brand-500/20 transition-all"
+                    :style="{ height: weeklyBarHeight(day.workouts) }"
+                    :title="`${day.day}: ${pluralizeWorkout(day.workouts)}`"
+                  />
+                </div>
+                <div class="text-center">
+                  <p class="text-xs font-bold text-slate-700 leading-none">{{ day.workouts }}</p>
+                  <p class="text-[10px] font-semibold uppercase text-slate-400 mt-1">{{ day.day }}</p>
+                </div>
+              </div>
+            </div>
           </div>
           <div v-else class="h-52 flex flex-col items-center justify-center rounded-2xl bg-slate-50/70 border border-dashed border-slate-200">
             <div class="w-10 h-10 rounded-2xl bg-white flex items-center justify-center shadow-sm mb-3">
@@ -199,7 +217,25 @@
             </span>
           </div>
           <div v-if="totalWeeklyWorkouts > 0" class="h-52">
-            <canvas ref="chartCanvas" />
+            <div class="h-full flex items-end gap-3 rounded-2xl bg-slate-50/60 border border-slate-100 px-4 pt-4 pb-3">
+              <div
+                v-for="day in weeklyActivity"
+                :key="day.date"
+                class="flex-1 h-full flex flex-col justify-end items-center gap-2"
+              >
+                <div class="w-full flex-1 flex items-end justify-center">
+                  <div
+                    class="w-full max-w-12 min-h-[10px] rounded-t-xl bg-gradient-to-t from-brand-600 to-brand-400 shadow-sm shadow-brand-500/20 transition-all"
+                    :style="{ height: weeklyBarHeight(day.workouts) }"
+                    :title="`${day.day}: ${pluralizeWorkout(day.workouts)}`"
+                  />
+                </div>
+                <div class="text-center">
+                  <p class="text-xs font-bold text-slate-700 leading-none">{{ day.workouts }}</p>
+                  <p class="text-[10px] font-semibold uppercase text-slate-400 mt-1">{{ day.day }}</p>
+                </div>
+              </div>
+            </div>
           </div>
           <div v-else class="h-52 flex flex-col items-center justify-center rounded-2xl bg-slate-50/70 border border-dashed border-slate-200">
             <div class="w-10 h-10 rounded-2xl bg-white flex items-center justify-center shadow-sm mb-3">
@@ -272,30 +308,30 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Chart, BarElement, CategoryScale, LinearScale, Tooltip, Filler } from 'chart.js'
 import { useAuthStore } from '../stores/auth.js'
 import api from '../services/api.js'
 import StatCard from '../components/dashboard/StatCard.vue'
-
-Chart.register(BarElement, CategoryScale, LinearScale, Tooltip, Filler)
 
 const auth        = useAuthStore()
 const data        = ref(null)
 const loading     = ref(true)
 const error       = ref('')
-const chartCanvas = ref(null)
-let   chartInstance = null
 
 const firstName = computed(() => {
   const name = data.value?.admin_name ?? auth.user?.name ?? ''
   return name.split(' ')[0]
 })
 
+const weeklyActivity = computed(() => data.value?.weekly_activity ?? [])
+
 const totalWeeklyWorkouts = computed(() => {
-  if (!data.value?.weekly_activity) return 0
-  return data.value.weekly_activity.reduce((s, d) => s + d.workouts, 0)
+  return weeklyActivity.value.reduce((s, d) => s + d.workouts, 0)
+})
+
+const maxWeeklyWorkouts = computed(() => {
+  return Math.max(...weeklyActivity.value.map((day) => day.workouts), 1)
 })
 
 const weeklyInsightCards = computed(() => {
@@ -337,6 +373,10 @@ function pluralizeWorkout(count) {
   return `${count} treino${count === 1 ? '' : 's'}`
 }
 
+function weeklyBarHeight(count) {
+  return `${Math.max(10, Math.round((count / maxWeeklyWorkouts.value) * 100))}%`
+}
+
 function formatPoints(n) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
   if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'k'
@@ -361,85 +401,6 @@ async function loadData() {
   } finally {
     loading.value = false
   }
-  await nextTick()
-  renderChart()
-}
-
-function renderChart() {
-  if (chartInstance) {
-    chartInstance.destroy()
-    chartInstance = null
-  }
-
-  if (!chartCanvas.value || !data.value?.weekly_activity || totalWeeklyWorkouts.value === 0) return
-
-  const activity = data.value.weekly_activity
-  const labels   = activity.map(d => d.day)
-  const values   = activity.map(d => d.workouts)
-  const maxVal   = Math.max(...values, 1)
-
-  chartInstance = new Chart(chartCanvas.value, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Treinos',
-        data: values,
-        backgroundColor: (ctx) => {
-          const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, ctx.chart.height)
-          gradient.addColorStop(0, 'rgba(99, 102, 241, 0.85)')
-          gradient.addColorStop(1, 'rgba(99, 102, 241, 0.25)')
-          return gradient
-        },
-        borderColor: 'rgba(99, 102, 241, 0)',
-        borderRadius: 8,
-        borderSkipped: false,
-        barPercentage: 0.55,
-      }],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => ` ${ctx.parsed.y} treino${ctx.parsed.y !== 1 ? 's' : ''}`,
-          },
-          backgroundColor: '#1e293b',
-          titleColor: '#94a3b8',
-          bodyColor: '#f1f5f9',
-          padding: 10,
-          cornerRadius: 8,
-          displayColors: false,
-        },
-      },
-      scales: {
-        x: {
-          grid: { display: false },
-          border: { display: false },
-          ticks: {
-            color: '#94a3b8',
-            font: { size: 12, family: 'Inter' },
-          },
-        },
-        y: {
-          grid: {
-            color: '#f1f5f9',
-            drawTicks: false,
-          },
-          border: { display: false, dash: [4, 4] },
-          ticks: {
-            color: '#94a3b8',
-            font: { size: 11, family: 'Inter' },
-            padding: 8,
-            stepSize: Math.ceil(maxVal / 4) || 1,
-          },
-          min: 0,
-        },
-      },
-    },
-  })
 }
 
 onMounted(loadData)
