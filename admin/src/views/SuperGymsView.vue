@@ -64,7 +64,8 @@
             <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide hidden md:table-cell">Equipe</th>
             <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Alunos</th>
             <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide hidden xl:table-cell">Convite</th>
-            <th class="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+            <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+            <th class="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">A&ccedil;&otilde;es</th>
           </tr>
         </thead>
         <tbody>
@@ -105,12 +106,23 @@
             <td class="px-5 py-4 hidden xl:table-cell">
               <code class="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">{{ gym.invite_code ?? '-' }}</code>
             </td>
-            <td class="px-5 py-4 text-right">
+            <td class="px-5 py-4">
               <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
                     :class="gym.active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'">
                 <span class="w-1.5 h-1.5 rounded-full" :class="gym.active ? 'bg-emerald-500' : 'bg-slate-400'" />
                 {{ gym.active ? 'Ativa' : 'Inativa' }}
               </span>
+            </td>
+            <td class="px-5 py-4 text-right">
+              <button
+                v-if="gym.chain"
+                @click="confirmUnlink(gym)"
+                class="inline-flex items-center justify-center px-3 py-1.5 text-xs font-semibold text-red-500
+                       border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+              >
+                Desvincular
+              </button>
+              <span v-else class="text-xs font-medium text-slate-300">-</span>
             </td>
           </tr>
         </tbody>
@@ -132,6 +144,36 @@
         </div>
       </div>
     </div>
+
+    <Teleport to="body">
+      <Transition name="modal">
+        <div v-if="unlinkTarget"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <h2 class="text-base font-bold text-slate-900 mb-1">Desvincular academia da rede</h2>
+            <p class="text-sm text-slate-500 mb-4">
+              Deseja remover <strong>{{ unlinkTarget.name }}</strong> da rede
+              <strong>{{ unlinkTarget.chain?.name }}</strong>?
+            </p>
+            <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-5">
+              <p class="text-xs font-medium text-amber-800 leading-relaxed">
+                A academia continuar&aacute; ativa. Alunos, treinos, pontos, check-ins e hist&oacute;rico permanecem vinculados a ela.
+              </p>
+            </div>
+            <div class="flex justify-end gap-2">
+              <button @click="unlinkTarget = null"
+                class="px-4 py-2 text-sm font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                Cancelar
+              </button>
+              <button @click="doUnlink" :disabled="unlinking"
+                class="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-60">
+                {{ unlinking ? 'Desvinculando...' : 'Desvincular' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -170,6 +212,8 @@ const loading = ref(false)
 const error = ref(null)
 const searchInput = ref('')
 const page = ref(1)
+const unlinkTarget = ref(null)
+const unlinking = ref(false)
 let searchTimer = null
 
 watch(searchInput, () => {
@@ -209,4 +253,28 @@ async function load() {
     loading.value = false
   }
 }
+
+function confirmUnlink(gym) {
+  unlinkTarget.value = gym
+}
+
+async function doUnlink() {
+  if (!unlinkTarget.value?.chain?.id) return
+  unlinking.value = true
+  try {
+    await api.delete(`/super/chains/${unlinkTarget.value.chain.id}/gyms/${unlinkTarget.value.id}`)
+    unlinkTarget.value = null
+    await load()
+  } catch (e) {
+    error.value = e.response?.data?.message ?? 'Erro ao desvincular academia.'
+    unlinkTarget.value = null
+  } finally {
+    unlinking.value = false
+  }
+}
 </script>
+
+<style scoped>
+.modal-enter-active, .modal-leave-active { transition: opacity 0.2s ease; }
+.modal-enter-from, .modal-leave-to { opacity: 0; }
+</style>

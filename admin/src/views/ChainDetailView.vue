@@ -105,8 +105,8 @@
               <p class="text-xs text-slate-400 mt-0.5">{{ gym.students_count }} aluno{{ gym.students_count !== 1 ? 's' : '' }}</p>
             </div>
             <button @click="confirmUnlink(gym)"
-              class="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-xs font-semibold
-                     text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors">
+              class="px-3 py-1.5 text-xs font-semibold text-red-500 border border-red-200 rounded-lg
+                     hover:bg-red-50 transition-colors">
               Desvincular
             </button>
           </li>
