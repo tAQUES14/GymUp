@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import 'controllers/workout_execution_controller.dart';
@@ -52,6 +54,10 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
   List<TextEditingController> _seriesCtrls = [];
   List<TextEditingController> _repsCtrls   = [];
   int _lastSyncedExerciseId = -1;
+  final Map<int, int> _seriesIndexByExerciseId = {};
+  final Map<int, Map<int, String>> _draftWeights = {};
+  final Map<int, Map<int, String>> _draftReps = {};
+  Timer? _setsSaveDebounce;
 
   // ── Rest timer ────────────────────────────────────────────────────────────
   Timer? _timer;
@@ -100,6 +106,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
     _ctrl.dispose();
     _elapsedTimer?.cancel();
     _timer?.cancel();
+    _setsSaveDebounce?.cancel();
     _progressMsgTimer?.cancel();
     for (final c in _seriesCtrls) { c.dispose(); }
     for (final c in _repsCtrls) { c.dispose(); }
@@ -122,6 +129,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
       // as the session continues ticking.
       final syncedElapsed = Duration(seconds: session.elapsedSeconds);
       final syntheticStart = DateTime.now().subtract(syncedElapsed);
+      await _restoreExecutionState(session);
       setState(() {
         _session = session;
         _sessionStart = syntheticStart;
@@ -165,6 +173,19 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
         Navigator.of(context).pushReplacementNamed('/login');
         return;
       }
+      if (e.toString().contains('404')) {
+        await _clearExecutionState();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Esse treino ja foi encerrado. Atualizando sua tela...'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (_) => false);
+        return;
+      }
       // Surface the error — silently swallowing it leaves the user without points.
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -181,6 +202,133 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
   }
 
   // ── Weight ────────────────────────────────────────────────────────────────
+
+  String? get _executionStateKey {
+    final sessionId = _session?.id;
+    final workoutId = _workout?.id;
+    if (sessionId == null || workoutId == null) return null;
+    return 'workout_execution_state_${sessionId}_$workoutId';
+  }
+
+  void _rememberCurrentSeries() {
+    if (_workout == null || _workout!.exercises.isEmpty) return;
+    final exercise = _workout!.exercises[_currentExerciseIndex];
+    _seriesIndexByExerciseId[exercise.id] = _currentSeriesIndex;
+  }
+
+  int _clampIndex(int value, int min, int max) {
+    if (max < min) return min;
+    return value.clamp(min, max).toInt();
+  }
+
+  int _rememberedSeriesIndexFor(ExerciseModel exercise) {
+    final maxIndex = _seriesCount(exercise) - 1;
+    final remembered = _seriesIndexByExerciseId[exercise.id] ?? 0;
+    return _clampIndex(remembered, 0, maxIndex);
+  }
+
+  double _parseWeight(String value) =>
+      double.tryParse(value.trim().replaceAll(',', '.')) ?? 0;
+
+  void _captureControllerDrafts(ExerciseModel exercise) {
+    final totalSeries = _seriesCount(exercise);
+    for (int i = 0; i < totalSeries; i++) {
+      final setNum = i + 1;
+      final weight = _seriesCtrls.length > i ? _seriesCtrls[i].text.trim() : '';
+      final reps = _repsCtrls.length > i ? _repsCtrls[i].text.trim() : '';
+      if (weight.isNotEmpty) {
+        _draftWeights.putIfAbsent(exercise.id, () => {})[setNum] = weight;
+      }
+      if (reps.isNotEmpty) {
+        _draftReps.putIfAbsent(exercise.id, () => {})[setNum] = reps;
+      }
+    }
+  }
+
+  Future<void> _persistExecutionState() async {
+    final key = _executionStateKey;
+    if (key == null || _workout == null) return;
+    _rememberCurrentSeries();
+    _captureControllerDrafts(_workout!.exercises[_currentExerciseIndex]);
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(key, jsonEncode({
+      'exercise_index': _currentExerciseIndex,
+      'series_index': _currentSeriesIndex,
+      'completed_exercises': _completedExercises,
+      'series_by_exercise': _seriesIndexByExerciseId.map((k, v) => MapEntry('$k', v)),
+      'weights': _draftWeights.map(
+        (exerciseId, sets) => MapEntry('$exerciseId', sets.map((k, v) => MapEntry('$k', v))),
+      ),
+      'reps': _draftReps.map(
+        (exerciseId, sets) => MapEntry('$exerciseId', sets.map((k, v) => MapEntry('$k', v))),
+      ),
+    }));
+  }
+
+  Future<void> _clearExecutionState() async {
+    final key = _executionStateKey;
+    if (key == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(key);
+  }
+
+  Future<void> _restoreExecutionState(WorkoutSessionData session) async {
+    if (_workout == null || _workout!.exercises.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'workout_execution_state_${session.id}_${_workout!.id}';
+    final raw = prefs.getString(key);
+
+    if (raw == null || raw.isEmpty) {
+      final fromProgress = ((session.progress / 100) * _workout!.exercises.length).floor();
+      _currentExerciseIndex = _clampIndex(fromProgress, 0, _workout!.exercises.length - 1);
+      _currentSeriesIndex = 0;
+      _completedExercises = _currentExerciseIndex;
+      return;
+    }
+
+    try {
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      final exerciseIndex = (data['exercise_index'] as num?)?.toInt() ?? 0;
+      _currentExerciseIndex = _clampIndex(exerciseIndex, 0, _workout!.exercises.length - 1);
+      _currentSeriesIndex = _clampIndex(
+        (data['series_index'] as num?)?.toInt() ?? 0,
+        0,
+        _seriesCount(_workout!.exercises[_currentExerciseIndex]) - 1,
+      );
+      _completedExercises = _clampIndex(
+        (data['completed_exercises'] as num?)?.toInt() ?? _currentExerciseIndex,
+        0,
+        _workout!.exercises.length,
+      );
+
+      void readNestedStringMap(dynamic source, Map<int, Map<int, String>> target) {
+        if (source is! Map) return;
+        source.forEach((exerciseKey, setsValue) {
+          final exerciseId = int.tryParse('$exerciseKey');
+          if (exerciseId == null || setsValue is! Map) return;
+          final sets = target.putIfAbsent(exerciseId, () => {});
+          setsValue.forEach((setKey, value) {
+            final setNum = int.tryParse('$setKey');
+            if (setNum != null && '$value'.trim().isNotEmpty) {
+              sets[setNum] = '$value';
+            }
+          });
+        });
+      }
+
+      if (data['series_by_exercise'] is Map) {
+        (data['series_by_exercise'] as Map).forEach((exerciseKey, value) {
+          final exerciseId = int.tryParse('$exerciseKey');
+          final idx = value is num ? value.toInt() : int.tryParse('$value');
+          if (exerciseId != null && idx != null) _seriesIndexByExerciseId[exerciseId] = idx;
+        });
+      }
+
+      readNestedStringMap(data['weights'], _draftWeights);
+      readNestedStringMap(data['reps'], _draftReps);
+    } catch (_) {}
+  }
 
   void _syncWeightField() {
     if (_workout == null || !mounted) return;
@@ -202,13 +350,21 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
 
     // Sync weight from execution controller
     for (int i = 0; i < totalSeries; i++) {
-      final w = _ctrl.getWeight(exercise.id, i + 1);
-      final text = w > 0
-          ? (w == w.roundToDouble() ? w.toInt().toString() : w.toStringAsFixed(1))
-          : '';
+      final setNum = i + 1;
+      final draftWeight = _draftWeights[exercise.id]?[setNum];
+      final draftReps = _draftReps[exercise.id]?[setNum];
+      final w = _ctrl.getWeight(exercise.id, setNum);
+      final text = draftWeight ??
+          (w > 0
+              ? (w == w.roundToDouble() ? w.toInt().toString() : w.toStringAsFixed(1))
+              : '');
       if (_seriesCtrls[i].text != text) {
         _seriesCtrls[i].text = text;
         _seriesCtrls[i].selection = TextSelection.collapsed(offset: text.length);
+      }
+      if (draftReps != null && _repsCtrls[i].text != draftReps) {
+        _repsCtrls[i].text = draftReps;
+        _repsCtrls[i].selection = TextSelection.collapsed(offset: draftReps.length);
       }
     }
   }
@@ -271,8 +427,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
     }).catchError((_) {});
   }
 
-  /// Save current exercise sets to the backend (fire-and-forget).
-  void _saveExerciseSets(ExerciseModel exercise) {
+  Future<void> _flushExerciseSets(ExerciseModel exercise) async {
     final sessionId = _session?.id;
     if (sessionId == null) return;
 
@@ -280,20 +435,47 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
     final sets = <Map<String, dynamic>>[];
 
     for (int i = 0; i < totalSeries; i++) {
-      final weight = double.tryParse(
-        _seriesCtrls.length > i ? _seriesCtrls[i].text : '',
-      ) ?? 0.0;
+      final weight = _parseWeight(_seriesCtrls.length > i ? _seriesCtrls[i].text : '');
       final reps = int.tryParse(
         _repsCtrls.length > i ? _repsCtrls[i].text : '',
       ) ?? exercise.reps;
       sets.add({'set_number': i + 1, 'weight': weight, 'reps': reps});
     }
 
-    _workoutService.saveWorkoutSets(
+    await _workoutService.saveWorkoutSets(
       sessionId:  sessionId,
       exerciseId: exercise.id,
       sets:       sets,
-    ).catchError((_) {});
+    );
+  }
+
+  /// Save current exercise sets to the backend (fire-and-forget).
+  void _saveExerciseSets(ExerciseModel exercise) {
+    _flushExerciseSets(exercise).catchError((_) {});
+  }
+
+  void _onSetFieldChanged(ExerciseModel exercise, int setNum) {
+    final index = setNum - 1;
+    if (index < 0) return;
+
+    final weight = _seriesCtrls.length > index ? _seriesCtrls[index].text.trim() : '';
+    final reps = _repsCtrls.length > index ? _repsCtrls[index].text.trim() : '';
+
+    _draftWeights.putIfAbsent(exercise.id, () => {})[setNum] = weight;
+    _draftReps.putIfAbsent(exercise.id, () => {})[setNum] = reps;
+    _rememberCurrentSeries();
+
+    final parsedWeight = _parseWeight(weight);
+    if (parsedWeight > 0) {
+      _ctrl.setWeight(exercise.id, setNum, parsedWeight);
+    }
+
+    _persistExecutionState();
+    _setsSaveDebounce?.cancel();
+    _setsSaveDebounce = Timer(const Duration(milliseconds: 700), () {
+      if (!mounted) return;
+      _saveExerciseSets(exercise);
+    });
   }
 
   void _saveWeight([int? seriesNumber]) {
@@ -306,7 +488,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
 
     double weight = 0;
     if (ctrlIndex >= 0 && ctrlIndex < _seriesCtrls.length) {
-      weight = double.tryParse(_seriesCtrls[ctrlIndex].text) ?? 0;
+      weight = _parseWeight(_seriesCtrls[ctrlIndex].text);
     }
     if (weight <= 0) {
       weight = _ctrl.getWeight(exercise.id, setNum);
@@ -314,6 +496,9 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
     if (weight <= 0) return;
 
     _ctrl.setWeight(exercise.id, setNum, weight);
+    _captureControllerDrafts(exercise);
+    _saveExerciseSets(exercise);
+    _persistExecutionState();
   }
 
   // ── Series / Exercise navigation ──────────────────────────────────────────
@@ -344,8 +529,10 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
       // Not the last set: advance to next set + between-set rest
       setState(() {
         _currentSeriesIndex++;
+        _rememberCurrentSeries();
         _currentSetReady = false;
       });
+      _persistExecutionState();
       _syncWeightField();
       _startRest(RestType.betweenSets, exercise.rest);
     } else {
@@ -371,9 +558,9 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
     final reps = int.tryParse(
           _repsCtrls.length > completedIdx ? _repsCtrls[completedIdx].text : '') ??
         0;
-    final weight = double.tryParse(
-          _seriesCtrls.length > completedIdx ? _seriesCtrls[completedIdx].text : '') ??
-        0.0;
+    final weight = _parseWeight(
+      _seriesCtrls.length > completedIdx ? _seriesCtrls[completedIdx].text : '',
+    );
 
     final completedLabel = reps > 0 || weight > 0
         ? '$reps × ${_fmtKg(weight)}'
@@ -403,11 +590,13 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
     _completedExercises++;
     _saveExerciseSets(completedExercise);
     setState(() {
+      _rememberCurrentSeries();
       _currentExerciseIndex++;
-      _currentSeriesIndex = 0;
+      _currentSeriesIndex = _rememberedSeriesIndexFor(exercises[_currentExerciseIndex]);
     });
     _syncWeightField();
     _prefillFromLastSets(exercises[_currentExerciseIndex].id);
+    _persistExecutionState();
     _sendProgress(exercises.length);
   }
 
@@ -415,14 +604,16 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
     final exercises = _workout!.exercises;
     if (_currentExerciseIndex < exercises.length - 1) {
       _saveExerciseSets(exercises[_currentExerciseIndex]);
+      _rememberCurrentSeries();
       _cancelRest();
       setState(() {
         _currentExerciseIndex++;
-        _currentSeriesIndex = 0;
+        _currentSeriesIndex = _rememberedSeriesIndexFor(exercises[_currentExerciseIndex]);
         _currentSetReady = false;
       });
       _syncWeightField();
       _prefillFromLastSets(exercises[_currentExerciseIndex].id);
+      _persistExecutionState();
       _sendProgress(exercises.length);
     }
   }
@@ -430,13 +621,15 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
   void _prevExercise() {
     if (_currentExerciseIndex > 0) {
       _saveExerciseSets(_workout!.exercises[_currentExerciseIndex]);
+      _rememberCurrentSeries();
       _cancelRest();
       setState(() {
         _currentExerciseIndex--;
-        _currentSeriesIndex = 0;
+        _currentSeriesIndex = _rememberedSeriesIndexFor(_workout!.exercises[_currentExerciseIndex]);
         _currentSetReady = false;
       });
       _syncWeightField();
+      _persistExecutionState();
     }
   }
 
@@ -511,7 +704,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
     if (_workout == null || !mounted) return;
     final idx = _currentSeriesIndex;
     if (idx >= _seriesCtrls.length || idx >= _repsCtrls.length) return;
-    final weight = double.tryParse(_seriesCtrls[idx].text) ?? 0;
+    final weight = _parseWeight(_seriesCtrls[idx].text);
     final reps   = int.tryParse(_repsCtrls[idx].text) ?? 0;
     final ready  = weight > 0 && reps > 0;
     if (ready != _currentSetReady) {
@@ -526,9 +719,9 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
     if (cached == null || !cached.hasData) return;
 
     final setNum = setIndex + 1;
-    final currWeight = double.tryParse(
-          _seriesCtrls.length > setIndex ? _seriesCtrls[setIndex].text : '') ??
-        0;
+    final currWeight = _parseWeight(
+      _seriesCtrls.length > setIndex ? _seriesCtrls[setIndex].text : '',
+    );
     final currReps = int.tryParse(
           _repsCtrls.length > setIndex ? _repsCtrls[setIndex].text : '') ??
         0;
@@ -625,6 +818,9 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
     try {
       // 1. Sincroniza progresso com o backend antes da avaliação de pontos.
       final total = _workout!.exercises.length;
+      _setsSaveDebounce?.cancel();
+      await _flushExerciseSets(_workout!.exercises[_currentExerciseIndex]);
+      await _persistExecutionState();
       final best = _completedExercises > _currentExerciseIndex
           ? _completedExercises
           : _currentExerciseIndex;
@@ -698,6 +894,9 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
         if (!mounted) return;
       }
 
+      await _clearExecutionState();
+      if (!mounted) return;
+
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
@@ -727,6 +926,19 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
         return;
       }
       // Erro de rede — restaura estado para o usuário poder tentar novamente.
+      if (e.toString().contains('404')) {
+        await _clearExecutionState();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Esse treino ja foi encerrado. Atualizando sua tela...'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (_) => false);
+        return;
+      }
       setState(() => _isFinishing = false);
       _startElapsedTimer();
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -1041,6 +1253,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
       _currentSeriesIndex = 0;
     });
     _syncWeightField();
+    _persistExecutionState();
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -1787,8 +2000,8 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
 
   String _displayWeight(ExerciseModel exercise, int setNum, int index) {
     final text = _seriesCtrls.length > index ? _seriesCtrls[index].text : '';
-    final parsed = double.tryParse(text);
-    final value = parsed ?? _ctrl.getWeight(exercise.id, setNum);
+    final parsed = _parseWeight(text);
+    final value = parsed > 0 ? parsed : _ctrl.getWeight(exercise.id, setNum);
     if (value <= 0) return '0 kg';
     return value == value.roundToDouble()
         ? '${value.toInt()} kg'
@@ -3603,7 +3816,10 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
                         hint: '--',
                         suffix: 'x',
                         isDecimal: false,
-                        onChanged: (_) { if (isCurrent) _checkSetReadiness(); },
+                        onChanged: (_) {
+                          _onSetFieldChanged(exercise, setNum);
+                          if (isCurrent) _checkSetReadiness();
+                        },
                       ),
                     ),
                   const SizedBox(width: 6),
@@ -3619,8 +3835,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
                         suffix: 'kg',
                         isDecimal: true,
                         onChanged: (value) {
-                          final w = double.tryParse(value) ?? 0;
-                          if (w > 0) _ctrl.setWeight(exercise.id, setNum, w);
+                          _onSetFieldChanged(exercise, setNum);
                           if (isCurrent) _checkSetReadiness();
                         },
                       ),
@@ -3645,8 +3860,10 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
   void _adjustWeight(ExerciseModel exercise, int setNum, double delta) {
     final ctrlIndex = setNum - 1;
     if (ctrlIndex >= _seriesCtrls.length) return;
-    final current = double.tryParse(_seriesCtrls[ctrlIndex].text) ??
-        _ctrl.getWeight(exercise.id, setNum);
+    final parsedCurrent = _parseWeight(_seriesCtrls[ctrlIndex].text);
+    final current = parsedCurrent > 0
+        ? parsedCurrent
+        : _ctrl.getWeight(exercise.id, setNum);
     final newWeight = (current + delta).clamp(0.0, 9999.0);
     final text = newWeight == newWeight.roundToDouble()
         ? newWeight.toInt().toString()
@@ -3656,7 +3873,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> {
       _seriesCtrls[ctrlIndex].selection =
           TextSelection.collapsed(offset: text.length);
     });
-    _ctrl.setWeight(exercise.id, setNum, newWeight);
+    _onSetFieldChanged(exercise, setNum);
   }
 
   Widget _buildQuickAdjustRow(ExerciseModel exercise, int setNum) {
