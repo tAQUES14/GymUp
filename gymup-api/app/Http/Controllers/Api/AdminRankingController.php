@@ -18,6 +18,8 @@ class AdminRankingController extends Controller
         $gymId  = $request->user()->activeGymId();
         $period = $request->query('period', 'all');
         $limit  = min((int) $request->query('limit', 50), 100);
+        $rankBy = $request->query('rank_by', 'points');
+        $rankBy = in_array($rankBy, ['points', 'streak'], true) ? $rankBy : 'points';
 
         $startDate = match ($period) {
             'weekly'    => now()->startOfWeek(),
@@ -47,7 +49,7 @@ class AdminRankingController extends Controller
                 'users.name',
                 'users.email',
                 'users.points_balance',
-                'users.weekly_streak',
+                'users.current_streak',
                 DB::raw('COALESCE(SUM(point_transactions.points), 0) as period_points'),
                 DB::raw('COALESCE(ws.total_workouts, 0) as workouts_count')
             )
@@ -56,11 +58,14 @@ class AdminRankingController extends Controller
                 'users.name',
                 'users.email',
                 'users.points_balance',
-                'users.weekly_streak',
+                'users.current_streak',
                 'ws.total_workouts'
             )
-            ->orderByDesc('period_points')
-            ->orderByDesc('users.points_balance')
+            ->when(
+                $rankBy === 'streak',
+                fn ($q) => $q->orderByDesc('users.current_streak')->orderByDesc('period_points'),
+                fn ($q) => $q->orderByDesc('period_points')->orderByDesc('users.points_balance')
+            )
             ->orderBy('users.name')
             ->limit($limit)
             ->get()
@@ -72,7 +77,8 @@ class AdminRankingController extends Controller
                 'email'          => $u->email,
                 'period_points'  => (int) $u->period_points,
                 'points_balance' => (int) $u->points_balance,
-                'weekly_streak'  => (int) $u->weekly_streak,
+                'weekly_streak'  => (int) $u->current_streak,
+                'current_streak' => (int) $u->current_streak,
                 'workouts_count' => (int) $u->workouts_count,
             ]);
 

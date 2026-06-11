@@ -8,16 +8,29 @@
         <p class="text-slate-500 text-sm mt-1">Pontuação dos alunos da academia.</p>
       </div>
       <!-- Period selector -->
-      <div class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg flex-shrink-0">
-        <button v-for="p in periods" :key="p.value"
-          @click="selectPeriod(p.value)"
-          class="px-3 py-1.5 text-xs font-semibold rounded-md transition-all"
-          :class="period === p.value
-            ? 'bg-white text-slate-900 shadow-sm'
-            : 'text-slate-500 hover:text-slate-700'"
-        >
-          {{ p.label }}
-        </button>
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg flex-shrink-0">
+          <button v-for="type in rankTypes" :key="type.value"
+            @click="selectRankType(type.value)"
+            class="px-3 py-1.5 text-xs font-semibold rounded-md transition-all"
+            :class="rankBy === type.value
+              ? 'bg-white text-slate-900 shadow-sm'
+              : 'text-slate-500 hover:text-slate-700'"
+          >
+            {{ type.label }}
+          </button>
+        </div>
+        <div class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg flex-shrink-0">
+          <button v-for="p in periods" :key="p.value"
+            @click="selectPeriod(p.value)"
+            class="px-3 py-1.5 text-xs font-semibold rounded-md transition-all"
+            :class="period === p.value
+              ? 'bg-white text-slate-900 shadow-sm'
+              : 'text-slate-500 hover:text-slate-700'"
+          >
+            {{ p.label }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -99,8 +112,8 @@
             </div>
             <div class="text-center">
               <p class="text-xs font-bold text-slate-800 truncate max-w-[140px]">{{ firstName(top3[1]?.name) }}</p>
-              <p class="text-sm font-black text-slate-900">{{ formatPts(top3[1]?.period_points) }}</p>
-              <p class="text-[10px] text-slate-400">pts</p>
+              <p class="text-sm font-black text-slate-900">{{ metricValue(top3[1]) }}</p>
+              <p class="text-[10px] text-slate-400">{{ metricUnit(top3[1]) }}</p>
             </div>
             <div class="w-full bg-slate-300 rounded-t-lg flex items-center justify-center py-4 min-h-[60px]">
               <span class="text-4xl font-black text-white/30">2</span>
@@ -120,8 +133,8 @@
             </div>
             <div class="text-center">
               <p class="text-sm font-bold text-slate-800 truncate max-w-[160px]">{{ firstName(top3[0]?.name) }}</p>
-              <p class="text-xl font-black text-yellow-600">{{ formatPts(top3[0]?.period_points) }}</p>
-              <p class="text-[10px] text-slate-400">pts</p>
+              <p class="text-xl font-black text-yellow-600">{{ metricValue(top3[0]) }}</p>
+              <p class="text-[10px] text-slate-400">{{ metricUnit(top3[0]) }}</p>
             </div>
             <div class="w-full bg-yellow-400 rounded-t-lg flex items-center justify-center py-6 min-h-[90px] shadow-md shadow-yellow-200">
               <span class="text-5xl font-black text-white/30">1</span>
@@ -140,8 +153,8 @@
             </div>
             <div class="text-center">
               <p class="text-xs font-bold text-slate-800 truncate max-w-[140px]">{{ firstName(top3[2]?.name) }}</p>
-              <p class="text-sm font-black text-slate-900">{{ formatPts(top3[2]?.period_points) }}</p>
-              <p class="text-[10px] text-slate-400">pts</p>
+              <p class="text-sm font-black text-slate-900">{{ metricValue(top3[2]) }}</p>
+              <p class="text-[10px] text-slate-400">{{ metricUnit(top3[2]) }}</p>
             </div>
             <div class="w-full bg-amber-600/70 rounded-t-lg flex items-center justify-center py-3 min-h-[44px]">
               <span class="text-3xl font-black text-white/30">3</span>
@@ -288,10 +301,10 @@
               <td class="px-4 py-3.5 text-right">
                 <div class="inline-flex flex-col items-end">
                   <span class="text-sm font-black leading-tight"
-                        :class="entry.period_points > 0 ? 'text-brand-700' : 'text-slate-300'">
-                    {{ formatPts(entry.period_points) }}
+                        :class="metricNumber(entry) > 0 ? 'text-brand-700' : 'text-slate-300'">
+                    {{ metricValue(entry) }}
                   </span>
-                  <span class="text-[10px] text-slate-400">pts</span>
+                  <span class="text-[10px] text-slate-400">{{ metricUnit(entry) }}</span>
                 </div>
               </td>
 
@@ -338,9 +351,15 @@ const periods = [
   { value: 'all',       label: 'Geral' },
 ]
 
+const rankTypes = [
+  { value: 'points', label: 'Pontos' },
+  { value: 'streak', label: 'Streak' },
+]
+
 const ranking = ref([])
 const stats   = ref({ total_users: 0, active_count: 0, total_points: 0 })
 const period  = ref('all')
+const rankBy  = ref('points')
 const search  = ref('')
 const loading = ref(true)
 const error   = ref('')
@@ -358,7 +377,7 @@ const filteredRanking = computed(() => {
 async function load() {
   loading.value = true; error.value = ''
   try {
-    const { data } = await api.get(`/admin/ranking?period=${period.value}&limit=100`)
+    const { data } = await api.get(`/admin/ranking?period=${period.value}&rank_by=${rankBy.value}&limit=100`)
     ranking.value = data.ranking ?? []
     stats.value   = {
       total_users:  data.total_users  ?? 0,
@@ -376,6 +395,25 @@ function selectPeriod(p) {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────
+function selectRankType(type) {
+  rankBy.value = type
+  load()
+}
+
+function metricNumber(entry) {
+  if (!entry) return 0
+  return rankBy.value === 'streak' ? (entry.current_streak ?? entry.weekly_streak ?? 0) : (entry.period_points ?? 0)
+}
+
+function metricValue(entry) {
+  return formatPts(metricNumber(entry))
+}
+
+function metricUnit(entry) {
+  if (rankBy.value !== 'streak') return 'pts'
+  return metricNumber(entry) === 1 ? 'dia' : 'dias'
+}
+
 function formatPts(n) {
   if (n === undefined || n === null) return '0'
   if (n >= 1000) return (n / 1000).toFixed(1).replace('.0', '') + 'k'

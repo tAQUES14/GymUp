@@ -23,6 +23,20 @@ const _kCrownSvg = '''
 </svg>
 ''';
 
+enum RankingTipo { points, streak }
+
+extension RankingTipoExt on RankingTipo {
+  String get label => switch (this) {
+        RankingTipo.points => 'Pontos',
+        RankingTipo.streak => 'Streak',
+      };
+
+  String get param => switch (this) {
+        RankingTipo.points => 'points',
+        RankingTipo.streak => 'streak',
+      };
+}
+
 class RankingPage extends StatefulWidget {
   const RankingPage({super.key});
 
@@ -34,6 +48,7 @@ class _RankingPageState extends State<RankingPage> {
   final _service = RankingApiService();
   RankingPeriodo _periodo = RankingPeriodo.semanal;
   RankingEscopo _escopo = RankingEscopo.gym;
+  RankingTipo _tipo = RankingTipo.points;
   List<RankingItem> _ranking = [];
   int? _currentUserId;
   String _currentUserName = 'Marcos Silva';
@@ -103,6 +118,17 @@ class _RankingPageState extends State<RankingPage> {
     _activeFetch!.whenComplete(() => _activeFetch = null);
   }
 
+  void _changeType(RankingTipo type) {
+    if (_tipo == type || _activeFetch != null) return;
+    setState(() {
+      _tipo = type;
+      _isLoading = true;
+      _error = null;
+    });
+    _activeFetch = _executeFetch();
+    _activeFetch!.whenComplete(() => _activeFetch = null);
+  }
+
   Future<void> _executeFetch() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -111,6 +137,7 @@ class _RankingPageState extends State<RankingPage> {
       final items = await _service.getRanking(
         period: _periodo.param,
         scope: _escopo.param,
+        rankBy: _tipo.param,
       );
       if (!mounted) return;
       setState(() {
@@ -151,6 +178,8 @@ class _RankingPageState extends State<RankingPage> {
               _header(),
               const SizedBox(height: 14),
               _periodSelector(),
+              const SizedBox(height: 10),
+              _typeSelector(),
               if (_hasChain) ...[
                 const SizedBox(height: 10),
                 _scopeSelector(),
@@ -167,6 +196,7 @@ class _RankingPageState extends State<RankingPage> {
                   ranking: _ranking,
                   currentUserId: _currentUserId,
                   currentUserName: _currentUserName,
+                  type: _tipo,
                 ),
             ],
           ),
@@ -241,6 +271,26 @@ class _RankingPageState extends State<RankingPage> {
     );
   }
 
+  Widget _typeSelector() {
+    return SizedBox(
+      height: 36,
+      child: Row(
+        children: [
+          for (final type in RankingTipo.values) ...[
+            Expanded(
+              child: _SmallSelectorPill(
+                label: type.label,
+                selected: _tipo == type,
+                onTap: () => _changeType(type),
+              ),
+            ),
+            if (type != RankingTipo.values.last) const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _scopeSelector() {
     return SizedBox(
       height: 36,
@@ -266,11 +316,13 @@ class _RankingContent extends StatelessWidget {
   final List<RankingItem> ranking;
   final int? currentUserId;
   final String currentUserName;
+  final RankingTipo type;
 
   const _RankingContent({
     required this.ranking,
     required this.currentUserId,
     required this.currentUserName,
+    required this.type,
   });
 
   @override
@@ -282,14 +334,14 @@ class _RankingContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _PositionHero(item: current, currentUserName: currentUserName),
+        _PositionHero(item: current, currentUserName: currentUserName, type: type),
         const SizedBox(height: 24),
         Text(
           'Top alunos',
           style: _pjs(size: 17, weight: FontWeight.w700, color: _kInk, letterSpacing: -0.3),
         ),
         const SizedBox(height: 14),
-        if (top3.isNotEmpty) _PodiumCard(top3: top3, currentUserId: currentUserId),
+        if (top3.isNotEmpty) _PodiumCard(top3: top3, currentUserId: currentUserId, type: type),
         const SizedBox(height: 24),
         Row(
           children: [
@@ -308,6 +360,7 @@ class _RankingContent extends StatelessWidget {
                     builder: (_) => _RankingFullListPage(
                       ranking: sorted,
                       currentUserId: currentUserId,
+                      type: type,
                     ),
                   ),
                 );
@@ -323,7 +376,7 @@ class _RankingContent extends StatelessWidget {
         for (final item in sorted.take(6))
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: _RankingRow(item: item, isMe: item.userId == currentUserId),
+            child: _RankingRow(item: item, isMe: item.userId == currentUserId, type: type),
           ),
       ],
     );
@@ -348,8 +401,9 @@ class _RankingContent extends StatelessWidget {
 class _PositionHero extends StatelessWidget {
   final RankingItem item;
   final String currentUserName;
+  final RankingTipo type;
 
-  const _PositionHero({required this.item, required this.currentUserName});
+  const _PositionHero({required this.item, required this.currentUserName, required this.type});
 
   @override
   Widget build(BuildContext context) {
@@ -430,7 +484,7 @@ class _PositionHero extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                '${_fmtPoints(item.points)} pts',
+                _metricText(item, type),
                 style: _sg(size: 13, weight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.90)),
               ),
               const Spacer(),
@@ -455,7 +509,7 @@ class _PositionHero extends StatelessWidget {
                           children: [
                             TextSpan(text: 'Voc\u00EA est\u00E1 no ', style: _pjs(size: 12.5, weight: FontWeight.w600, color: Colors.white)),
                             TextSpan(text: 'Top ${item.position}', style: _pjs(size: 12.5, weight: FontWeight.w700, color: Colors.white)),
-                            TextSpan(text: ' da academia', style: _pjs(size: 12.5, weight: FontWeight.w600, color: Colors.white)),
+                            TextSpan(text: type == RankingTipo.streak ? ' em streak' : ' da academia', style: _pjs(size: 12.5, weight: FontWeight.w600, color: Colors.white)),
                           ],
                         ),
                       ),
@@ -475,8 +529,9 @@ class _PositionHero extends StatelessWidget {
 class _PodiumCard extends StatelessWidget {
   final List<RankingItem> top3;
   final int? currentUserId;
+  final RankingTipo type;
 
-  const _PodiumCard({required this.top3, required this.currentUserId});
+  const _PodiumCard({required this.top3, required this.currentUserId, required this.type});
 
   @override
   Widget build(BuildContext context) {
@@ -504,6 +559,7 @@ class _PodiumCard extends StatelessWidget {
                     barTop: 135,
                     barHeight: 90,
                     isMe: second.userId == currentUserId,
+                    type: type,
                   ),
           ),
           const SizedBox(width: 8),
@@ -519,6 +575,7 @@ class _PodiumCard extends StatelessWidget {
               barTop: 170,
               barHeight: 122,
               isMe: first.userId == currentUserId,
+              type: type,
               crown: true,
             ),
           ),
@@ -537,6 +594,7 @@ class _PodiumCard extends StatelessWidget {
                     barTop: 155,
                     barHeight: 70,
                     isMe: third.userId == currentUserId,
+                    type: type,
                   ),
           ),
         ],
@@ -556,6 +614,7 @@ class _PodiumSlot extends StatelessWidget {
   final double barTop;
   final double barHeight;
   final bool isMe;
+  final RankingTipo type;
   final bool crown;
 
   const _PodiumSlot({
@@ -569,6 +628,7 @@ class _PodiumSlot extends StatelessWidget {
     required this.barTop,
     required this.barHeight,
     required this.isMe,
+    required this.type,
     this.crown = false,
   });
 
@@ -626,7 +686,7 @@ class _PodiumSlot extends StatelessWidget {
             left: 2,
             right: 2,
             child: Text(
-              '${_fmtPoints(item.points)} pts',
+              _metricText(item, type),
               textAlign: TextAlign.center,
               style: _sg(size: 11, weight: FontWeight.w700, color: _kMuted, letterSpacing: -0.1),
             ),
@@ -692,8 +752,9 @@ class _PodiumSlot extends StatelessWidget {
 class _RankingRow extends StatelessWidget {
   final RankingItem item;
   final bool isMe;
+  final RankingTipo type;
 
-  const _RankingRow({required this.item, required this.isMe});
+  const _RankingRow({required this.item, required this.isMe, required this.type});
 
   @override
   Widget build(BuildContext context) {
@@ -758,14 +819,14 @@ class _RankingRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${_fmtPoints(item.points)} pts',
+                  _metricText(item, type),
                   style: _sg(size: 12, weight: FontWeight.w700, color: _kMuted, letterSpacing: -0.1),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 12),
-          _trendIcon(item),
+          _trendIcon(item, type),
         ],
       ),
     );
@@ -775,10 +836,12 @@ class _RankingRow extends StatelessWidget {
 class _RankingFullListPage extends StatelessWidget {
   final List<RankingItem> ranking;
   final int? currentUserId;
+  final RankingTipo type;
 
   const _RankingFullListPage({
     required this.ranking,
     required this.currentUserId,
+    required this.type,
   });
 
   @override
@@ -834,7 +897,7 @@ class _RankingFullListPage extends StatelessWidget {
             for (final item in ranking)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: _RankingRow(item: item, isMe: item.userId == currentUserId),
+                child: _RankingRow(item: item, isMe: item.userId == currentUserId, type: type),
               ),
           ],
         ),
@@ -1058,7 +1121,21 @@ Widget _countPill(int count) {
   );
 }
 
-Widget _trendIcon(RankingItem item) {
+Widget _trendIcon(RankingItem item, RankingTipo type) {
+  if (type == RankingTipo.streak) {
+    final active = item.streak > 0;
+    final color = active ? _kLime : _kSoft;
+    return Container(
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: active ? 0.26 : 0.12),
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Icon(Icons.local_fire_department_rounded, color: active ? _kBlueDark : _kSoft, size: 15),
+    );
+  }
+
   final growth = item.growthPct;
   final up = growth == null || growth >= 0;
   final color = up ? _kGreen : _kRed;
@@ -1071,6 +1148,13 @@ Widget _trendIcon(RankingItem item) {
     ),
     child: Icon(up ? Icons.trending_up_rounded : Icons.trending_down_rounded, color: color, size: 15),
   );
+}
+
+String _metricText(RankingItem item, RankingTipo type) {
+  if (type == RankingTipo.streak) {
+    return '${item.streak} ${item.streak == 1 ? 'dia' : 'dias'}';
+  }
+  return '${_fmtPoints(item.points)} pts';
 }
 
 Widget _growthBadge(RankingItem item) {

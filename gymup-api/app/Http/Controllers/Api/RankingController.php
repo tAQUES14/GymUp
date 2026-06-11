@@ -19,6 +19,8 @@ class RankingController extends Controller
 
         $period = $request->query('period', 'all');
         $scope  = $request->query('scope', 'gym');
+        $rankBy = $request->query('rank_by', 'points');
+        $rankBy = in_array($rankBy, ['points', 'streak'], true) ? $rankBy : 'points';
 
         $chainId = null;
         if ($scope === 'chain') {
@@ -75,7 +77,11 @@ class RankingController extends Controller
 
         $users = $query->select($select)
             ->groupBy($groupBy)
-            ->orderByDesc('points')
+            ->when(
+                $rankBy === 'streak',
+                fn ($q) => $q->orderByDesc('users.current_streak')->orderByDesc('points'),
+                fn ($q) => $q->orderByDesc('points')->orderByDesc('users.current_streak')
+            )
             ->orderBy('users.name')
             ->limit($limit)
             ->get();

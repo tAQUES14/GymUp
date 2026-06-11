@@ -80,7 +80,34 @@ class PointService
         return $bonus;
     }
 
-    // idempotente: sem-op se já concedeu hoje
+    // idempotente: sem-op se o marco de streak ja foi concedido antes
+    public function grantStreakMilestoneBonus(User $user, int $streakDays, int $referenceId): int
+    {
+        $milestones = collect(config('workout.streak_bonus_milestones', []))
+            ->mapWithKeys(fn ($points, $days) => [(int) $days => (int) $points]);
+
+        $bonus = (int) ($milestones[$streakDays] ?? 0);
+        if ($bonus <= 0) {
+            return 0;
+        }
+
+        $description = "Bônus de streak de {$streakDays} dias";
+
+        $alreadyGranted = PointTransaction::where('user_id', $user->id)
+            ->where('type', 'earn')
+            ->where('category', 'streak')
+            ->where('description', $description)
+            ->exists();
+
+        if ($alreadyGranted) {
+            return 0;
+        }
+
+        $this->earnPoints($user, $bonus, $description, 'streak', $referenceId);
+
+        return $bonus;
+    }
+
     public function grantPrBonus(User $user, int $referenceId): int
     {
         $historicalBest = ExerciseWeight::where('user_id', $user->id)

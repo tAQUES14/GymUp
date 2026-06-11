@@ -47,8 +47,9 @@ class RankingApiService {
   Future<List<RankingItem>> getRanking({
     String period = 'all',
     String scope  = 'gym',
+    String rankBy = 'points',
   }) async {
-    final response = await _api.get('/ranking?period=$period&scope=$scope');
+    final response = await _api.get('/ranking?period=$period&scope=$scope&rank_by=$rankBy');
 
     if (response.statusCode == 401) {
       throw Exception('401');

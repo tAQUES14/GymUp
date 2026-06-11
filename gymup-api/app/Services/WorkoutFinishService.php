@@ -107,6 +107,19 @@ class WorkoutFinishService
             : $this->streak->getStreakState($user);
 
         // 6. pós-concessão: desafios, PR, progresso
+        if ($wasGranted && ($streakState['streak_just_increased'] ?? false)) {
+            $streakBonus = $this->points->grantStreakMilestoneBonus(
+                $user,
+                (int) $streakState['streak'],
+                $session->id
+            );
+
+            if ($streakBonus > 0) {
+                $pointsGenerated += $streakBonus;
+                $user->refresh();
+            }
+        }
+
         $challengeProgress          = null;
         $personalChallengesProgress = [];
         $progressMessage            = null;
