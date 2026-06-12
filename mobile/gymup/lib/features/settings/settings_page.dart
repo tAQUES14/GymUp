@@ -219,11 +219,13 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<Uint8List?> _showAvatarCropModal(Uint8List bytes) async {
     final cropKey = GlobalKey();
-    final result = await showModalBottomSheet<Uint8List>(
+    final result = await showGeneralDialog<Uint8List>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
+      barrierDismissible: false,
+      barrierLabel: 'Recortar foto',
+      barrierColor: Colors.black.withValues(alpha: 0.92),
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (ctx, _, _) {
         var saving = false;
         return StatefulBuilder(
           builder: (ctx, setSheetState) {
@@ -244,73 +246,103 @@ class _SettingsPageState extends State<SettingsPage> {
               }
             }
 
-            return Container(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-              ),
+            final width = MediaQuery.sizeOf(ctx).width;
+            final cropSize = (width - 48).clamp(280.0, 360.0);
+
+            return Material(
+              color: const Color(0xFF0E1116),
               child: SafeArea(
-                top: false,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                  child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Center(
-                      child: Container(
-                        width: 42,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: const Color(0x220E1116),
-                          borderRadius: BorderRadius.circular(100),
+                    Row(
+                      children: [
+                        _CircleButton(
+                          icon: Icons.close_rounded,
+                          onTap: saving ? () {} : () => Navigator.pop(ctx),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      'Recortar foto',
-                      style: _pjs(size: 20, weight: FontWeight.w800, color: _kInk, letterSpacing: -0.4),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Ajuste a foto no quadrado para usar no perfil.',
-                      style: _pjs(size: 13, weight: FontWeight.w500, color: _kMuted, height: 1.4),
-                    ),
-                    const SizedBox(height: 18),
-                    Center(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(24),
-                        child: RepaintBoundary(
-                          key: cropKey,
-                          child: SizedBox(
-                            width: 280,
-                            height: 280,
-                            child: InteractiveViewer(
-                              minScale: 1,
-                              maxScale: 4,
-                              boundaryMargin: const EdgeInsets.all(120),
-                              child: Image.memory(
-                                bytes,
-                                width: 280,
-                                height: 280,
-                                fit: BoxFit.cover,
-                              ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text(
+                            'Recortar foto',
+                            textAlign: TextAlign.center,
+                            style: _pjs(
+                              size: 18,
+                              weight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: -0.3,
                             ),
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 56),
+                      ],
                     ),
                     const SizedBox(height: 18),
+                    Text(
+                      'Arraste e aproxime a imagem para enquadrar seu avatar.',
+                      textAlign: TextAlign.center,
+                      style: _pjs(
+                        size: 13,
+                        weight: FontWeight.w500,
+                        color: Colors.white.withValues(alpha: 0.72),
+                        height: 1.45,
+                      ),
+                    ),
+                    const Spacer(),
+                    Center(
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(28),
+                            child: RepaintBoundary(
+                              key: cropKey,
+                              child: SizedBox(
+                                width: cropSize,
+                                height: cropSize,
+                                child: InteractiveViewer(
+                                  minScale: 1,
+                                  maxScale: 5,
+                                  boundaryMargin: const EdgeInsets.all(160),
+                                  child: Image.memory(
+                                    bytes,
+                                    width: cropSize,
+                                    height: cropSize,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          IgnorePointer(
+                            child: Container(
+                              width: cropSize,
+                              height: cropSize,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(28),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.88),
+                                  width: 2,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Spacer(),
                     Row(
                       children: [
                         Expanded(
                           child: OutlinedButton(
                             onPressed: saving ? null : () => Navigator.pop(ctx),
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: _kInk,
+                              foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 15),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                              side: const BorderSide(color: Color(0x1F0E1116)),
+                              side: BorderSide(color: Colors.white.withValues(alpha: 0.24)),
                             ),
                             child: const Text('Cancelar'),
                           ),
@@ -325,12 +357,13 @@ class _SettingsPageState extends State<SettingsPage> {
                               padding: const EdgeInsets.symmetric(vertical: 15),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
                             ),
-                            child: Text(saving ? 'Salvando...' : 'Usar foto'),
+                            child: Text(saving ? 'Salvando...' : 'Cortar e salvar'),
                           ),
                         ),
                       ],
                     ),
                   ],
+                  ),
                 ),
               ),
             );
