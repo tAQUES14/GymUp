@@ -30,16 +30,25 @@ class StorePage extends StatefulWidget {
 class _StorePageState extends State<StorePage> {
   List<Reward>? _rewards;
   List<Redemption>? _redemptions;
+  final _searchCtrl = TextEditingController();
   int _userPoints = 0;
   bool _isLoading = true;
   String? _error;
   int _tabIndex = 0;
   String _category = 'Todos';
+  bool _searchOpen = false;
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -89,6 +98,10 @@ class _StorePageState extends State<StorePage> {
             padding: EdgeInsets.fromLTRB(20, 8, 20, 112 + bottomInset),
             children: [
               _header(),
+              if (_searchOpen) ...[
+                const SizedBox(height: 12),
+                _searchField(),
+              ],
               const SizedBox(height: 18),
               _balanceHero(),
               const SizedBox(height: 18),
@@ -163,23 +176,69 @@ class _StorePageState extends State<StorePage> {
             ],
           ),
         ),
-        _circleButton(Icons.search_rounded),
-        const SizedBox(width: 10),
-        _circleButton(Icons.receipt_long_rounded),
+        _circleButton(
+          _searchOpen ? Icons.close_rounded : Icons.search_rounded,
+          onTap: () {
+            setState(() {
+              _searchOpen = !_searchOpen;
+              if (!_searchOpen) {
+                _searchCtrl.clear();
+                _searchQuery = '';
+              }
+            });
+          },
+        ),
       ],
     );
   }
 
-  Widget _circleButton(IconData icon) {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        boxShadow: _shadow(),
+  Widget _searchField() {
+    return TextField(
+      controller: _searchCtrl,
+      autofocus: true,
+      onChanged: (value) => setState(() => _searchQuery = value.trim()),
+      style: _pjs(size: 14, weight: FontWeight.w600, color: _kInk),
+      decoration: InputDecoration(
+        hintText: 'Buscar recompensa...',
+        hintStyle: _pjs(size: 14, weight: FontWeight.w500, color: _kSoft),
+        prefixIcon: const Icon(Icons.search_rounded, size: 18, color: _kBlue),
+        suffixIcon: _searchQuery.isEmpty
+            ? null
+            : IconButton(
+                onPressed: () {
+                  _searchCtrl.clear();
+                  setState(() => _searchQuery = '');
+                },
+                icon: const Icon(Icons.close_rounded, size: 18),
+              ),
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: Color(0x140E1116)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: Color(0x332F6FED)),
+        ),
       ),
-      child: Icon(icon, size: 18, color: _kInk),
+    );
+  }
+
+  Widget _circleButton(IconData icon, {VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: _shadow(),
+        ),
+        child: Icon(icon, size: 18, color: _kInk),
+      ),
     );
   }
 
@@ -415,7 +474,7 @@ class _StorePageState extends State<StorePage> {
             crossAxisCount: 2,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: 0.88,
+            childAspectRatio: 0.74,
           ),
           itemBuilder: (context, index) {
             return _RewardTile(
@@ -431,10 +490,15 @@ class _StorePageState extends State<StorePage> {
 
   List<Reward> _filteredRewards() {
     final rewards = _rewards ?? [];
-    if (_category == 'Todos') return rewards;
-    return rewards.where((reward) {
+    final byCategory = _category == 'Todos' ? rewards : rewards.where((reward) {
       final category = _rewardCategory(reward).label;
       return category == _category;
+    }).toList();
+    if (_searchQuery.isEmpty) return byCategory;
+    final query = _searchQuery.toLowerCase();
+    return byCategory.where((reward) {
+      final text = '${reward.name} ${reward.description} ${reward.category ?? ''}'.toLowerCase();
+      return text.contains(query);
     }).toList();
   }
 

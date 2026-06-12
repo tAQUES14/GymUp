@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -31,8 +33,10 @@ class CheckinPage extends StatefulWidget {
   State<CheckinPage> createState() => _CheckinPageState();
 }
 
-class _CheckinPageState extends State<CheckinPage> {
-  final MobileScannerController _scannerController = MobileScannerController();
+class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
+  final MobileScannerController _scannerController = MobileScannerController(
+    autoStart: false,
+  );
   final TextEditingController _manualController = TextEditingController();
   final QrService _qrService = QrService();
   final CheckinApiService _checkinService = CheckinApiService();
@@ -41,6 +45,8 @@ class _CheckinPageState extends State<CheckinPage> {
   bool _isProcessing = false;
   bool _handledScan = false;
   bool _didReadArgs = false;
+  bool _scannerActive = false;
+  bool _disposed = false;
   _CheckinState _state = _CheckinState.scanning;
   WorkoutModel? _argumentWorkout;
   WorkoutModel? _validatedWorkout;
@@ -53,7 +59,53 @@ class _CheckinPageState extends State<CheckinPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _ensureCameraPermission();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_state != _CheckinState.scanning) return;
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_startScanner());
+    } else {
+      unawaited(_stopScanner());
+    }
+  }
+
+  @override
+  void deactivate() {
+    unawaited(_stopScanner());
+    super.deactivate();
+  }
+
+  Future<void> _startScanner() async {
+    if (_disposed || _scannerActive || _state != _CheckinState.scanning) return;
+    if (mounted) {
+      setState(() => _scannerActive = true);
+    }
+    try {
+      await _scannerController.start();
+    } catch (_) {
+      if (mounted) setState(() => _scannerActive = false);
+    }
+  }
+
+  Future<void> _stopScanner() async {
+    if (!_scannerActive && !_disposed) {
+      try {
+        await _scannerController.stop();
+      } catch (_) {}
+      return;
+    }
+    if (mounted && !_disposed) {
+      setState(() => _scannerActive = false);
+    } else {
+      _scannerActive = false;
+    }
+    try {
+      await _scannerController.stop();
+    } catch (_) {}
   }
 
   @override
@@ -73,7 +125,10 @@ class _CheckinPageState extends State<CheckinPage> {
   Future<void> _ensureCameraPermission() async {
     final status = await Permission.camera.request();
     if (!mounted) return;
-    if (status.isGranted) return;
+    if (status.isGranted) {
+      unawaited(_startScanner());
+      return;
+    }
     if (status.isPermanentlyDenied) {
       _showPermissionDialog(permanent: true);
     } else {
@@ -121,7 +176,7 @@ class _CheckinPageState extends State<CheckinPage> {
     final code = capture.barcodes.firstOrNull?.rawValue;
     if (code == null || code.isEmpty) return;
     _handledScan = true;
-    _scannerController.stop();
+    unawaited(_stopScanner());
     _processCheckin(code, fromCamera: true);
   }
 
@@ -133,7 +188,7 @@ class _CheckinPageState extends State<CheckinPage> {
       _validatedWorkout = null;
       _validatedSession = null;
     });
-    _scannerController.start();
+    unawaited(_startScanner());
   }
 
   Future<void> _submitManual() async {
@@ -167,13 +222,20 @@ class _CheckinPageState extends State<CheckinPage> {
       final workouts = results[1] as List<WorkoutModel>;
       final workout = _argumentWorkout ?? _resolveWorkout(plan, workouts);
 
+      if (workout == null) {
+        _showInvalidState(
+          title: 'Voce ainda nao tem nenhum treino',
+          message:
+              'Para liberar o QR Code, voce precisa ter ao menos um treino criado ou um treino indicado no seu plano.',
+        );
+        return;
+      }
+
       await _checkinService.doCheckIn(qrToken: code);
       if (!mounted) return;
 
       WorkoutSessionData? session;
-      if (workout != null) {
-        session = await _workoutService.startWorkout();
-      }
+      session = await _workoutService.startWorkout();
       if (!mounted) return;
 
       setState(() {
@@ -182,6 +244,7 @@ class _CheckinPageState extends State<CheckinPage> {
         _state = _CheckinState.success;
         _isProcessing = false;
       });
+      unawaited(_stopScanner());
     } catch (e) {
       if (!mounted) return;
       final msg = e.toString().replaceAll('Exception: ', '');
@@ -215,12 +278,21 @@ class _CheckinPageState extends State<CheckinPage> {
       final plan = results[0] as TodayWorkoutPlan?;
       final workouts = results[1] as List<WorkoutModel>;
       final workout = _argumentWorkout ?? _resolveWorkout(plan, workouts);
+      if (workout == null) {
+        _showInvalidState(
+          title: 'Voce ainda nao tem nenhum treino',
+          message:
+              'Seu check-in ja foi registrado, mas voce precisa ter ao menos um treino criado ou indicado no plano para iniciar.',
+        );
+        return;
+      }
       setState(() {
         _validatedWorkout = workout;
         _validatedSession = null;
         _state = _CheckinState.success;
         _isProcessing = false;
       });
+      unawaited(_stopScanner());
     } catch (_) {
       _showInvalidState(
         title: 'Nao foi possivel validar',
@@ -238,7 +310,7 @@ class _CheckinPageState extends State<CheckinPage> {
       _isProcessing = false;
       _handledScan = false;
     });
-    _scannerController.stop();
+    unawaited(_stopScanner());
   }
 
   WorkoutModel? _resolveWorkout(TodayWorkoutPlan? plan, List<WorkoutModel> workouts) {
@@ -265,6 +337,9 @@ class _CheckinPageState extends State<CheckinPage> {
 
   @override
   void dispose() {
+    _disposed = true;
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_scannerController.stop());
     _scannerController.dispose();
     _manualController.dispose();
     super.dispose();
@@ -291,7 +366,10 @@ class _CheckinPageState extends State<CheckinPage> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        MobileScanner(controller: _scannerController, onDetect: _onDetect),
+        if (_scannerActive)
+          MobileScanner(controller: _scannerController, onDetect: _onDetect)
+        else
+          Container(color: const Color(0xFF0E1116)),
         Container(
           decoration: const BoxDecoration(
             gradient: RadialGradient(

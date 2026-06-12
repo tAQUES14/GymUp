@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -180,17 +182,20 @@ class _SettingsPageState extends State<SettingsPage> {
     }
     if (picked == null) return;
 
-    setState(() => _avatarUploading = true);
-
     try {
       final bytes = await picked.readAsBytes();
+      final croppedBytes = await _showAvatarCropModal(bytes);
+      if (croppedBytes == null) return;
+
+      setState(() => _avatarUploading = true);
+
       final streamed = await _api.multipartPost(
         '/profile/avatar',
         files: [
           http.MultipartFile.fromBytes(
             'avatar',
-            bytes,
-            filename: picked.name,
+            croppedBytes,
+            filename: 'avatar.png',
           ),
         ],
       );
@@ -210,6 +215,130 @@ class _SettingsPageState extends State<SettingsPage> {
     } finally {
       if (mounted) setState(() => _avatarUploading = false);
     }
+  }
+
+  Future<Uint8List?> _showAvatarCropModal(Uint8List bytes) async {
+    final cropKey = GlobalKey();
+    final result = await showModalBottomSheet<Uint8List>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        var saving = false;
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            Future<void> capture() async {
+              if (saving) return;
+              setSheetState(() => saving = true);
+              await Future<void>.delayed(const Duration(milliseconds: 60));
+              try {
+                final boundary =
+                    cropKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+                final image = await boundary?.toImage(pixelRatio: 3);
+                final data = await image?.toByteData(format: ui.ImageByteFormat.png);
+                if (ctx.mounted) {
+                  Navigator.pop(ctx, data?.buffer.asUint8List());
+                }
+              } catch (_) {
+                if (ctx.mounted) Navigator.pop(ctx);
+              }
+            }
+
+            return Container(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 42,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: const Color(0x220E1116),
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Recortar foto',
+                      style: _pjs(size: 20, weight: FontWeight.w800, color: _kInk, letterSpacing: -0.4),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Ajuste a foto no quadrado para usar no perfil.',
+                      style: _pjs(size: 13, weight: FontWeight.w500, color: _kMuted, height: 1.4),
+                    ),
+                    const SizedBox(height: 18),
+                    Center(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: RepaintBoundary(
+                          key: cropKey,
+                          child: SizedBox(
+                            width: 280,
+                            height: 280,
+                            child: InteractiveViewer(
+                              minScale: 1,
+                              maxScale: 4,
+                              boundaryMargin: const EdgeInsets.all(120),
+                              child: Image.memory(
+                                bytes,
+                                width: 280,
+                                height: 280,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: saving ? null : () => Navigator.pop(ctx),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: _kInk,
+                              padding: const EdgeInsets.symmetric(vertical: 15),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                              side: const BorderSide(color: Color(0x1F0E1116)),
+                            ),
+                            child: const Text('Cancelar'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: saving ? null : capture,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _kBlue,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 15),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                            ),
+                            child: Text(saving ? 'Salvando...' : 'Usar foto'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    return result;
   }
 
   String? _emptyToNull(TextEditingController ctrl) {

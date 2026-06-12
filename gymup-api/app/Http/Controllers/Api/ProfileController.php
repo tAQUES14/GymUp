@@ -4,13 +4,17 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Checkin;
+use App\Services\ImageService;
 use App\Services\StreakService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Storage;
 
 class ProfileController extends Controller
 {
+    private const FALLBACK_PUBLIC_STORAGE_BASE_URL = 'https://s3.us-west-004.backblazeb2.com/gymup-storage';
+
+    public function __construct(private ImageService $images) {}
+
     public function show(Request $request, StreakService $streakService)
     {
         $user = $request->user()->load('gym:id,name');
@@ -24,7 +28,7 @@ class ProfileController extends Controller
             'name'           => $user->name,
             'email'          => $user->email,
             'phone'          => Schema::hasColumn('users', 'phone') ? $user->phone : null,
-            'avatar_url'     => Schema::hasColumn('users', 'avatar_url') ? $user->avatar_url : null,
+            'avatar_url'     => Schema::hasColumn('users', 'avatar_url') ? $this->avatarUrl($user->avatar_url) : null,
             'role'           => $user->role,
             'points_balance' => (int) $user->points_balance,
             'total_checkins' => $totalCheckins,
@@ -64,7 +68,14 @@ class ProfileController extends Controller
 
         return response()->json([
             'message' => 'Perfil atualizado com sucesso.',
-            'user'    => $user->only(['id', 'name', 'phone', 'avatar_url', 'weight', 'height']),
+            'user'    => [
+                'id'         => $user->id,
+                'name'       => $user->name,
+                'phone'      => $user->phone,
+                'avatar_url' => $this->avatarUrl($user->avatar_url),
+                'weight'     => $user->weight,
+                'height'     => $user->height,
+            ],
         ]);
     }
 
@@ -80,15 +91,82 @@ class ProfileController extends Controller
             'avatar' => 'required|image|max:4096',
         ]);
 
-        $path = $request->file('avatar')->store('avatars', 'public');
-        $avatarUrl = url(Storage::url($path));
-
         $user = $request->user();
-        $user->update(['avatar_url' => $avatarUrl]);
+
+        try {
+            $path = $this->images->store($request->file('avatar'), 'avatars');
+        } catch (\Throwable) {
+            return response()->json([
+                'message' => 'Nao foi possivel enviar a foto para o storage.',
+            ], 422);
+        }
+
+        if ($user->avatar_url) {
+            $this->images->delete($user->avatar_url);
+        }
+
+        $user->update(['avatar_url' => $path]);
 
         return response()->json([
             'message'    => 'Foto atualizada com sucesso.',
-            'avatar_url' => $avatarUrl,
+            'avatar_url' => $this->avatarUrl($path),
         ]);
+    }
+
+    private function avatarUrl(?string $value): ?string
+    {
+        if (! $value) {
+            return null;
+        }
+
+        $path = $this->normalizeAvatarPath($value);
+        if (! $path) {
+            return null;
+        }
+
+        $encoded = implode('/', array_map('rawurlencode', explode('/', $path)));
+        return rtrim($this->publicStorageBaseUrl(), '/') . '/' . $encoded;
+    }
+
+    private function normalizeAvatarPath(string $value): string
+    {
+        if (! str_starts_with($value, 'http')) {
+            return ltrim($value, '/');
+        }
+
+        $path = rawurldecode(parse_url($value, PHP_URL_PATH) ?: '');
+
+        if (preg_match('#/(?:storage|img)/(.+)$#', $path, $matches)) {
+            return ltrim($matches[1], '/');
+        }
+
+        if (preg_match('#/(avatars/.+)$#', $path, $matches)) {
+            return ltrim($matches[1], '/');
+        }
+
+        return ltrim($path, '/');
+    }
+
+    private function publicStorageBaseUrl(): string
+    {
+        $publicDisk = config('filesystems.disks.public', []);
+        $publicUrl = env('PUBLIC_DISK_URL');
+
+        if (! $publicUrl && ($publicDisk['driver'] ?? null) === 's3') {
+            $endpoint = $publicDisk['endpoint'] ?? null;
+            $bucket = $publicDisk['bucket'] ?? null;
+
+            if ($endpoint && $bucket) {
+                $publicUrl = rtrim($endpoint, '/') . '/' . $bucket;
+            }
+        }
+
+        $publicUrl ??= $publicDisk['url'] ?? null;
+
+        if (! $publicUrl || str_contains($publicUrl, 'gymup-api.onrender.com/storage')) {
+            return self::FALLBACK_PUBLIC_STORAGE_BASE_URL;
+        }
+
+        return $publicUrl;
     }
 }
