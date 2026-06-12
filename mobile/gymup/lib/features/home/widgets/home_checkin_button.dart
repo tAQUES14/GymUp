@@ -65,7 +65,7 @@ class HomeCheckinButton extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        hasCheckedIn ? 'Check-in realizado' : 'Fazer check-in',
+                        hasCheckedIn ? 'Check-in feito' : 'Fazer check-in',
                         style: AppText.pjs(
                           size: 17, weight: FontWeight.w700,
                           color: Colors.white, letterSpacing: -0.3,
@@ -74,7 +74,7 @@ class HomeCheckinButton extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         hasCheckedIn
-                            ? 'Você já fez check-in hoje!'
+                            ? 'Tudo pronto para iniciar seu treino.'
                             : 'Escaneie o QR na recepção',
                         style: AppText.pjs(
                           size: 12.5, weight: FontWeight.w500,
@@ -113,10 +113,10 @@ class HomeCheckinButton extends StatelessWidget {
                       borderRadius: BorderRadius.circular(100),
                     ),
                     child: Text(
-                      '✓ FEITO',
+                      'Treine agora',
                       style: AppText.pjs(
                         size: 10.5, weight: FontWeight.w700,
-                        color: Colors.white, letterSpacing: 0.3,
+                        color: Colors.white, letterSpacing: 0.1,
                       ),
                     ),
                   ),
@@ -126,3 +126,4 @@ class HomeCheckinButton extends StatelessWidget {
     );
   }
 }
+
