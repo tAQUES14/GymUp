@@ -190,7 +190,7 @@ class _ProfilePageState extends State<ProfilePage> {
             key: _formKey,
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.fromLTRB(20, 20, 20, 126 + bottomInset),
+              padding: EdgeInsets.fromLTRB(20, 14, 20, 126 + bottomInset),
               children: [
                 _ProfileHeader(
                   editing: _isEditing,
@@ -364,7 +364,7 @@ class _ProfileHero extends StatelessWidget {
     final hasAvatar = avatarUrl.trim().isNotEmpty;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 26, 20, 22),
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
       clipBehavior: Clip.antiAlias,
       decoration: _whiteDecoration(26),
       child: Stack(
@@ -381,8 +381,8 @@ class _ProfileHero extends StatelessWidget {
                 clipBehavior: Clip.none,
                 children: [
                   Container(
-                    width: 96,
-                    height: 96,
+                    width: 88,
+                    height: 88,
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [_kBlue, _kBlue2],
@@ -404,16 +404,16 @@ class _ProfileHero extends StatelessWidget {
                         ? Image.network(
                             avatarUrl.trim(),
                             fit: BoxFit.cover,
-                            width: 96,
-                            height: 96,
+                            width: 88,
+                            height: 88,
                             errorBuilder: (_, _, _) => Text(
                               initial,
-                              style: _pjs(size: 38, weight: FontWeight.w800, color: Colors.white, letterSpacing: -0.8),
+                              style: _pjs(size: 34, weight: FontWeight.w800, color: Colors.white, letterSpacing: -0.8),
                             ),
                           )
                         : Text(
                             initial,
-                            style: _pjs(size: 38, weight: FontWeight.w800, color: Colors.white, letterSpacing: -0.8),
+                            style: _pjs(size: 34, weight: FontWeight.w800, color: Colors.white, letterSpacing: -0.8),
                           ),
                   ),
                   Positioned(
@@ -432,7 +432,7 @@ class _ProfileHero extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
               Text(
                 name,
                 textAlign: TextAlign.center,

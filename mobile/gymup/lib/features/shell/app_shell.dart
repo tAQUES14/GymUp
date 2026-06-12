@@ -101,7 +101,11 @@ class _AppShellState extends State<AppShell> {
               children: [
                 GlobalAppHeader(currentIndex: _currentIndex),
                 Expanded(
-                  child: IndexedStack(index: _currentIndex, children: _pages),
+                  child: SafeArea(
+                    bottom: false,
+                    minimum: const EdgeInsets.only(top: 8),
+                    child: IndexedStack(index: _currentIndex, children: _pages),
+                  ),
                 ),
               ],
             ),
