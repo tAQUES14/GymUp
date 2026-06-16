@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart'
-    show TargetPlatform, defaultTargetPlatform, kIsWeb;
+    show TargetPlatform, defaultTargetPlatform, kIsWeb, kReleaseMode;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -23,10 +23,13 @@ class ApiService {
     const useProductionApi = bool.fromEnvironment('USE_PRODUCTION_API');
     if (useProductionApi) return _productionBaseUrl;
 
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    if (!kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android &&
+        !kReleaseMode) {
       return 'http://$_androidDevHost:8000/api';
     }
-    return 'http://localhost:8000/api';
+
+    return _productionBaseUrl;
   }
 
   Future<String?> _getToken() async {
