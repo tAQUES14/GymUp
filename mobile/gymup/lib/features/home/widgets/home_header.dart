@@ -8,6 +8,7 @@ class HomeHeader extends StatelessWidget {
   final VoidCallback? onCalendar;
   final VoidCallback? onBell;
   final bool hasNotification;
+  final String avatarUrl;
 
   const HomeHeader({
     super.key,
@@ -16,6 +17,7 @@ class HomeHeader extends StatelessWidget {
     this.onCalendar,
     this.onBell,
     this.hasNotification = true,
+    this.avatarUrl = '',
   });
 
   String get _greeting {
@@ -30,22 +32,24 @@ class HomeHeader extends StatelessWidget {
     return Row(
       children: [
         // ── Avatar com gradiente e inicial ────────────────────────────────
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            gradient: AppColors.gradientPrimary,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Center(
-            child: Text(
-              nome.isNotEmpty ? nome[0].toUpperCase() : 'U',
-              textAlign: TextAlign.center,
-              style: AppText.pjs(
-                size: 15.1, weight: FontWeight.w700,
-                color: Colors.white, letterSpacing: -0.3,
-              ),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              gradient: AppColors.gradientPrimary,
+              borderRadius: BorderRadius.circular(18),
             ),
+            child: avatarUrl.trim().isNotEmpty
+                ? Image.network(
+                    avatarUrl.trim(),
+                    fit: BoxFit.cover,
+                    cacheWidth: 120,
+                    cacheHeight: 120,
+                    errorBuilder: (context, error, stackTrace) => _InitialAvatar(nome: nome),
+                  )
+                : _InitialAvatar(nome: nome),
           ),
         ),
 
@@ -114,6 +118,28 @@ class HomeHeader extends StatelessWidget {
 }
 
 /// Botão quadrado branco com sombra suave — padrão dos ícones do header.
+class _InitialAvatar extends StatelessWidget {
+  final String nome;
+
+  const _InitialAvatar({required this.nome});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        nome.isNotEmpty ? nome[0].toUpperCase() : 'U',
+        textAlign: TextAlign.center,
+        style: AppText.pjs(
+          size: 15.1,
+          weight: FontWeight.w700,
+          color: Colors.white,
+          letterSpacing: -0.3,
+        ),
+      ),
+    );
+  }
+}
+
 class _HeaderIconButton extends StatelessWidget {
   final Widget child;
   final VoidCallback? onTap;

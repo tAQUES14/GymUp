@@ -95,6 +95,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final gym = data['gym'] as Map<String, dynamic>?;
+      final avatarUrl = data['avatar_url'] as String? ?? '';
       final latestWeight = _latestBodyWeight(weightResponse);
       final goalData = _goalFallback(goalResponse);
       final profileWeight = _toDouble(data['weight']);
@@ -103,12 +104,15 @@ class _SettingsPageState extends State<SettingsPage> {
       _phoneCtrl.text = data['phone'] as String? ?? '';
       _weightCtrl.text = _formatNumber(profileWeight ?? latestWeight ?? goalData.weight, decimals: 1);
       _heightCtrl.text = _formatNumber(profileHeight ?? goalData.height, decimals: 0);
+      if (avatarUrl.isNotEmpty) {
+        await prefs.setString('user_avatar_url', avatarUrl);
+      }
 
       if (!mounted) return;
       setState(() {
         _email = data['email'] as String?;
         _gymName = gym?['name'] as String?;
-        _avatarUrl = data['avatar_url'] as String? ?? '';
+        _avatarUrl = avatarUrl;
         _notifications = prefs.getBool('settings_notifications') ?? true;
         _workoutReminder = prefs.getBool('settings_workout_reminder') ?? true;
         _rankingVisible = prefs.getBool('settings_ranking_visible') ?? true;
@@ -169,8 +173,6 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       picked = await _picker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 84,
-        maxWidth: 1200,
       );
     } on MissingPluginException {
       _snack(
@@ -206,8 +208,13 @@ class _SettingsPageState extends State<SettingsPage> {
       }
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final avatarUrl = data['avatar_url'] as String? ?? _avatarUrl;
+      if (avatarUrl.isNotEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('user_avatar_url', avatarUrl);
+      }
       if (!mounted) return;
-      setState(() => _avatarUrl = data['avatar_url'] as String? ?? _avatarUrl);
+      setState(() => _avatarUrl = avatarUrl);
       _snack('Foto atualizada.', success: true);
     } catch (e) {
       if (!mounted) return;
@@ -236,7 +243,7 @@ class _SettingsPageState extends State<SettingsPage> {
               try {
                 final boundary =
                     cropKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-                final image = await boundary?.toImage(pixelRatio: 3);
+                final image = await boundary?.toImage(pixelRatio: 2);
                 final data = await image?.toByteData(format: ui.ImageByteFormat.png);
                 if (ctx.mounted) {
                   Navigator.pop(ctx, data?.buffer.asUint8List());
@@ -299,18 +306,22 @@ class _SettingsPageState extends State<SettingsPage> {
                             borderRadius: BorderRadius.circular(28),
                             child: RepaintBoundary(
                               key: cropKey,
-                              child: SizedBox(
-                                width: cropSize,
-                                height: cropSize,
-                                child: InteractiveViewer(
-                                  minScale: 1,
-                                  maxScale: 5,
-                                  boundaryMargin: const EdgeInsets.all(160),
-                                  child: Image.memory(
-                                    bytes,
-                                    width: cropSize,
-                                    height: cropSize,
-                                    fit: BoxFit.cover,
+                              child: ColoredBox(
+                                color: Colors.black,
+                                child: SizedBox(
+                                  width: cropSize,
+                                  height: cropSize,
+                                  child: InteractiveViewer(
+                                    minScale: 1,
+                                    maxScale: 6,
+                                    boundaryMargin: const EdgeInsets.all(220),
+                                    child: Image.memory(
+                                      bytes,
+                                      width: cropSize,
+                                      height: cropSize,
+                                      fit: BoxFit.contain,
+                                      filterQuality: FilterQuality.high,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -658,22 +669,6 @@ class _AvatarHero extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.white.withValues(alpha: 0),
-                    Colors.white.withValues(alpha: 0.08),
-                    Colors.white.withValues(alpha: 0.18),
-                  ],
-                  stops: const [0, 0.58, 1],
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                ),
-              ),
-            ),
-          ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -688,16 +683,8 @@ class _AvatarHero extends StatelessWidget {
                           width: 70,
                           height: 70,
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.white.withValues(alpha: 0.95),
-                                Colors.white.withValues(alpha: 0.78),
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
+                            color: hasAvatar ? Colors.transparent : Colors.white,
                             shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.55), width: 2.5),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.18),
@@ -712,6 +699,9 @@ class _AvatarHero extends StatelessWidget {
                                   avatarUrl,
                                   key: ValueKey(avatarUrl),
                                   fit: BoxFit.cover,
+                                  cacheWidth: 180,
+                                  cacheHeight: 180,
+                                  filterQuality: FilterQuality.medium,
                                   errorBuilder: (_, _, _) => _Initials(initials: initials, color: _kBlue),
                                 )
                               : _Initials(initials: initials, color: _kBlue),

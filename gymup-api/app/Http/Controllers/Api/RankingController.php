@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\DB;
 
 class RankingController extends Controller
 {
+    private const FALLBACK_PUBLIC_STORAGE_BASE_URL = 'https://s3.us-west-004.backblazeb2.com/gymup-storage';
+
     public function index(Request $request)
     {
         $user = $request->user();
@@ -61,10 +63,11 @@ class RankingController extends Controller
         $select  = [
             'users.id',
             'users.name',
+            'users.avatar_url',
             'users.current_streak',
             DB::raw('COALESCE(SUM(point_transactions.points), 0) as points'),
         ];
-        $groupBy = ['users.id', 'users.name', 'users.current_streak'];
+        $groupBy = ['users.id', 'users.name', 'users.avatar_url', 'users.current_streak'];
 
         if ($scope === 'chain') {
             $query->join('gyms', 'gyms.id', '=', 'users.gym_id')
@@ -93,6 +96,7 @@ class RankingController extends Controller
                 'position'   => $index + 1,
                 'user_id'    => $u->id,
                 'name'       => $u->name,
+                'avatar_url' => $this->avatarUrl($u->avatar_url ?? null),
                 'points'     => (int) $u->points,
                 'streak'     => (int) $u->current_streak,
                 'growth_pct' => null,
@@ -134,6 +138,7 @@ class RankingController extends Controller
         $select = [
             'users.id',
             'users.name',
+            'users.avatar_url',
             'users.current_streak',
             DB::raw('COALESCE(curr.pts, 0) as current_pts'),
             DB::raw('COALESCE(prev.pts, 0) as previous_pts'),
@@ -150,7 +155,7 @@ class RankingController extends Controller
                 END as growth_pct
             "),
         ];
-        $groupBy = ['users.id', 'users.name', 'users.current_streak'];
+        $groupBy = ['users.id', 'users.name', 'users.avatar_url', 'users.current_streak'];
 
         if ($scope === 'chain') {
             $query->join('gyms', 'gyms.id', '=', 'users.gym_id')
@@ -176,6 +181,7 @@ class RankingController extends Controller
                 'position'   => $index + 1,
                 'user_id'    => $u->id,
                 'name'       => $u->name,
+                'avatar_url' => $this->avatarUrl($u->avatar_url ?? null),
                 'points'     => (int) $u->current_pts,
                 'streak'     => (int) $u->current_streak,
                 'growth_pct' => (int) $u->growth_pct,
@@ -185,5 +191,66 @@ class RankingController extends Controller
             }
             return $item;
         })->all();
+    }
+
+    private function avatarUrl(?string $value): ?string
+    {
+        if (! $value) {
+            return null;
+        }
+
+        if (str_starts_with($value, 'http') && ! str_contains($value, 'gymup-api.onrender.com/storage')) {
+            return $value;
+        }
+
+        $path = $this->normalizeAvatarPath($value);
+        if (! $path) {
+            return null;
+        }
+
+        $encoded = implode('/', array_map('rawurlencode', explode('/', $path)));
+        return rtrim($this->publicStorageBaseUrl(), '/') . '/' . $encoded;
+    }
+
+    private function normalizeAvatarPath(string $value): string
+    {
+        if (! str_starts_with($value, 'http')) {
+            return ltrim($value, '/');
+        }
+
+        $path = rawurldecode(parse_url($value, PHP_URL_PATH) ?: '');
+
+        if (preg_match('#/(?:storage|img)/(.+)$#', $path, $matches)) {
+            return ltrim($matches[1], '/');
+        }
+
+        if (preg_match('#/(avatars/.+)$#', $path, $matches)) {
+            return ltrim($matches[1], '/');
+        }
+
+        return ltrim($path, '/');
+    }
+
+    private function publicStorageBaseUrl(): string
+    {
+        $publicDisk = config('filesystems.disks.public', []);
+        $publicUrl = env('PUBLIC_DISK_URL');
+
+        if (! $publicUrl && ($publicDisk['driver'] ?? null) === 's3') {
+            $endpoint = $publicDisk['endpoint'] ?? null;
+            $bucket = $publicDisk['bucket'] ?? null;
+
+            if ($endpoint && $bucket) {
+                $publicUrl = rtrim($endpoint, '/') . '/' . $bucket;
+            }
+        }
+
+        $publicUrl ??= $publicDisk['url'] ?? null;
+
+        if (! $publicUrl || str_contains($publicUrl, 'gymup-api.onrender.com/storage')) {
+            return self::FALLBACK_PUBLIC_STORAGE_BASE_URL;
+        }
+
+        return $publicUrl;
     }
 }

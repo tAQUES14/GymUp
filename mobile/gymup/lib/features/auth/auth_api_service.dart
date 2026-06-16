@@ -25,10 +25,17 @@ class AuthApiService {
     final data = jsonDecode(response.body) as Map<String, dynamic>;
 
     if (response.statusCode != 200) {
-      throw Exception(data['message'] ?? 'Erro ao fazer login');
+      throw AuthApiException(
+        data['message'] as String? ?? 'Erro ao fazer login',
+        statusCode: response.statusCode,
+        code: data['code'] as String?,
+        email: data['email'] as String?,
+      );
     }
 
-    await _saveSession(data);
+    if (data['token'] != null) {
+      await _saveSession(data);
+    }
     return data;
   }
 
@@ -153,6 +160,10 @@ class AuthApiService {
     } else {
       await prefs.remove('gym_chain_id');
     }
+    final avatarUrl = data['avatar_url'] as String?;
+    if (avatarUrl != null && avatarUrl.isNotEmpty) {
+      await prefs.setString('user_avatar_url', avatarUrl);
+    }
 
     return data;
   }
@@ -248,6 +259,43 @@ class AuthApiService {
       await prefs.setInt('user_id', (user['id'] as num).toInt());
       final name = user['name'] as String?;
       if (name != null) await prefs.setString('user_name', name);
+      final avatarUrl = user['avatar_url'] as String?;
+      if (avatarUrl != null && avatarUrl.isNotEmpty) {
+        await prefs.setString('user_avatar_url', avatarUrl);
+      }
     }
   }
+
+  Future<void> resendVerificationEmail({required String email}) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/email/verification-notification'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: jsonEncode({'email': email}),
+    );
+
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(data['message'] ?? 'Erro ao reenviar verificacao');
+    }
+  }
+}
+
+class AuthApiException implements Exception {
+  const AuthApiException(
+    this.message, {
+    this.statusCode,
+    this.code,
+    this.email,
+  });
+
+  final String message;
+  final int? statusCode;
+  final String? code;
+  final String? email;
+
+  @override
+  String toString() => message;
 }

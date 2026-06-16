@@ -42,20 +42,26 @@ class ImageService
      *   3. Reduz a qualidade iterativamente até o arquivo ficar abaixo de 1 MB.
      *   4. Salva em storage/public/{folder}/ e retorna o path relativo (ex: rewards/uuid.webp).
      */
-    public function store(UploadedFile $file, string $folder = 'uploads'): string
+    public function store(
+        UploadedFile $file,
+        string $folder = 'uploads',
+        int $maxDimension = self::MAX_DIMENSION,
+        int $maxSizeBytes = self::MAX_SIZE_BYTES,
+        int $qualityStart = self::QUALITY_START
+    ): string
     {
         $image = $this->manager()->read($file->getRealPath());
 
         // 1. Redimensiona mantendo proporção
-        if ($image->width() > self::MAX_DIMENSION || $image->height() > self::MAX_DIMENSION) {
-            $image->scaleDown(self::MAX_DIMENSION, self::MAX_DIMENSION);
+        if ($image->width() > $maxDimension || $image->height() > $maxDimension) {
+            $image->scaleDown($maxDimension, $maxDimension);
         }
 
         // 2. Converte para WebP com qualidade iterativa
-        $quality  = self::QUALITY_START;
+        $quality  = $qualityStart;
         $encoded  = $image->toWebp($quality);
 
-        while (strlen((string) $encoded) > self::MAX_SIZE_BYTES && $quality > 10) {
+        while (strlen((string) $encoded) > $maxSizeBytes && $quality > 10) {
             $quality -= 5;
             $encoded  = $image->toWebp($quality);
         }

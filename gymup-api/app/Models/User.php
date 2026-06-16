@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Notifications\ResetPasswordNotification;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -202,5 +203,15 @@ class User extends Authenticatable
     public function userNotifications()
     {
         return $this->hasMany(UserNotification::class);
+    }
+
+    public function sendPasswordResetNotification($token): void
+    {
+        $base = rtrim(config('app.frontend_url', 'https://admin.gymupapp.com.br'), '/');
+        $url = $base . '/reset-password'
+            . '?token=' . $token
+            . '&email=' . urlencode($this->getEmailForPasswordReset());
+
+        $this->notify(new ResetPasswordNotification($url));
     }
 }

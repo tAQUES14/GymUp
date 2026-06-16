@@ -46,6 +46,8 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
   bool _handledScan = false;
   bool _didReadArgs = false;
   bool _scannerActive = false;
+  bool _scannerRunning = false;
+  Future<void> _scannerOp = Future<void>.value();
   bool _disposed = false;
   _CheckinState _state = _CheckinState.scanning;
   WorkoutModel? _argumentWorkout;
@@ -81,31 +83,53 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
 
   Future<void> _startScanner() async {
     if (_disposed || _scannerActive || _state != _CheckinState.scanning) return;
-    if (mounted) {
-      setState(() => _scannerActive = true);
-    }
-    try {
-      await _scannerController.start();
-    } catch (_) {
-      if (mounted) setState(() => _scannerActive = false);
-    }
+    _scannerOp = _scannerOp.then((_) async {
+      if (_disposed || _scannerRunning || _state != _CheckinState.scanning) return;
+      if (mounted) {
+        setState(() => _scannerActive = true);
+      }
+      try {
+        await _scannerController.start();
+        _scannerRunning = true;
+      } catch (_) {
+        _scannerRunning = false;
+        if (mounted) setState(() => _scannerActive = false);
+      }
+    });
+    await _scannerOp;
   }
 
   Future<void> _stopScanner() async {
-    if (!_scannerActive && !_disposed) {
+    _scannerOp = _scannerOp.then((_) async {
+      if (!_scannerRunning) {
+        if (mounted && !_disposed && _scannerActive) {
+          setState(() => _scannerActive = false);
+        } else {
+          _scannerActive = false;
+        }
+        return;
+      }
+
       try {
         await _scannerController.stop();
       } catch (_) {}
-      return;
-    }
+      _scannerRunning = false;
+      if (mounted && !_disposed) {
+        setState(() => _scannerActive = false);
+      } else {
+        _scannerActive = false;
+      }
+    });
+    await _scannerOp;
+  }
+
+  void _forceScannerInactive() {
+    _scannerRunning = false;
     if (mounted && !_disposed) {
       setState(() => _scannerActive = false);
     } else {
       _scannerActive = false;
     }
-    try {
-      await _scannerController.stop();
-    } catch (_) {}
   }
 
   @override
@@ -176,8 +200,13 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
     final code = capture.barcodes.firstOrNull?.rawValue;
     if (code == null || code.isEmpty) return;
     _handledScan = true;
-    unawaited(_stopScanner());
-    _processCheckin(code, fromCamera: true);
+    unawaited(_handleDetectedCode(code));
+  }
+
+  Future<void> _handleDetectedCode(String code) async {
+    await _stopScanner();
+    if (!mounted || _disposed) return;
+    await _processCheckin(code, fromCamera: true);
   }
 
   void _resetScanner() {
@@ -339,8 +368,14 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
   void dispose() {
     _disposed = true;
     WidgetsBinding.instance.removeObserver(this);
-    unawaited(_scannerController.stop());
-    _scannerController.dispose();
+    _forceScannerInactive();
+    final controller = _scannerController;
+    unawaited(
+      _scannerOp
+          .then((_) => controller.stop())
+          .catchError((_) {})
+          .whenComplete(controller.dispose),
+    );
     _manualController.dispose();
     super.dispose();
   }

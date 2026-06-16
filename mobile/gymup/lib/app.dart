@@ -10,6 +10,7 @@ import 'package:gymup/features/auth/register_page.dart';
 import 'package:gymup/features/auth/google_invite_page.dart';
 import 'package:gymup/features/auth/forgot_password_page.dart';
 import 'package:gymup/features/auth/reset_password_page.dart';
+import 'package:gymup/features/onboarding/onboarding_page.dart';
 import 'package:gymup/features/shell/app_shell.dart';
 import 'package:gymup/features/checkin/checkin_page.dart';
 import 'package:gymup/features/store/reward_details_page.dart';
@@ -106,6 +107,7 @@ class _GymUpAppState extends State<GymUpApp> {
 
       routes: {
         '/login':            (context) => const LoginPage(),
+        '/onboarding':       (context) => const OnboardingPage(),
         '/register':         (context) => const RegisterPage(),
         '/google-invite':    (context) => const GoogleInvitePage(),
         '/forgot-password':  (context) => const ForgotPasswordPage(),

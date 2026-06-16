@@ -55,6 +55,7 @@ class _ProfilePageState extends State<ProfilePage> {
     _pesoController = TextEditingController();
     _alturaController = TextEditingController();
     _academiaController = TextEditingController();
+    _hydrateCachedProfile();
     _profileFuture = _loadProfile();
   }
 
@@ -93,11 +94,21 @@ class _ProfilePageState extends State<ProfilePage> {
     final profileHeight = data['height'] != null ? double.tryParse(data['height'].toString()) : null;
     final resolvedHeight = profileHeight ?? goal?.height;
     final gymName = gym?['name'] as String?;
+    final avatarUrl = data['avatar_url'] as String?;
+    final prefs = await SharedPreferences.getInstance();
 
     if (gymName != null) {
-      final prefs = await SharedPreferences.getInstance();
       await prefs.setString('gym_name', gymName);
     }
+    if (avatarUrl != null && avatarUrl.isNotEmpty) {
+      await prefs.setString('user_avatar_url', avatarUrl);
+    }
+    await prefs.setString('user_name', data['name'] as String? ?? '');
+    await prefs.setString('profile_name', data['name'] as String? ?? '');
+    await prefs.setString('profile_email', data['email'] as String? ?? '');
+    await prefs.setInt('profile_points_balance', (data['points_balance'] as num?)?.toInt() ?? 0);
+    await prefs.setInt('profile_total_checkins', (data['total_checkins'] as num?)?.toInt() ?? 0);
+    await prefs.setInt('profile_current_streak', (data['current_streak'] as num?)?.toInt() ?? 0);
 
     if (!mounted) return;
     setState(() {
@@ -107,6 +118,32 @@ class _ProfilePageState extends State<ProfilePage> {
       _pesoController.text = resolvedWeight != null ? resolvedWeight.toStringAsFixed(1) : '';
       _alturaController.text = resolvedHeight != null ? resolvedHeight.toStringAsFixed(0) : '';
       _academiaController.text = gymName ?? '';
+    });
+  }
+
+  Future<void> _hydrateCachedProfile() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cachedName = prefs.getString('profile_name') ?? prefs.getString('user_name') ?? '';
+    final cachedAvatar = prefs.getString('user_avatar_url') ?? '';
+    final cachedGym = prefs.getString('gym_name') ?? '';
+
+    if (cachedName.isEmpty && cachedAvatar.isEmpty && cachedGym.isEmpty) {
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _userData = {
+        'name': cachedName,
+        'email': prefs.getString('profile_email') ?? '',
+        'avatar_url': cachedAvatar,
+        'points_balance': prefs.getInt('profile_points_balance') ?? 0,
+        'total_checkins': prefs.getInt('profile_total_checkins') ?? 0,
+        'current_streak': prefs.getInt('profile_current_streak') ?? 0,
+        'gym': cachedGym.isEmpty ? null : {'name': cachedGym},
+      };
+      if (_nomeController.text.isEmpty) _nomeController.text = cachedName;
+      if (_academiaController.text.isEmpty) _academiaController.text = cachedGym;
     });
   }
 
@@ -161,11 +198,11 @@ class _ProfilePageState extends State<ProfilePage> {
       body: FutureBuilder<void>(
         future: _profileFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting && _userData == null) {
             return const GymUpLoading();
           }
 
-          if (snapshot.hasError) {
+          if (snapshot.hasError && _userData == null) {
             return _ProfileError(
               message: snapshot.error.toString(),
               onRetry: () => setState(() => _profileFuture = _loadProfile()),
@@ -239,10 +276,9 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 const SizedBox(height: 22),
                 _ProfileMenuCard(
-                  onEdit: () => setState(() => _isEditing = !_isEditing),
+                  onEdit: _openSettings,
                   onProgress: _openProgress,
                   onGoal: _openGoal,
-                  onSettings: _openSettings,
                 ),
                 if (_isEditing) ...[
                   const SizedBox(height: 16),
@@ -406,7 +442,17 @@ class _ProfileHero extends StatelessWidget {
                             fit: BoxFit.cover,
                             width: 88,
                             height: 88,
-                            errorBuilder: (_, _, _) => Text(
+                            cacheWidth: 180,
+                            cacheHeight: 180,
+                            filterQuality: FilterQuality.medium,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Text(
+                                initial,
+                                style: _pjs(size: 34, weight: FontWeight.w800, color: Colors.white, letterSpacing: -0.8),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) => Text(
                               initial,
                               style: _pjs(size: 34, weight: FontWeight.w800, color: Colors.white, letterSpacing: -0.8),
                             ),
@@ -579,13 +625,11 @@ class _ProfileMenuCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onProgress;
   final VoidCallback onGoal;
-  final VoidCallback onSettings;
 
   const _ProfileMenuCard({
     required this.onEdit,
     required this.onProgress,
     required this.onGoal,
-    required this.onSettings,
   });
 
   @override
@@ -596,8 +640,8 @@ class _ProfileMenuCard extends StatelessWidget {
       child: Column(
         children: [
           _MenuRow(
-            title: 'Editar perfil',
-            icon: Icons.edit_rounded,
+            title: 'Editar perfil e configurações',
+            icon: Icons.tune_rounded,
             bg: _kBlueSoft,
             color: _kBlue,
             onTap: onEdit,
@@ -614,15 +658,8 @@ class _ProfileMenuCard extends StatelessWidget {
             icon: Icons.flag_rounded,
             bg: _kBlueSoft,
             color: _kBlue,
-            onTap: onGoal,
-          ),
-          _MenuRow(
-            title: 'Configura\u00E7\u00F5es',
-            icon: Icons.settings_rounded,
-            bg: const Color(0xFFF1F3F8),
-            color: _kMuted,
             showDivider: false,
-            onTap: onSettings,
+            onTap: onGoal,
           ),
         ],
       ),

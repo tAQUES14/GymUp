@@ -542,7 +542,7 @@ class _RankingRow extends StatelessWidget {
             child: Text('${entry.position}', style: _sg(size: 13, weight: FontWeight.w700, color: positionColor, letterSpacing: -0.2)),
           ),
           const SizedBox(width: 12),
-          _Avatar(name: entry.userName, seed: entry.position),
+          _Avatar(name: entry.userName, imageUrl: entry.avatarUrl, seed: entry.position),
           const SizedBox(width: 12),
           Expanded(
             child: Row(
@@ -573,22 +573,48 @@ class _RankingRow extends StatelessWidget {
 
 class _Avatar extends StatelessWidget {
   final String name;
+  final String? imageUrl;
   final int seed;
 
-  const _Avatar({required this.name, required this.seed});
+  const _Avatar({required this.name, this.imageUrl, required this.seed});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: _avatarGradient(seed), begin: Alignment.topLeft, end: Alignment.bottomRight),
-        shape: BoxShape.circle,
+    final url = imageUrl?.trim() ?? '';
+
+    return ClipOval(
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: _avatarGradient(seed), begin: Alignment.topLeft, end: Alignment.bottomRight),
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: url.isNotEmpty
+            ? Image.network(
+                url,
+                fit: BoxFit.cover,
+                width: 36,
+                height: 36,
+                cacheWidth: 120,
+                cacheHeight: 120,
+                errorBuilder: (context, error, stackTrace) => _AvatarInitial(name: name),
+              )
+            : _AvatarInitial(name: name),
       ),
-      alignment: Alignment.center,
-      child: Text(_initials(name), style: _pjs(size: 13, weight: FontWeight.w800, color: Colors.white, letterSpacing: -0.2)),
     );
+  }
+}
+
+class _AvatarInitial extends StatelessWidget {
+  final String name;
+
+  const _AvatarInitial({required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(_initials(name), style: _pjs(size: 13, weight: FontWeight.w800, color: Colors.white, letterSpacing: -0.2));
   }
 }
 

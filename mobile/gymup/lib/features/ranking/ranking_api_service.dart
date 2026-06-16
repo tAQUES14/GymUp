@@ -7,6 +7,7 @@ class RankingItem {
   final String name;
   final int points;
   final int streak;
+  final String? avatarUrl;
   /// Percentual de crescimento em relação à semana anterior.
   /// Não nulo apenas quando period=progress.
   /// 999 significa crescimento infinito (sem pontos na semana anterior).
@@ -20,6 +21,7 @@ class RankingItem {
     required this.name,
     required this.points,
     required this.streak,
+    this.avatarUrl,
     this.growthPct,
     this.gymName,
   });
@@ -31,6 +33,7 @@ class RankingItem {
       name:      json['name'] as String,
       points:    (json['points'] as num).toInt(),
       streak:    (json['streak'] as num?)?.toInt() ?? 0,
+      avatarUrl: json['avatar_url'] as String?,
       growthPct: (json['growth_pct'] as num?)?.toInt(),
       gymName:   json['gym_name'] as String?,
     );

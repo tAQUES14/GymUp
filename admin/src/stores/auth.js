@@ -56,6 +56,19 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('admin_user')
   }
 
+  async function forgotPassword(email) {
+    await api.post('/auth/forgot-password', { email })
+  }
+
+  async function resetPassword({ token, email, password }) {
+    await api.post('/auth/reset-password', {
+      token,
+      email,
+      password,
+      password_confirmation: password,
+    })
+  }
+
   async function refreshMe() {
     try {
       const { data } = await api.get('/me')
@@ -77,6 +90,8 @@ export const useAuthStore = defineStore('auth', () => {
     hasPermission,
     login,
     logout,
+    forgotPassword,
+    resetPassword,
     refreshMe,
     loginRedirect,
   }

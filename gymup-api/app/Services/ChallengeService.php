@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 
 class ChallengeService
 {
+    private const FALLBACK_PUBLIC_STORAGE_BASE_URL = 'https://s3.us-west-004.backblazeb2.com/gymup-storage';
+
     public function __construct(private PointService $pointService) {}
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -180,7 +182,7 @@ class ChallengeService
                 ->pluck('workouts_count', 'user_id');
 
             $participants = ChallengeParticipant::where('challenge_id', $challenge->id)
-                ->with('user:id,name')
+                ->with('user:id,name,avatar_url')
                 ->orderByDesc('total_challenge_points')
                 ->get();
 
@@ -190,6 +192,7 @@ class ChallengeService
                     'position'              => $i + 1,
                     'user_id'              => $p->user_id,
                     'user_name'            => $p->user->name,
+                    'avatar_url'           => $this->avatarUrl($p->user->avatar_url ?? null),
                     'total_points'         => $p->total_challenge_points,
                     'workouts_this_week'   => $thisWeekByUser[$p->user_id] ?? 0,
                 ])
@@ -197,12 +200,13 @@ class ChallengeService
         }
 
         return ChallengeParticipant::where('challenge_id', $challenge->id)
-            ->with('user:id,name')
+            ->with('user:id,name,avatar_url')
             ->orderByDesc('workouts_this_challenge')
             ->get()
             ->map(fn ($p) => [
                 'user_id'        => $p->user_id,
                 'user_name'      => $p->user->name,
+                'avatar_url'     => $this->avatarUrl($p->user->avatar_url ?? null),
                 'workouts'       => $p->workouts_this_challenge,
                 'goal_completed' => $p->goal_completed,
             ])
@@ -217,12 +221,13 @@ class ChallengeService
     {
         return ChallengeWeeklyRanking::where('challenge_id', $challenge->id)
             ->where('week_start', $weekStart)
-            ->with('user:id,name')
+            ->with('user:id,name,avatar_url')
             ->orderByDesc('workouts_count')
             ->get()
             ->map(fn ($r) => [
                 'user_id'        => $r->user_id,
                 'user_name'      => $r->user->name,
+                'avatar_url'     => $this->avatarUrl($r->user->avatar_url ?? null),
                 'workouts_count' => $r->workouts_count,
                 'position'       => $r->position,
                 'points_awarded' => $r->points_awarded,
@@ -455,6 +460,52 @@ class ChallengeService
             '7' => 2,
             '8' => 1,
         ];
+    }
+
+    private function avatarUrl(?string $avatarPath): ?string
+    {
+        $path = $this->normalizeAvatarPath($avatarPath);
+
+        if (!$path) {
+            return null;
+        }
+
+        if (preg_match('/^https?:\/\//i', $path)) {
+            if (str_contains($path, '/storage/avatars/')) {
+                return rtrim($this->publicStorageBaseUrl(), '/') . '/avatars/' . basename($path);
+            }
+
+            return $path;
+        }
+
+        return rtrim($this->publicStorageBaseUrl(), '/') . '/' . ltrim($path, '/');
+    }
+
+    private function normalizeAvatarPath(?string $avatarPath): ?string
+    {
+        if (!$avatarPath) {
+            return null;
+        }
+
+        $path = trim($avatarPath);
+
+        if ($path === '') {
+            return null;
+        }
+
+        if (str_starts_with($path, 'storage/')) {
+            return substr($path, strlen('storage/'));
+        }
+
+        return ltrim($path, '/');
+    }
+
+    private function publicStorageBaseUrl(): string
+    {
+        return env('PUBLIC_DISK_URL')
+            ?: env('PUBLIC_DISK_ENDPOINT')
+            ?: env('PUBLIC_DISK_BASE_URL')
+            ?: self::FALLBACK_PUBLIC_STORAGE_BASE_URL;
     }
 
     /**

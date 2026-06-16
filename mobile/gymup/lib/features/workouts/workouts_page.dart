@@ -25,6 +25,7 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
   List<WorkoutModel> _workouts = [];
   TodayWorkoutPlan? _todayPlan;
   String _userName = '';
+  String _avatarUrl = '';
   bool _isLoading = true;
   bool _hasError = false;
 
@@ -61,6 +62,7 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
     try {
       final prefs = await SharedPreferences.getInstance();
       var name = prefs.getString('user_name') ?? '';
+      var avatarUrl = prefs.getString('user_avatar_url') ?? '';
 
       final results = await Future.wait<dynamic>([
         WorkoutApiService().getWorkouts(),
@@ -71,12 +73,17 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
         try {
           final me = await AuthApiService().getMe();
           name = me['name'] as String? ?? '';
+          avatarUrl = me['avatar_url'] as String? ?? avatarUrl;
         } catch (_) {}
+      }
+      if (avatarUrl.isNotEmpty) {
+        await prefs.setString('user_avatar_url', avatarUrl);
       }
 
       if (!mounted) return;
       setState(() {
         _userName = name;
+        _avatarUrl = avatarUrl;
         _workouts = results[0] as List<WorkoutModel>;
         _todayPlan = results[1] as TodayWorkoutPlan?;
         _isLoading = false;
@@ -125,6 +132,7 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                     child: _WorkoutsHeader(
                       userName: _userName,
+                      avatarUrl: _avatarUrl,
                       onCalendar: () => Navigator.pushNamed(context, '/history'),
                       onStats: () => Navigator.pushNamed(context, '/progress'),
                     ),
@@ -292,11 +300,13 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
 
 class _WorkoutsHeader extends StatelessWidget {
   final String userName;
+  final String avatarUrl;
   final VoidCallback? onCalendar;
   final VoidCallback? onStats;
 
   const _WorkoutsHeader({
     required this.userName,
+    required this.avatarUrl,
     this.onCalendar,
     this.onStats,
   });
@@ -314,18 +324,19 @@ class _WorkoutsHeader extends StatelessWidget {
             gradient: AppColors.gradientPrimary,
             borderRadius: BorderRadius.circular(20),
           ),
-          child: Center(
-            child: Text(
-              initial,
-              textAlign: TextAlign.center,
-              style: AppText.pjs(
-                size: 17,
-                weight: FontWeight.w700,
-                color: Colors.white,
-                letterSpacing: -0.3,
-              ),
-            ),
-          ),
+          clipBehavior: Clip.antiAlias,
+          child: avatarUrl.trim().isNotEmpty
+              ? Image.network(
+                  avatarUrl.trim(),
+                  width: 40,
+                  height: 40,
+                  fit: BoxFit.cover,
+                  cacheWidth: 120,
+                  cacheHeight: 120,
+                  filterQuality: FilterQuality.medium,
+                  errorBuilder: (_, _, _) => Center(child: _headerInitial(initial)),
+                )
+              : Center(child: _headerInitial(initial)),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -372,6 +383,19 @@ class _WorkoutsHeader extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _headerInitial(String initial) {
+    return Text(
+      initial,
+      textAlign: TextAlign.center,
+      style: AppText.pjs(
+        size: 17,
+        weight: FontWeight.w700,
+        color: Colors.white,
+        letterSpacing: -0.3,
+      ),
     );
   }
 }

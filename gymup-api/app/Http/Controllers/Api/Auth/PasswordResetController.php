@@ -3,8 +3,6 @@
 namespace App\Http\Controllers\Api\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
-use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -24,14 +22,6 @@ class PasswordResetController extends Controller
         ]);
 
         // Personaliza a URL do link de reset para apontar ao frontend.
-        ResetPassword::createUrlUsing(function (User $user, string $token): string {
-            $base = rtrim(config('app.frontend_url', 'https://gymup.app'), '/');
-
-            return $base . '/reset-password'
-                . '?token=' . $token
-                . '&email=' . urlencode($user->getEmailForPasswordReset());
-        });
-
         // Dispara o envio (ignora o status para não vazar informação).
         Password::sendResetLink($request->only('email'));
 

@@ -21,10 +21,12 @@ class _RegisterPageState extends State<RegisterPage> {
   final _inviteController = TextEditingController();
 
   bool _isLoading = false;
+  bool _resendingVerification = false;
   bool _obscurePassword = true;
   bool _inviteLookingUp = false;
   String? _invitedGymName;
   String? _inviteError;
+  String? _verificationEmail;
   Timer? _inviteDebounce;
 
   @override
@@ -94,12 +96,33 @@ class _RegisterPageState extends State<RegisterPage> {
         inviteCode: invite.isEmpty ? null : invite,
       );
       if (mounted) {
-        Navigator.pushNamedAndRemoveUntil(context, '/home', (_) => false);
+        setState(() => _verificationEmail = _emailController.text.trim());
       }
     } catch (error) {
       if (mounted) showAuthSnack(context, authError(error));
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _resendVerification() async {
+    final email = _verificationEmail;
+    if (email == null || email.isEmpty) return;
+
+    setState(() => _resendingVerification = true);
+    try {
+      await AuthApiService().resendVerificationEmail(email: email);
+      if (mounted) {
+        showAuthSnack(
+          context,
+          'Enviamos um novo link de verificacao.',
+          success: true,
+        );
+      }
+    } catch (error) {
+      if (mounted) showAuthSnack(context, authError(error));
+    } finally {
+      if (mounted) setState(() => _resendingVerification = false);
     }
   }
 
@@ -133,6 +156,31 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_verificationEmail != null) {
+      return AuthScaffold(
+        children: [
+          AuthStatusCard(
+            icon: Icons.mark_email_read_rounded,
+            iconColor: authGreen,
+            title: 'Confirme seu email',
+            body:
+                'Enviamos um link para $_verificationEmail. Abra o email para liberar seu acesso ao GymUp.',
+            buttonLabel: 'Ir para o login',
+            onButtonTap: () => Navigator.pushNamedAndRemoveUntil(
+              context,
+              '/login',
+              (_) => false,
+            ),
+          ),
+          const SizedBox(height: 16),
+          AuthSecondaryButton(
+            label: _resendingVerification ? 'Reenviando...' : 'Reenviar email',
+            onTap: _resendingVerification ? null : _resendVerification,
+          ),
+        ],
+      );
+    }
+
     return AuthScaffold(
       topPadding: 42,
       children: [

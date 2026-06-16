@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Gym;
 use App\Models\User;
+use App\Notifications\VerifyEmailNotification;
 use App\Services\ChallengeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -15,6 +16,8 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    private const FALLBACK_PUBLIC_STORAGE_BASE_URL = 'https://s3.us-west-004.backblazeb2.com/gymup-storage';
+
     public function __construct(private readonly ChallengeService $challengeService) {}
 
     public function register(Request $request)
@@ -51,13 +54,13 @@ class AuthController extends Controller
         // Atribui ao desafio ativo da academia, se houver
         $this->challengeService->assignActiveChallengeTo($user);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $user->notify(new VerifyEmailNotification());
 
         return response()->json([
-            'message' => 'Usuário criado com sucesso',
-            'token' => $token,
+            'message' => 'Conta criada. Enviamos um link de verificacao para o seu email.',
+            'requires_email_verification' => true,
             'user' => $user
-        ]);
+        ], 201);
     }
 
     // GET /gym/by-invite/{code}  — público
@@ -154,10 +157,17 @@ class AuthController extends Controller
             ]);
         }
 
-        // Marca primeiro login (usado para detectar convites de staff pendentes)
         if (! $user->email_verified_at) {
-            $user->email_verified_at = now();
-            $user->save();
+            if ($user->role === 'user') {
+                return response()->json([
+                    'message' => 'Confirme seu email antes de entrar. Se precisar, envie um novo link de verificacao.',
+                    'code' => 'email_unverified',
+                    'email' => $user->email,
+                ], 403);
+            }
+
+            // Staff convidado e contas admin antigas ativam no primeiro login.
+            $user->forceFill(['email_verified_at' => now()])->save();
         }
 
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -210,9 +220,44 @@ class AuthController extends Controller
 
         return response()->json([
             ...$user->only(['id', 'name', 'email', 'role', 'gym_id', 'points_balance']),
+            'avatar_url'   => Schema::hasColumn('users', 'avatar_url') ? $this->avatarUrl($user->avatar_url) : null,
             'gym_chain_id' => $gym?->chain_id,
             'permissions'  => $user->getPermissions(),
         ]);
+    }
+
+    public function sendVerificationEmail(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        $user = User::where('email', strtolower($request->email))->first();
+
+        if ($user && ! $user->email_verified_at && $user->role === 'user') {
+            $user->notify(new VerifyEmailNotification());
+        }
+
+        return response()->json([
+            'message' => 'Se este email precisar de verificacao, enviaremos um novo link em breve.',
+        ]);
+    }
+
+    public function verifyEmail(Request $request, int $id, string $hash)
+    {
+        $user = User::findOrFail($id);
+
+        if (! hash_equals($hash, sha1((string) $user->email))) {
+            abort(403, 'Link de verificacao invalido.');
+        }
+
+        if (! $user->email_verified_at) {
+            $user->forceFill(['email_verified_at' => now()])->save();
+        }
+
+        $base = rtrim((string) config('app.frontend_url', 'https://admin.gymupapp.com.br'), '/');
+
+        return redirect()->away($base . '/login?verified=1');
     }
 
     public function logout(Request $request)
@@ -222,5 +267,66 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Logout realizado com sucesso'
         ]);
+    }
+
+    private function avatarUrl(?string $value): ?string
+    {
+        if (! $value) {
+            return null;
+        }
+
+        if (str_starts_with($value, 'http') && ! str_contains($value, 'gymup-api.onrender.com/storage')) {
+            return $value;
+        }
+
+        $path = $this->normalizeAvatarPath($value);
+        if (! $path) {
+            return null;
+        }
+
+        $encoded = implode('/', array_map('rawurlencode', explode('/', $path)));
+        return rtrim($this->publicStorageBaseUrl(), '/') . '/' . $encoded;
+    }
+
+    private function normalizeAvatarPath(string $value): string
+    {
+        if (! str_starts_with($value, 'http')) {
+            return ltrim($value, '/');
+        }
+
+        $path = rawurldecode(parse_url($value, PHP_URL_PATH) ?: '');
+
+        if (preg_match('#/(?:storage|img)/(.+)$#', $path, $matches)) {
+            return ltrim($matches[1], '/');
+        }
+
+        if (preg_match('#/(avatars/.+)$#', $path, $matches)) {
+            return ltrim($matches[1], '/');
+        }
+
+        return ltrim($path, '/');
+    }
+
+    private function publicStorageBaseUrl(): string
+    {
+        $publicDisk = config('filesystems.disks.public', []);
+        $publicUrl = env('PUBLIC_DISK_URL');
+
+        if (! $publicUrl && ($publicDisk['driver'] ?? null) === 's3') {
+            $endpoint = $publicDisk['endpoint'] ?? null;
+            $bucket = $publicDisk['bucket'] ?? null;
+
+            if ($endpoint && $bucket) {
+                $publicUrl = rtrim($endpoint, '/') . '/' . $bucket;
+            }
+        }
+
+        $publicUrl ??= $publicDisk['url'] ?? null;
+
+        if (! $publicUrl || str_contains($publicUrl, 'gymup-api.onrender.com/storage')) {
+            return self::FALLBACK_PUBLIC_STORAGE_BASE_URL;
+        }
+
+        return $publicUrl;
     }
 }

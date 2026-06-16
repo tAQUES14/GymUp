@@ -13,7 +13,6 @@ import 'workout_share_card.dart';
 const _kBlue = Color(0xFF2F6FED);
 const _kBlueDark = Color(0xFF1F4FC4);
 const _kGreen = Color(0xFF5BA300);
-const _kLime = Color(0xFFC8F84A);
 const _homeButtonSvg = '''
 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M2.5 9.58317L10 2.9165L17.5 9.58317M4.16667 8.33317V16.6665H15.8333V8.33317" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -38,6 +37,8 @@ class WorkoutCompletePage extends StatefulWidget {
   final List<String> prMessages;
   final int workoutVolume;
   final List<String> exerciseNames;
+  final int remainingWorkoutsThisWeek;
+  final int weeklyGoal;
 
   const WorkoutCompletePage({
     super.key,
@@ -53,6 +54,8 @@ class WorkoutCompletePage extends StatefulWidget {
     this.prMessages = const [],
     this.workoutVolume = 0,
     this.exerciseNames = const [],
+    this.remainingWorkoutsThisWeek = -1,
+    this.weeklyGoal = 4,
   });
 
   @override
@@ -66,6 +69,8 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
   bool _shareLoading = false;
 
   bool get _hasPoints => widget.noPointsReason == null && widget.pontosGerados > 0;
+  bool get _completedAnyExercise => widget.setsConcluidos > 0;
+  bool get _wasAbandoned => !_completedAnyExercise;
 
   @override
   void initState() {
@@ -118,6 +123,7 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
           streak: widget.streak,
           duracaoMinutos: widget.duracaoMinutos,
           setsConcluidos: widget.setsConcluidos,
+          completed: !_wasAbandoned,
         ),
         onShare: _shareCard,
         isLoading: _shareLoading,
@@ -184,6 +190,11 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
   }
 
   Widget _header() {
+    final title = _wasAbandoned
+        ? 'Treino encerrado'
+        : _hasPoints
+            ? 'Treino concluído'
+            : 'Treino finalizado';
     return Row(
       children: [
         _circleButton(
@@ -196,7 +207,7 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Treino finalizado',
+                title,
                 style: _pjs(
                   size: 17,
                   weight: FontWeight.w700,
@@ -229,10 +240,40 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
   }
 
   Widget _heroCard() {
+    final heroIcon = _wasAbandoned
+        ? Icons.close_rounded
+        : _hasPoints
+            ? Icons.check_rounded
+            : Icons.bookmark_added_rounded;
+    final iconBg = _wasAbandoned
+        ? const Color(0xFFFFE3E3)
+        : _hasPoints
+            ? const Color(0xFFEDFBD3)
+            : const Color(0xFFE7EEFE);
+    final iconColor = _wasAbandoned
+        ? const Color(0xFFE5484D)
+        : _hasPoints
+            ? _kGreen
+            : _kBlueDark;
+    final title = _wasAbandoned
+        ? 'Treino não concluído'
+        : _hasPoints
+            ? 'Treino concluído!'
+            : 'Treino salvo';
+    final subtitle = _wasAbandoned
+        ? 'Você saiu antes de concluir exercícios.\nNada foi contado para a meta.'
+        : _hasPoints
+            ? 'Você completou o treino de hoje com\nsucesso.'
+            : 'Seu progresso foi salvo, mas sem pontos.';
+    final badge = _wasAbandoned
+        ? 'NÃO CONTABILIZADO'
+        : _hasPoints
+            ? 'TREINO VÁLIDO'
+            : 'TREINO SALVO';
     return Container(
       width: double.infinity,
-      height: 236,
-      padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+      height: 238,
+      padding: const EdgeInsets.fromLTRB(22, 18, 22, 16),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
@@ -251,30 +292,14 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
       ),
       child: Stack(
         children: [
-          Positioned(
-            right: -84,
-            top: -80,
-            child: Container(
-              width: 220,
-              height: 220,
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  colors: [
-                    _kLime.withValues(alpha: 0.42),
-                    _kLime.withValues(alpha: 0),
-                  ],
-                ),
-              ),
-            ),
-          ),
           Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 66,
-                  height: 66,
-                  padding: const EdgeInsets.all(9),
+                  width: 58,
+                  height: 58,
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(20),
@@ -282,43 +307,45 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
                   ),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: _kLime,
+                      color: iconBg,
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: const Icon(
-                      Icons.check_rounded,
-                      color: _kBlueDark,
-                      size: 30,
+                    child: Icon(
+                      heroIcon,
+                      color: iconColor,
+                      size: 27,
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Text(
-                  'Treino concluido!',
+                  title,
                   textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: _pjs(
-                    size: 24,
+                    size: 22,
                     weight: FontWeight.w800,
                     color: Colors.white,
                     height: 1.05,
                     letterSpacing: -0.7,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Text(
-                  _hasPoints
-                      ? 'Voce completou o treino de hoje com\nsucesso.'
-                      : 'Seu treino foi salvo com sucesso.',
+                  subtitle,
                   textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: _pjs(
-                    size: 13.5,
+                    size: 12.5,
                     weight: FontWeight.w500,
                     color: Colors.white,
-                    height: 1.45,
+                    height: 1.35,
                   ),
                 ),
-                const SizedBox(height: 12),
-                _darkBadge(_hasPoints ? 'TREINO VALIDO' : 'TREINO SALVO'),
+                const SizedBox(height: 10),
+                _darkBadge(badge, icon: heroIcon, iconColor: iconColor),
               ],
             ),
           ),
@@ -462,9 +489,19 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
   }
 
   Widget _weeklyGoalCard() {
-    const done = 3;
-    const total = 4;
-    const progress = done / total;
+    final total = widget.weeklyGoal <= 0 ? 4 : widget.weeklyGoal;
+    final hasServerWeeklyData = widget.remainingWorkoutsThisWeek >= 0;
+    final remaining = hasServerWeeklyData
+        ? widget.remainingWorkoutsThisWeek.clamp(0, total)
+        : (_completedAnyExercise ? (total - 1).clamp(0, total) : total);
+    final done = (total - remaining).clamp(0, total);
+    final progress = total == 0 ? 0.0 : done / total;
+    final remainingLabel = remaining == 1 ? '1 treino' : '$remaining treinos';
+    final statusText = _wasAbandoned
+        ? 'Este treino não entrou na sua meta semanal.'
+        : remaining == 0
+            ? 'Meta da semana completa. Boa!'
+            : 'Falta $remainingLabel para completar sua meta da semana.';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -503,7 +540,7 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
                             ),
                           ),
                           TextSpan(
-                            text: ' de $total treinos concluidos',
+                            text: ' de $total treinos concluídos',
                             style: _pjs(
                               size: 16,
                               weight: FontWeight.w700,
@@ -579,23 +616,13 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
             ),
           ),
           const SizedBox(height: 10),
-          Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(text: 'Falta ', style: _muted12()),
-                TextSpan(
-                  text: '${total - done} treino',
-                  style: _pjs(
-                    size: 12,
-                    weight: FontWeight.w800,
-                    color: const Color(0xFF0E1116),
-                  ),
-                ),
-                TextSpan(
-                  text: ' para completar sua meta da semana.',
-                  style: _muted12(),
-                ),
-              ],
+          Text(
+            statusText,
+            style: _pjs(
+              size: 12,
+              weight: _wasAbandoned ? FontWeight.w700 : FontWeight.w600,
+              color: _wasAbandoned ? const Color(0xFFE5484D) : const Color(0xFF5B6472),
+              height: 1.35,
             ),
           ),
         ],
@@ -609,7 +636,7 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
         : widget.setsTotais;
     final exercisesDone = widget.setsConcluidos.clamp(0, totalExercises);
     final totalSets = widget.exerciseNames.isNotEmpty
-        ? widget.exerciseNames.length * 3
+        ? widget.setsConcluidos * 3
         : widget.setsConcluidos * 3;
     return Container(
       width: double.infinity,
@@ -756,17 +783,54 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
             widget.setsTotais,
             (i) => i == 0 ? widget.workoutNome : 'Exercicio ${i + 1}',
           );
+    if (_wasAbandoned) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: _whiteDecoration(radius: 20),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFE3E3),
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: const Icon(
+                Icons.close_rounded,
+                color: Color(0xFFE5484D),
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Nenhum exercício foi concluído neste treino.',
+                style: _pjs(
+                  size: 13,
+                  weight: FontWeight.w700,
+                  color: const Color(0xFF5B6472),
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    final visibleNames = names.take(widget.setsConcluidos.clamp(0, names.length)).toList();
     return Container(
       width: double.infinity,
       decoration: _whiteDecoration(radius: 20),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          for (var i = 0; i < names.length; i++)
+          for (var i = 0; i < visibleNames.length; i++)
             _exerciseRow(
-              names[i],
+              visibleNames[i],
               seriesLabel: '3 series',
-              isLast: i == names.length - 1,
+              isLast: i == visibleNames.length - 1,
             ),
         ],
       ),
@@ -860,6 +924,101 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
   }
 
   Widget _bottomDock(double bottomInset) {
+    return _bottomDockClean(bottomInset);
+  }
+
+  Widget _bottomDockClean(double bottomInset) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(20, 21, 20, 26 + bottomInset),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF3F5F9),
+        border: Border(top: BorderSide(color: Color(0x0F0E1116))),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x0F0F172A),
+            blurRadius: 24,
+            offset: Offset(0, -8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: _goHome,
+              child: Container(
+                height: 56,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment(0.18, -0.69),
+                    end: Alignment(0.82, 1.69),
+                    colors: [_kBlueDark, _kBlue, Color(0xFF4A8CFF)],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _kBlue.withValues(alpha: 0.36),
+                      blurRadius: 30,
+                      offset: const Offset(0, 16),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SvgPicture.string(
+                      _homeButtonSvg,
+                      width: 20,
+                      height: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Voltar para o início',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _pjs(
+                          size: 13.6,
+                          weight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: _showShareBottomSheet,
+            child: Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0x190E1116)),
+                boxShadow: _softShadow(),
+              ),
+              child: Center(
+                child: SvgPicture.string(
+                  _shareButtonSvg,
+                  width: 17,
+                  height: 19,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget bottomDockLegacy(double bottomInset) {
     return Container(
       width: double.infinity,
       padding: EdgeInsets.fromLTRB(20, 21, 20, 26 + bottomInset),
@@ -905,13 +1064,17 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
                       height: 20,
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      'Voltar para o inicio',
-                      style: _pjs(
-                        size: 14.5,
-                        weight: FontWeight.w800,
-                        color: Colors.white,
-                        letterSpacing: -0.2,
+                    Flexible(
+                      child: Text(
+                        'Voltar para o início',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _pjs(
+                          size: 14,
+                          weight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: -0.2,
+                        ),
                       ),
                     ),
                   ],
@@ -939,13 +1102,17 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
                       height: 18,
                     ),
                     const SizedBox(width: 7),
-                    Text(
-                      'Compartilhar',
-                      style: _pjs(
-                        size: 14,
-                        weight: FontWeight.w700,
-                        color: const Color(0xFF0E1116),
-                        letterSpacing: -0.2,
+                    Flexible(
+                      child: Text(
+                        'Compartilhar',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _pjs(
+                          size: 14,
+                          weight: FontWeight.w700,
+                          color: const Color(0xFF0E1116),
+                          letterSpacing: -0.2,
+                        ),
                       ),
                     ),
                   ],
@@ -974,7 +1141,11 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
     );
   }
 
-  Widget _darkBadge(String label) {
+  Widget _darkBadge(
+    String label, {
+    IconData icon = Icons.check_rounded,
+    Color iconColor = _kGreen,
+  }) {
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 5, 10, 5),
       decoration: BoxDecoration(
@@ -987,11 +1158,11 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
           Container(
             width: 16,
             height: 16,
-            decoration: const BoxDecoration(
-              color: _kLime,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.16),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.check_rounded, color: _kBlueDark, size: 11),
+            child: Icon(icon, color: iconColor, size: 11),
           ),
           const SizedBox(width: 6),
           Text(
@@ -1029,14 +1200,6 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
         color: const Color(0xFF9AA3B0),
         letterSpacing: 0.4,
       ),
-    );
-  }
-
-  TextStyle _muted12() {
-    return _pjs(
-      size: 12,
-      weight: FontWeight.w500,
-      color: const Color(0xFF5B6472),
     );
   }
 
@@ -1129,10 +1292,10 @@ class _ShareBottomSheetState extends State<_ShareBottomSheet> {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        color: Color(0xFF0F172A),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        color: Color(0xFFF3F5F9),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
       ),
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 22),
       child: SafeArea(
         top: false,
         child: Column(
@@ -1142,40 +1305,129 @@ class _ShareBottomSheetState extends State<_ShareBottomSheet> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.20),
+                color: const Color(0x1F0E1116),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const SizedBox(height: 20),
-            const Text(
-              'Compartilhar treino',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 17,
-                fontFamily: 'Plus Jakarta Sans',
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 20),
-            RepaintBoundary(
-              key: widget.repaintKey,
-              child: widget.shareCard,
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _kBlue,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE7EEFE),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.ios_share_rounded,
+                    color: _kBlue,
+                    size: 21,
                   ),
                 ),
-                onPressed: _sharing || widget.isLoading ? null : _handleShare,
-                icon: _sharing || widget.isLoading
-                    ? const SizedBox(
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Compartilhar treino',
+                        style: TextStyle(
+                          color: Color(0xFF0E1116),
+                          fontSize: 17,
+                          fontFamily: 'Plus Jakarta Sans',
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Gere uma imagem pronta para postar.',
+                        style: TextStyle(
+                          color: Color(0xFF5B6472),
+                          fontSize: 12,
+                          fontFamily: 'Plus Jakarta Sans',
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).maybePop(),
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(19),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x0F0F172A),
+                          blurRadius: 10,
+                          offset: Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.close_rounded,
+                      color: Color(0xFF5B6472),
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(30),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x0A0F172A),
+                    blurRadius: 6,
+                    offset: Offset(0, 2),
+                  ),
+                  BoxShadow(
+                    color: Color(0x140F172A),
+                    blurRadius: 24,
+                    offset: Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: RepaintBoundary(
+                key: widget.repaintKey,
+                child: widget.shareCard,
+              ),
+            ),
+            const SizedBox(height: 18),
+            GestureDetector(
+              onTap: _sharing || widget.isLoading ? null : _handleShare,
+              child: Container(
+                width: double.infinity,
+                height: 56,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [_kBlueDark, _kBlue, Color(0xFF4A8CFF)],
+                  ),
+                  borderRadius: BorderRadius.circular(100),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _kBlue.withValues(alpha: 0.24),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (_sharing || widget.isLoading)
+                      const SizedBox(
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(
@@ -1183,15 +1435,32 @@ class _ShareBottomSheetState extends State<_ShareBottomSheet> {
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(Icons.share_rounded, size: 20),
-                label: Text(
-                  _sharing || widget.isLoading ? 'Gerando imagem...' : 'Compartilhar',
-                  style: const TextStyle(
-                    fontFamily: 'Plus Jakarta Sans',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                  ),
+                    else
+                      const Icon(Icons.share_rounded, color: Colors.white, size: 20),
+                    const SizedBox(width: 10),
+                    Text(
+                      _sharing || widget.isLoading ? 'Gerando imagem...' : 'Compartilhar',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Plus Jakarta Sans',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'A imagem usa os dados deste treino.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: const Color(0xFF5B6472).withValues(alpha: 0.85),
+                fontSize: 11.5,
+                fontFamily: 'Plus Jakarta Sans',
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],

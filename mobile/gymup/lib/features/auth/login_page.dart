@@ -17,7 +17,9 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
 
   bool _isLoading = false;
+  bool _resendingVerification = false;
   bool _obscurePassword = true;
+  String? _unverifiedEmail;
 
   @override
   void dispose() {
@@ -39,9 +41,36 @@ class _LoginPageState extends State<LoginPage> {
         Navigator.pushNamedAndRemoveUntil(context, '/home', (_) => false);
       }
     } catch (error) {
-      if (mounted) showAuthSnack(context, authError(error));
+      if (!mounted) return;
+      if (error is AuthApiException && error.code == 'email_unverified') {
+        setState(() => _unverifiedEmail = error.email ?? _emailController.text.trim());
+        showAuthSnack(context, error.message);
+      } else {
+        showAuthSnack(context, authError(error));
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _resendVerification() async {
+    final email = (_unverifiedEmail ?? _emailController.text).trim();
+    if (email.isEmpty) return;
+
+    setState(() => _resendingVerification = true);
+    try {
+      await AuthApiService().resendVerificationEmail(email: email);
+      if (mounted) {
+        showAuthSnack(
+          context,
+          'Enviamos um novo link de verificacao para seu email.',
+          success: true,
+        );
+      }
+    } catch (error) {
+      if (mounted) showAuthSnack(context, authError(error));
+    } finally {
+      if (mounted) setState(() => _resendingVerification = false);
     }
   }
 
@@ -154,6 +183,14 @@ class _LoginPageState extends State<LoginPage> {
                   child: const Text('Esqueci minha senha'),
                 ),
               ),
+              if (_unverifiedEmail != null) ...[
+                const SizedBox(height: 8),
+                _EmailVerificationCard(
+                  email: _unverifiedEmail!,
+                  loading: _resendingVerification,
+                  onResend: _resendVerification,
+                ),
+              ],
             ],
           ),
         ),
@@ -166,6 +203,71 @@ class _LoginPageState extends State<LoginPage> {
           onTap: _loginWithGoogle,
         ),
       ],
+    );
+  }
+}
+
+class _EmailVerificationCard extends StatelessWidget {
+  const _EmailVerificationCard({
+    required this.email,
+    required this.loading,
+    required this.onResend,
+  });
+
+  final String email;
+  final bool loading;
+  final VoidCallback onResend;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE7EEFE),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: authBlue.withValues(alpha: 0.16)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Confirme seu email',
+            style: TextStyle(
+              color: authText,
+              fontFamily: 'Plus Jakarta Sans',
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Enviamos o link para $email. Verifique sua caixa de entrada ou spam.',
+            style: const TextStyle(
+              color: authMuted,
+              fontFamily: 'Plus Jakarta Sans',
+              fontSize: 12,
+              height: 1.35,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: loading ? null : onResend,
+            style: TextButton.styleFrom(
+              foregroundColor: authBlue,
+              padding: EdgeInsets.zero,
+              minimumSize: const Size(0, 32),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              textStyle: const TextStyle(
+                fontFamily: 'Plus Jakarta Sans',
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            child: Text(loading ? 'Reenviando...' : 'Reenviar link'),
+          ),
+        ],
+      ),
     );
   }
 }

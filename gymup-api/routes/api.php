@@ -55,6 +55,9 @@ Route::post('/register',               [AuthController::class, 'register']);
 Route::post('/login',                  [AuthController::class, 'login']);
 Route::post('/auth/google',            [AuthController::class, 'google']);
 Route::get('/gym/by-invite/{code}',    [AuthController::class, 'gymByInvite']);
+Route::get('/auth/verify-email/{id}/{hash}', [AuthController::class, 'verifyEmail'])
+    ->middleware('signed')
+    ->name('verification.verify');
 
 // 🔹 Catálogo de exercícios (público — usado pelo app antes do login)
 // /library must be declared before /{id} so it is not captured by the wildcard
@@ -66,6 +69,7 @@ Route::get('/exercises',         [ExerciseController::class, 'index']); // backw
 Route::prefix('auth')->group(function () {
     Route::post('/forgot-password', [PasswordResetController::class, 'forgotPassword']);
     Route::post('/reset-password',  [PasswordResetController::class, 'resetPassword']);
+    Route::post('/email/verification-notification', [AuthController::class, 'sendVerificationEmail']);
 });
 
 /*

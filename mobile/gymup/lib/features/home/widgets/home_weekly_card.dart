@@ -60,7 +60,10 @@ class _RingPainter extends CustomPainter {
 class HomeWeeklyCard extends StatelessWidget {
   final int workoutsDone;
   final int weeklyGoal;
+  final int remainingWorkouts;
   final List<WeeklyProgressDay> weeklyProgress;
+  final bool hasCheckedInToday;
+  final bool hasCompletedToday;
   final bool isRestDayToday;
   final VoidCallback? onStartTap;
 
@@ -68,7 +71,10 @@ class HomeWeeklyCard extends StatelessWidget {
     super.key,
     required this.workoutsDone,
     required this.weeklyGoal,
+    required this.remainingWorkouts,
     required this.weeklyProgress,
+    this.hasCheckedInToday = false,
+    this.hasCompletedToday = false,
     this.isRestDayToday = false,
     this.onStartTap,
   });
@@ -78,12 +84,12 @@ class HomeWeeklyCard extends StatelessWidget {
     final goal     = weeklyGoal > 0 ? weeklyGoal : 1;
     final ratio    = (workoutsDone / goal).clamp(0.0, 1.0);
     final goalMet  = workoutsDone >= weeklyGoal;
-    final remaining = goalMet ? 0 : weeklyGoal - workoutsDone;
+    final remaining = goalMet ? 0 : remainingWorkouts.clamp(0, weeklyGoal);
     final weekNum  = _currentWeekNumber();
 
     return Container(
       width: 350,
-      height: 288.19,
+      height: 300,
       decoration: BoxDecoration(
         gradient: AppColors.gradientWeekCard,
         borderRadius: BorderRadius.circular(28),
@@ -116,7 +122,7 @@ class HomeWeeklyCard extends StatelessWidget {
 
           // Conteúdo
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -181,7 +187,7 @@ class HomeWeeklyCard extends StatelessWidget {
                   ],
                 ),
 
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
 
                 // Contador grande: "4 /5"
                 Row(
@@ -221,22 +227,24 @@ class HomeWeeklyCard extends StatelessWidget {
                   ),
                 ),
 
-                const SizedBox(height: 18),
+                const SizedBox(height: 14),
 
                 // Barras dos 7 dias
                 _WeekDayBars(days: weeklyProgress),
 
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
 
                 // CTA inferior
                 _CtaBanner(
                   goalMet:        goalMet,
                   remaining:      remaining,
+                  hasCheckedInToday: hasCheckedInToday,
+                  hasCompletedToday: hasCompletedToday,
                   isRestDayToday: isRestDayToday,
                   onTap:          onStartTap,
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 10),
               ],
             ),
           ),
@@ -335,18 +343,24 @@ class _WeekDayBars extends StatelessWidget {
 class _CtaBanner extends StatelessWidget {
   final bool goalMet;
   final int remaining;
+  final bool hasCheckedInToday;
+  final bool hasCompletedToday;
   final bool isRestDayToday;
   final VoidCallback? onTap;
 
   const _CtaBanner({
     required this.goalMet,
     required this.remaining,
+    required this.hasCheckedInToday,
+    required this.hasCompletedToday,
     required this.isRestDayToday,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final copy = _copy;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -377,39 +391,27 @@ class _CtaBanner extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: goalMet
-                  ? Text(
-                      'Meta da semana concluída! 🎉',
-                      style: AppText.pjs(
-                        size: 12.5, weight: FontWeight.w500,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Text.rich(
-                      TextSpan(
-                        style: AppText.pjs(
-                          size: 12.5, weight: FontWeight.w500,
-                          color: Colors.white,
-                        ),
-                        children: [
-                          const TextSpan(text: 'Falta '),
-                          TextSpan(
-                            text: '$remaining treino${remaining == 1 ? '' : 's'}',
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          const TextSpan(text: ' para bater sua meta'),
-                        ],
-                      ),
-                    ),
+              child: Text.rich(
+                TextSpan(
+                  style: AppText.pjs(
+                    size: 12.5,
+                    weight: FontWeight.w500,
+                    color: Colors.white,
+                  ),
+                  children: copy.message,
+                ),
+              ),
             ),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  isRestDayToday ? 'Treinar' : goalMet ? 'Ver' : 'Começar',
+                  copy.action,
                   style: AppText.pjs(
-                    size: 12, weight: FontWeight.w700,
-                    color: Colors.white, letterSpacing: -0.2,
+                    size: 12,
+                    weight: FontWeight.w700,
+                    color: Colors.white,
+                    letterSpacing: -0.2,
                   ),
                 ),
                 const SizedBox(width: 2),
@@ -421,4 +423,69 @@ class _CtaBanner extends StatelessWidget {
       ),
     );
   }
+
+  _WeeklyCtaCopy get _copy {
+    if (goalMet) {
+      return const _WeeklyCtaCopy(
+        action: 'Ver',
+        message: [
+          TextSpan(text: 'Meta da semana concluida. '),
+          TextSpan(text: 'Boa!', style: TextStyle(fontWeight: FontWeight.w700)),
+        ],
+      );
+    }
+
+    if (hasCompletedToday) {
+      final suffix = remaining > 0 ? '. Faltam $remaining para a meta.' : '.';
+      return _WeeklyCtaCopy(
+        action: 'Ver treino',
+        message: [
+          const TextSpan(text: 'Parabens, voce '),
+          const TextSpan(text: 'treinou hoje', style: TextStyle(fontWeight: FontWeight.w700)),
+          TextSpan(text: suffix),
+        ],
+      );
+    }
+
+    if (hasCheckedInToday) {
+      return const _WeeklyCtaCopy(
+        action: 'Treinar',
+        message: [
+          TextSpan(text: 'Check-in feito. '),
+          TextSpan(text: 'Treine agora', style: TextStyle(fontWeight: FontWeight.w700)),
+        ],
+      );
+    }
+
+    if (isRestDayToday) {
+      return const _WeeklyCtaCopy(
+        action: 'Treinar',
+        message: [
+          TextSpan(text: 'Dia de descanso. '),
+          TextSpan(text: 'Streak protegido', style: TextStyle(fontWeight: FontWeight.w700)),
+        ],
+      );
+    }
+
+    final amount = remaining <= 1 ? 1 : remaining;
+    final label = amount == 1 ? '1 treino' : '$amount treinos';
+    return _WeeklyCtaCopy(
+      action: 'Comecar',
+      message: [
+        const TextSpan(text: 'Faltam '),
+        TextSpan(text: label, style: const TextStyle(fontWeight: FontWeight.w700)),
+        const TextSpan(text: ' para manter sua sequencia'),
+      ],
+    );
+  }
+}
+
+class _WeeklyCtaCopy {
+  final String action;
+  final List<InlineSpan> message;
+
+  const _WeeklyCtaCopy({
+    required this.action,
+    required this.message,
+  });
 }

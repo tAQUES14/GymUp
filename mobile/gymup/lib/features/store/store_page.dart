@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/widgets/gymup_loading.dart';
 import '../auth/auth_api_service.dart';
@@ -38,6 +39,8 @@ class _StorePageState extends State<StorePage> {
   String _category = 'Todos';
   bool _searchOpen = false;
   String _searchQuery = '';
+  String _userName = 'Aluno';
+  String _avatarUrl = '';
 
   @override
   void initState() {
@@ -64,10 +67,18 @@ class _StorePageState extends State<StorePage> {
       ]);
       if (!mounted) return;
       final user = results[1] as Map<String, dynamic>;
+      final prefs = await SharedPreferences.getInstance();
+      final avatarUrl = user['avatar_url'] as String? ?? prefs.getString('user_avatar_url') ?? '';
+      if (avatarUrl.isNotEmpty) {
+        await prefs.setString('user_avatar_url', avatarUrl);
+      }
+      final userName = user['name'] as String? ?? prefs.getString('user_name') ?? _userName;
       setState(() {
         _rewards = results[0] as List<Reward>;
         _userPoints = (user['points_balance'] as num?)?.toInt() ?? 0;
         _redemptions = results[2] as List<Redemption>;
+        _userName = userName;
+        _avatarUrl = avatarUrl;
         _isLoading = false;
       });
     } catch (e) {
@@ -125,29 +136,7 @@ class _StorePageState extends State<StorePage> {
   Widget _header() {
     return Row(
       children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [_kBlue, Color(0xFF4A8CFF)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Center(
-            child: Text(
-              'M',
-              style: _pjs(
-                size: 16.8,
-                weight: FontWeight.w700,
-                color: Colors.white,
-                letterSpacing: -0.3,
-              ),
-            ),
-          ),
-        ),
+        _userAvatar(name: _userName, imageUrl: _avatarUrl),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -238,6 +227,47 @@ class _StorePageState extends State<StorePage> {
           boxShadow: _shadow(),
         ),
         child: Icon(icon, size: 18, color: _kInk),
+      ),
+    );
+  }
+
+  Widget _userAvatar({required String name, required String imageUrl}) {
+    final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : 'G';
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [_kBlue, Color(0xFF4A8CFF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: imageUrl.trim().isNotEmpty
+          ? Image.network(
+              imageUrl.trim(),
+              width: 40,
+              height: 40,
+              fit: BoxFit.cover,
+              cacheWidth: 120,
+              cacheHeight: 120,
+              filterQuality: FilterQuality.medium,
+              errorBuilder: (_, _, _) => Center(child: _avatarInitial(initial)),
+            )
+          : Center(child: _avatarInitial(initial)),
+    );
+  }
+
+  Widget _avatarInitial(String initial) {
+    return Text(
+      initial,
+      style: _pjs(
+        size: 16.8,
+        weight: FontWeight.w700,
+        color: Colors.white,
+        letterSpacing: -0.3,
       ),
     );
   }

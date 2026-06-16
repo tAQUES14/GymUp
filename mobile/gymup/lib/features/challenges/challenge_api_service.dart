@@ -81,6 +81,7 @@ class ChallengeRankingEntry {
   final int position;
   final int userId;
   final String userName;
+  final String? avatarUrl;
   final int? totalPoints;       // competitive — pontos históricos finalizados
   final int? workoutsThisWeek; // competitive — treinos da semana atual
   final int? workouts;          // simple
@@ -90,6 +91,7 @@ class ChallengeRankingEntry {
     required this.position,
     required this.userId,
     required this.userName,
+    this.avatarUrl,
     this.totalPoints,
     this.workoutsThisWeek,
     this.workouts,
@@ -101,6 +103,7 @@ class ChallengeRankingEntry {
       position:         (json['position'] as num?)?.toInt() ?? (index + 1),
       userId:           (json['user_id'] as num).toInt(),
       userName:         json['user_name'] as String,
+      avatarUrl:        json['avatar_url'] as String?,
       totalPoints:      (json['total_points'] as num?)?.toInt(),
       workoutsThisWeek:(json['workouts_this_week'] as num?)?.toInt(),
       workouts:         (json['workouts'] as num?)?.toInt(),

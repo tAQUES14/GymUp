@@ -94,7 +94,13 @@ class ProfileController extends Controller
         $user = $request->user();
 
         try {
-            $path = $this->images->store($request->file('avatar'), 'avatars');
+            $path = $this->images->store(
+                $request->file('avatar'),
+                'avatars',
+                maxDimension: 512,
+                maxSizeBytes: 180_000,
+                qualityStart: 82
+            );
         } catch (\Throwable) {
             return response()->json([
                 'message' => 'Nao foi possivel enviar a foto para o storage.',
@@ -117,6 +123,10 @@ class ProfileController extends Controller
     {
         if (! $value) {
             return null;
+        }
+
+        if (str_starts_with($value, 'http') && ! str_contains($value, 'gymup-api.onrender.com/storage')) {
+            return $value;
         }
 
         $path = $this->normalizeAvatarPath($value);
