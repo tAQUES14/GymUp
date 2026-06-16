@@ -75,7 +75,7 @@ class ChallengeTest extends TestCase
      * Simula um treino válido (com pontos) para um usuário.
      * Cria checkin + sessão e chama o ChallengeService diretamente.
      */
-    private function grantValidWorkout(User $user, Gym $gym, Carbon $at = null): WorkoutSession
+    private function grantValidWorkout(User $user, Gym $gym, ?Carbon $at = null): WorkoutSession
     {
         $at = $at ?? now();
 
@@ -1094,7 +1094,7 @@ class ChallengeTest extends TestCase
             'gym_id'   => $gym->id,
         ]);
 
-        $response->assertStatus(200);
+        $response->assertStatus(201);
         $userId = $response->json('user.id');
 
         $this->assertDatabaseHas('challenge_participants', [
@@ -1291,7 +1291,7 @@ class ChallengeTest extends TestCase
             'gym_id'   => $gym->id,
         ]);
 
-        $response->assertStatus(200);
+        $response->assertStatus(201);
         $userId = $response->json('user.id');
 
         $this->assertDatabaseHas('challenge_participants', ['challenge_id' => $p1->id, 'user_id' => $userId]);

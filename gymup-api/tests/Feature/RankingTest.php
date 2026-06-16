@@ -84,4 +84,95 @@ class RankingTest extends TestCase
             $this->assertEquals($gym1->id, $userGym1->gym_id);
         }
     }
+
+    public function test_ranking_does_not_count_redemption_refunds_as_activity_points()
+    {
+        $gym = Gym::factory()->create();
+
+        $user1 = User::factory()->create([
+            'gym_id' => $gym->id,
+            'role' => 'user',
+        ]);
+
+        $user2 = User::factory()->create([
+            'gym_id' => $gym->id,
+            'role' => 'user',
+        ]);
+
+        PointTransaction::factory()->create([
+            'user_id' => $user1->id,
+            'gym_id' => $gym->id,
+            'type' => 'earn',
+            'category' => 'workout',
+            'points' => 20,
+        ]);
+
+        PointTransaction::factory()->create([
+            'user_id' => $user2->id,
+            'gym_id' => $gym->id,
+            'type' => 'earn',
+            'category' => 'redemption',
+            'points' => 100,
+            'description' => 'Resgate recusado: Camiseta',
+        ]);
+
+        Sanctum::actingAs($user1);
+
+        $response = $this->getJson('/api/ranking');
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('0.user_id', $user1->id);
+        $response->assertJsonPath('0.points', 20);
+        $response->assertJsonPath('1.user_id', $user2->id);
+        $response->assertJsonPath('1.points', 0);
+    }
+
+    public function test_admin_ranking_does_not_count_redemption_refunds_as_activity_points()
+    {
+        $gym = Gym::factory()->create();
+
+        $admin = User::factory()->create([
+            'gym_id' => $gym->id,
+            'role' => 'super_admin',
+        ]);
+
+        $user1 = User::factory()->create([
+            'gym_id' => $gym->id,
+            'role' => 'user',
+            'points_balance' => 20,
+        ]);
+
+        $user2 = User::factory()->create([
+            'gym_id' => $gym->id,
+            'role' => 'user',
+            'points_balance' => 100,
+        ]);
+
+        PointTransaction::factory()->create([
+            'user_id' => $user1->id,
+            'gym_id' => $gym->id,
+            'type' => 'earn',
+            'category' => 'workout',
+            'points' => 20,
+        ]);
+
+        PointTransaction::factory()->create([
+            'user_id' => $user2->id,
+            'gym_id' => $gym->id,
+            'type' => 'earn',
+            'category' => 'redemption',
+            'points' => 100,
+            'description' => 'Resgate recusado: Camiseta',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $response = $this->getJson('/api/admin/ranking');
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('ranking.0.user_id', $user1->id);
+        $response->assertJsonPath('ranking.0.period_points', 20);
+        $response->assertJsonPath('ranking.1.user_id', $user2->id);
+        $response->assertJsonPath('ranking.1.period_points', 0);
+    }
 }

@@ -38,7 +38,8 @@ class AdminRankingController extends Controller
             ->where('users.role', 'user')
             ->leftJoin('point_transactions', function ($join) use ($startDate) {
                 $join->on('point_transactions.user_id', '=', 'users.id')
-                     ->where('point_transactions.type', 'earn');
+                     ->where('point_transactions.type', 'earn')
+                     ->where('point_transactions.category', '!=', 'redemption');
                 if ($startDate) {
                     $join->where('point_transactions.created_at', '>=', $startDate);
                 }
