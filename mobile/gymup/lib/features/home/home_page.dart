@@ -35,6 +35,7 @@ class _HomePageState extends State<HomePage> {
   TodayWorkoutPlan? _todayPlan;
   int? _pointsRanking;
   String _avatarUrl = '';
+  bool _hasWorkoutAvailable = false;
 
   bool _isLoading  = true;
   bool _hasError   = false;
@@ -84,8 +85,10 @@ class _HomePageState extends State<HomePage> {
         } else if (plan == null) {
           _todayWorkout = workouts.isNotEmpty ? workouts.first : null;
         } else {
-          _todayWorkout = null;
+          _todayWorkout = workouts.isNotEmpty ? workouts.first : null;
         }
+        _hasWorkoutAvailable =
+            workouts.isNotEmpty || (plan != null && !plan.isRestDay && plan.today.exercises.isNotEmpty);
         _challengeData = results[2] as ChallengeData?;
         _isLoading     = false;
       });
@@ -211,11 +214,7 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: HomeCheckinButton(
                     hasCheckedIn: data.hasCheckedInToday,
-                    onTap:        data.hasCheckedInToday
-                        ? (_isStarting ? null : _handleStartWorkout)
-                        : () => Navigator.of(context)
-                            .pushNamed('/checkin')
-                            .then((_) => _loadDashboard()),
+                    onTap:        _isStarting ? null : _handleCheckinCardTap,
                   ),
                 ),
 
@@ -457,7 +456,52 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  void _showNoWorkoutForCheckin() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+          'Você ainda não tem treino criado ou indicado no plano. Crie um treino antes de liberar o QR Code.',
+        ),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      ),
+    );
+  }
+
+  Future<void> _handleCheckinCardTap() async {
+    if (_isStarting || _dashboardData == null) return;
+    final data = _dashboardData!;
+
+    if (!_hasWorkoutAvailable) {
+      _showNoWorkoutForCheckin();
+      return;
+    }
+
+    if (_todayPlan?.isRestDay ?? false) {
+      if (data.hasCheckedInToday) {
+        await _handleStartWorkout();
+      } else {
+        await _handleRestDayWorkout();
+      }
+      return;
+    }
+
+    if (data.hasCheckedInToday) {
+      await _handleStartWorkout();
+      return;
+    }
+
+    if (!mounted) return;
+    Navigator.of(context).pushNamed('/checkin').then((_) => _loadDashboard());
+  }
+
   Future<void> _handleRestDayWorkout() async {
+    if (!_hasWorkoutAvailable) {
+      _showNoWorkoutForCheckin();
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(

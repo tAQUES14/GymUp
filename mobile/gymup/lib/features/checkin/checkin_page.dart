@@ -45,6 +45,7 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
   bool _isProcessing = false;
   bool _handledScan = false;
   bool _didReadArgs = false;
+  bool _didPrepareScanner = false;
   bool _scannerActive = false;
   bool _scannerRunning = false;
   Future<void> _scannerOp = Future<void>.value();
@@ -62,7 +63,6 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _ensureCameraPermission();
   }
 
   @override
@@ -144,6 +144,37 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
       _argumentWorkout = args.workout;
       _isRestDayFlow = args.isRestDayWorkout;
     }
+    unawaited(_prepareScanner());
+  }
+
+  Future<void> _prepareScanner() async {
+    if (_didPrepareScanner || _disposed) return;
+    _didPrepareScanner = true;
+
+    if (_argumentWorkout == null) {
+      try {
+        final results = await Future.wait([
+          WorkoutPlanApiService().getTodayWorkout().catchError((_) => null),
+          _workoutService.getWorkouts().catchError((_) => <WorkoutModel>[]),
+        ]);
+        if (!mounted || _disposed) return;
+        final plan = results[0] as TodayWorkoutPlan?;
+        final workouts = results[1] as List<WorkoutModel>;
+        final workout = _resolveWorkout(plan, workouts);
+        if (workout == null) {
+          _showInvalidState(
+            title: 'Você ainda não tem nenhum treino',
+            message:
+                'Para liberar o QR Code, você precisa ter ao menos um treino criado ou um treino indicado no seu plano.',
+          );
+          return;
+        }
+      } catch (_) {
+        if (!mounted || _disposed) return;
+      }
+    }
+
+    await _ensureCameraPermission();
   }
 
   Future<void> _ensureCameraPermission() async {
