@@ -173,6 +173,9 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       picked = await _picker.pickImage(
         source: ImageSource.gallery,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 82,
       );
     } on MissingPluginException {
       _snack(
@@ -243,7 +246,7 @@ class _SettingsPageState extends State<SettingsPage> {
               try {
                 final boundary =
                     cropKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-                final image = await boundary?.toImage(pixelRatio: 2);
+                final image = await boundary?.toImage(pixelRatio: 1.25);
                 final data = await image?.toByteData(format: ui.ImageByteFormat.png);
                 if (ctx.mounted) {
                   Navigator.pop(ctx, data?.buffer.asUint8List());
@@ -320,7 +323,9 @@ class _SettingsPageState extends State<SettingsPage> {
                                       width: cropSize,
                                       height: cropSize,
                                       fit: BoxFit.contain,
-                                      filterQuality: FilterQuality.high,
+                                      cacheWidth: 1200,
+                                      cacheHeight: 1200,
+                                      filterQuality: FilterQuality.medium,
                                     ),
                                   ),
                                 ),

@@ -62,14 +62,13 @@ class _AppShellState extends State<AppShell> {
   static const _kTabKey = 'last_tab_index';
 
   late int _currentIndex;
-  int _profileKey = 0;
 
-  List<Widget> get _pages => [
-    const HomePage(),
-    const WorkoutsPage(),
-    const StorePage(),
-    const RankingPage(),
-    ProfilePage(key: ValueKey(_profileKey)),
+  late final List<Widget> _pages = const [
+    HomePage(),
+    WorkoutsPage(),
+    StorePage(),
+    RankingPage(),
+    ProfilePage(),
   ];
 
   @override
@@ -82,7 +81,6 @@ class _AppShellState extends State<AppShell> {
     if (_currentIndex == index) return;
     HapticFeedback.selectionClick();
     setState(() {
-      if (index == 4) _profileKey++;
       _currentIndex = index;
     });
     SharedPreferences.getInstance().then((p) => p.setInt(_kTabKey, index));

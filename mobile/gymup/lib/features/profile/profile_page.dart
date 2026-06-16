@@ -33,7 +33,8 @@ class ProfilePage extends StatefulWidget {
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> {
+class _ProfilePageState extends State<ProfilePage>
+    with AutomaticKeepAliveClientMixin<ProfilePage> {
   final _api = ApiService();
   final _formKey = GlobalKey<FormState>();
 
@@ -67,6 +68,9 @@ class _ProfilePageState extends State<ProfilePage> {
     _academiaController.dispose();
     super.dispose();
   }
+
+  @override
+  bool get wantKeepAlive => true;
 
   Future<void> _loadProfile() async {
     developer.log('GET ${ApiService.baseUrl}/profile', name: 'ProfilePage');
@@ -193,6 +197,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       backgroundColor: _kBg,
       body: FutureBuilder<void>(
