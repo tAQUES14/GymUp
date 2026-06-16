@@ -67,7 +67,7 @@ class WorkoutExecutionController extends ChangeNotifier {
 
   /// Atualiza o mapa local e dispara o salvamento no backend em fire-and-forget.
   /// Em caso de erro, define [saveError] e notifica listeners para exibição na UI.
-  void setWeight(int exerciseId, int setNumber, double weight) {
+  void setWeight(int exerciseId, int setNumber, double weight, {int reps = 0}) {
     if (exerciseId <= 0) {
       debugPrint(
         '[Controller] setWeight BLOQUEADO: exerciseId=$exerciseId é inválido (≤ 0).',
@@ -96,6 +96,7 @@ class WorkoutExecutionController extends ChangeNotifier {
             exerciseId: exerciseId,
             setNumber: setNumber,
             weight: weight,
+            reps: reps,
           )
           .then((_) {
         ExerciseStatsService().invalidate(exerciseId);

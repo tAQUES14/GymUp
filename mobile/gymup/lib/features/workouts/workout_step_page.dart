@@ -487,7 +487,8 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
 
     final parsedWeight = _parseWeight(weight);
     if (parsedWeight > 0) {
-      _ctrl.setWeight(exercise.id, setNum, parsedWeight);
+      final parsedReps = int.tryParse(reps) ?? exercise.reps;
+      _ctrl.setWeight(exercise.id, setNum, parsedWeight, reps: parsedReps);
     }
 
     _persistExecutionState();
@@ -515,7 +516,11 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
     }
     if (weight <= 0) return;
 
-    _ctrl.setWeight(exercise.id, setNum, weight);
+    final reps = ctrlIndex >= 0 && ctrlIndex < _repsCtrls.length
+        ? int.tryParse(_repsCtrls[ctrlIndex].text) ?? exercise.reps
+        : exercise.reps;
+
+    _ctrl.setWeight(exercise.id, setNum, weight, reps: reps);
     _captureControllerDrafts(exercise);
     _saveExerciseSets(exercise);
     _persistExecutionState();
@@ -2057,8 +2062,8 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
       duration: const Duration(milliseconds: 180),
       width: double.infinity,
       padding: EdgeInsets.symmetric(
-        horizontal: isCurrent ? 10 : 15,
-        vertical: isCurrent ? 12 : 13,
+        horizontal: isCurrent ? 12 : 13,
+        vertical: isCurrent ? 13 : 12,
       ),
       decoration: BoxDecoration(
         color: bgColor,
@@ -2077,49 +2082,16 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
       child: isCurrent
           ? Column(
               children: [
-                Row(
-                  children: [
-                    _setNumberBadge(
-                      setNum: setNum,
-                      isCurrent: true,
-                      isDone: isDone,
-                      muted: muted,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'SERIE $setNum - ATUAL',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTypography.caption.copyWith(
-                              color: accentColor,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.35,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            '$reps reps  -  $weight',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFF0E1116),
-                              fontSize: 14.5,
-                              fontFamily: 'Space Grotesk',
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.2,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                _buildSetCardHeader(
+                  setNum: setNum,
+                  reps: reps,
+                  weight: weight,
+                  isCurrent: true,
+                  isDone: isDone,
+                  muted: muted,
+                  accentColor: accentColor,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 11),
                 Row(
                   children: [
                     Expanded(
@@ -2142,66 +2114,97 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
                 ),
               ],
             )
-          : Row(
+          : Column(
               children: [
-                _setNumberBadge(
+                _buildSetCardHeader(
                   setNum: setNum,
+                  reps: reps,
+                  weight: weight,
                   isCurrent: false,
                   isDone: isDone,
                   muted: muted,
+                  accentColor: accentColor,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        isDone ? 'SERIE $setNum - FEITA' : 'SERIE $setNum',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.caption.copyWith(
-                          color: accentColor,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.35,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '$reps reps  -  $weight',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFF0E1116),
-                          fontSize: 13.5,
-                          fontFamily: 'Space Grotesk',
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.2,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
+                const SizedBox(height: 10),
                 Row(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    _buildCompactRepsStepper(
-                      setNum: setNum,
-                      reps: reps,
-                      active: false,
+                    Expanded(
+                      child: _buildCompactRepsStepper(
+                        setNum: setNum,
+                        reps: reps,
+                        active: false,
+                      ),
                     ),
-                    const SizedBox(width: 4),
-                    _buildCompactKgStepper(
-                      exercise: exercise,
-                      setNum: setNum,
-                      weight: weight,
-                      active: false,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildCompactKgStepper(
+                        exercise: exercise,
+                        setNum: setNum,
+                        weight: weight,
+                        active: false,
+                      ),
                     ),
                   ],
                 ),
               ],
             ),
+    );
+  }
+
+  Widget _buildSetCardHeader({
+    required int setNum,
+    required String reps,
+    required String weight,
+    required bool isCurrent,
+    required bool isDone,
+    required bool muted,
+    required Color accentColor,
+  }) {
+    return Row(
+      children: [
+        _setNumberBadge(
+          setNum: setNum,
+          isCurrent: isCurrent,
+          isDone: isDone,
+          muted: muted,
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isCurrent
+                    ? 'SERIE $setNum - ATUAL'
+                    : isDone
+                        ? 'SERIE $setNum - FEITA'
+                        : 'SERIE $setNum',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.caption.copyWith(
+                  color: accentColor,
+                  fontSize: isCurrent ? 10 : 9.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.35,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                '$reps reps  -  $weight',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: const Color(0xFF0E1116),
+                  fontSize: isCurrent ? 14.5 : 13.5,
+                  fontFamily: 'Space Grotesk',
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -2263,6 +2266,8 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
       onPlus: () => _adjustReps(setNum, 1),
       child: Text(
         '$reps reps',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: color,
           fontSize: active ? 12 : 11,
@@ -2310,66 +2315,70 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 SizedBox(
-                  width: active ? 42 : 36,
-                  height: active ? 24 : 22,
+                  width: active ? 46 : 42,
+                  height: active ? 26 : 24,
                   child: TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  enabled: !_isFinishing,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  textInputAction: TextInputAction.done,
-                  textAlign: TextAlign.center,
-                  textAlignVertical: TextAlignVertical.center,
-                  cursorHeight: 15,
-                  cursorWidth: 1.5,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'^\d{0,3}([,.]\d{0,1})?')),
-                  ],
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 12,
-                    fontFamily: 'Space Grotesk',
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.1,
-                    height: 1.15,
+                    controller: controller,
+                    focusNode: focusNode,
+                    enabled: !_isFinishing,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    textInputAction: TextInputAction.done,
+                    textAlign: TextAlign.center,
+                    textAlignVertical: TextAlignVertical.center,
+                    cursorHeight: 14,
+                    cursorWidth: 1.5,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d{0,3}([,.]\d{0,1})?')),
+                    ],
+                    style: TextStyle(
+                      color: color,
+                      fontSize: active ? 12.5 : 12,
+                      fontFamily: 'Space Grotesk',
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.1,
+                      height: 1,
+                    ),
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      filled: false,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      hintText: '0',
+                      contentPadding: EdgeInsets.only(bottom: 1),
+                    ),
+                    onEditingComplete: () {
+                      _saveWeight(setNum);
+                      FocusScope.of(context).unfocus();
+                    },
+                    onTap: () {
+                      final node = focusNode;
+                      setState(() {
+                        _currentSeriesIndex = ctrlIndex;
+                        _rememberCurrentSeries();
+                      });
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        node?.requestFocus();
+                        controller.selection = TextSelection(
+                          baseOffset: 0,
+                          extentOffset: controller.text.length,
+                        );
+                      });
+                    },
+                    onChanged: (_) {
+                      _onSetFieldChanged(exercise, setNum);
+                      if (ctrlIndex == _currentSeriesIndex) {
+                        _checkSetReadiness();
+                      }
+                      setState(() {});
+                    },
+                    onSubmitted: (_) {
+                      _saveWeight(setNum);
+                      FocusScope.of(context).unfocus();
+                    },
                   ),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    filled: false,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    disabledBorder: InputBorder.none,
-                    hintText: '0',
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                  onTapOutside: (_) => FocusScope.of(context).unfocus(),
-                  onEditingComplete: () {
-                    _saveWeight(setNum);
-                    FocusScope.of(context).unfocus();
-                  },
-                  onTap: () {
-                    setState(() {
-                      _currentSeriesIndex = ctrlIndex;
-                      _rememberCurrentSeries();
-                    });
-                    controller.selection = TextSelection(
-                      baseOffset: 0,
-                      extentOffset: controller.text.length,
-                    );
-                  },
-                  onChanged: (_) {
-                    _onSetFieldChanged(exercise, setNum);
-                    if (ctrlIndex == _currentSeriesIndex) {
-                      _checkSetReadiness();
-                    }
-                    setState(() {});
-                  },
-                  onSubmitted: (_) {
-                    _saveWeight(setNum);
-                    FocusScope.of(context).unfocus();
-                  },
-                ),
                 ),
                 const SizedBox(width: 3),
                 Text(
@@ -2407,20 +2416,22 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
         ),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: MainAxisSize.max,
         children: [
           _buildStepperButton(
             icon: Icons.remove_rounded,
             active: active,
             onTap: onMinus,
           ),
-          ConstrainedBox(
-            constraints: BoxConstraints(minWidth: minCenterWidth),
-            child: SizedBox(
-              height: active ? 25 : 21,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 3),
-                child: Center(child: child),
+          Expanded(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: minCenterWidth),
+              child: SizedBox(
+                height: active ? 25 : 21,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  child: Center(child: child),
+                ),
               ),
             ),
           ),
@@ -2438,6 +2449,8 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
   void _adjustReps(int setNum, int delta) {
     final ctrlIndex = setNum - 1;
     if (ctrlIndex < 0 || ctrlIndex >= _repsCtrls.length) return;
+    if (_workout == null) return;
+    final exercise = _workout!.exercises[_currentExerciseIndex];
     final current = int.tryParse(_repsCtrls[ctrlIndex].text) ?? 0;
     final next = (current + delta).clamp(0, 999).toInt();
     final text = next > 0 ? next.toString() : '';
@@ -2449,6 +2462,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
     if (ctrlIndex == _currentSeriesIndex) {
       _checkSetReadiness();
     }
+    _onSetFieldChanged(exercise, setNum);
   }
 
   Widget _buildStepperButton({
