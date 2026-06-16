@@ -71,6 +71,8 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
   bool get _hasPoints => widget.noPointsReason == null && widget.pontosGerados > 0;
   bool get _completedAnyExercise => widget.setsConcluidos > 0;
   bool get _wasAbandoned => !_completedAnyExercise;
+  bool get _isInvalid => widget.noPointsReason != null;
+  bool get _isCompletedWorkout => _hasPoints;
 
   @override
   void initState() {
@@ -102,7 +104,9 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
           .writeAsBytes(imageBytes);
       await Share.shareXFiles(
         [XFile(file.path)],
-        text: 'Treino concluido no GymUp!',
+        text: _isCompletedWorkout
+            ? 'Treino concluido no GymUp!'
+            : 'Treino registrado no GymUp.',
       );
     } finally {
       if (mounted) setState(() => _shareLoading = false);
@@ -123,7 +127,7 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
           streak: widget.streak,
           duracaoMinutos: widget.duracaoMinutos,
           setsConcluidos: widget.setsConcluidos,
-          completed: !_wasAbandoned,
+          completed: _isCompletedWorkout,
         ),
         onShare: _shareCard,
         isLoading: _shareLoading,
@@ -194,7 +198,9 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
         ? 'Treino encerrado'
         : _hasPoints
             ? 'Treino concluído'
-            : 'Treino finalizado';
+            : _isInvalid
+                ? 'Treino sem validação'
+                : 'Treino registrado';
     return Row(
       children: [
         _circleButton(
@@ -240,36 +246,36 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
   }
 
   Widget _heroCard() {
-    final heroIcon = _wasAbandoned
-        ? Icons.close_rounded
-        : _hasPoints
-            ? Icons.check_rounded
-            : Icons.bookmark_added_rounded;
-    final iconBg = _wasAbandoned
-        ? const Color(0xFFFFE3E3)
-        : _hasPoints
-            ? const Color(0xFFEDFBD3)
-            : const Color(0xFFE7EEFE);
-    final iconColor = _wasAbandoned
-        ? const Color(0xFFE5484D)
-        : _hasPoints
-            ? _kGreen
-            : _kBlueDark;
-    final title = _wasAbandoned
-        ? 'Treino não concluído'
-        : _hasPoints
-            ? 'Treino concluído!'
-            : 'Treino salvo';
-    final subtitle = _wasAbandoned
-        ? 'Você saiu antes de concluir exercícios.\nNada foi contado para a meta.'
-        : _hasPoints
-            ? 'Você completou o treino de hoje com\nsucesso.'
-            : 'Seu progresso foi salvo, mas sem pontos.';
-    final badge = _wasAbandoned
-        ? 'NÃO CONTABILIZADO'
-        : _hasPoints
-            ? 'TREINO VÁLIDO'
-            : 'TREINO SALVO';
+    final heroIcon = _isCompletedWorkout
+        ? Icons.check_rounded
+        : _wasAbandoned
+            ? Icons.close_rounded
+            : Icons.info_outline_rounded;
+    final iconBg = _isCompletedWorkout
+        ? const Color(0xFFEDFBD3)
+        : _wasAbandoned
+            ? const Color(0xFFFFE3E3)
+            : const Color(0xFFFFEDDC);
+    final iconColor = _isCompletedWorkout
+        ? _kGreen
+        : _wasAbandoned
+            ? const Color(0xFFE5484D)
+            : const Color(0xFFFF7A1A);
+    final title = _isCompletedWorkout
+        ? 'Treino concluído!'
+        : _wasAbandoned
+            ? 'Treino não concluído'
+            : 'Treino não validado';
+    final subtitle = _isCompletedWorkout
+        ? 'Você completou o treino de hoje com\nsucesso.'
+        : _wasAbandoned
+            ? 'Você saiu antes de concluir exercícios.\nNada foi contado para a meta.'
+            : 'Seu treino foi salvo, mas não gerou\npontos nem meta semanal.';
+    final badge = _isCompletedWorkout
+        ? 'TREINO VÁLIDO'
+        : _wasAbandoned
+            ? 'NÃO CONTABILIZADO'
+            : 'SEM PONTOS';
     return Container(
       width: double.infinity,
       height: 238,
@@ -279,7 +285,7 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
         gradient: const LinearGradient(
           begin: Alignment(0.08, -0.12),
           end: Alignment(0.92, 1.12),
-          colors: [Color(0xFF2F6FED), Color(0xFF4A8CFF), Color(0xFF5E98FF)],
+          colors: [Color(0xFF1F4FC4), Color(0xFF2F6FED), Color(0xFF4A8CFF)],
         ),
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
@@ -497,11 +503,14 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
     final done = (total - remaining).clamp(0, total);
     final progress = total == 0 ? 0.0 : done / total;
     final remainingLabel = remaining == 1 ? '1 treino' : '$remaining treinos';
-    final statusText = _wasAbandoned
-        ? 'Este treino não entrou na sua meta semanal.'
+    final statusText = !_isCompletedWorkout
+        ? 'Esse treino não alterou sua meta. Você segue com $done de $total treinos válidos na semana.'
         : remaining == 0
             ? 'Meta da semana completa. Boa!'
             : 'Falta $remainingLabel para completar sua meta da semana.';
+    final progressColor = _isCompletedWorkout ? _kGreen : const Color(0xFF9AA3B0);
+    final progressBg =
+        _isCompletedWorkout ? const Color(0xFFEDFBD3) : const Color(0xFFEFF3F8);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -559,7 +568,7 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEDFBD3),
+                  color: progressBg,
                   borderRadius: BorderRadius.circular(100),
                 ),
                 child: Text(
@@ -567,7 +576,7 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
                   style: _sg(
                     size: 12,
                     weight: FontWeight.w700,
-                    color: _kGreen,
+                    color: progressColor,
                     letterSpacing: -0.1,
                   ),
                 ),
@@ -596,18 +605,22 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
                     child: Container(
                       height: 8,
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
+                        gradient: LinearGradient(
                           begin: Alignment.centerLeft,
                           end: Alignment.centerRight,
-                          colors: [Color(0xFF5BA300), Color(0xFFA6E000)],
+                          colors: _isCompletedWorkout
+                              ? const [Color(0xFF5BA300), Color(0xFFA6E000)]
+                              : const [Color(0xFF9AA3B0), Color(0xFFCBD3DD)],
                         ),
                         borderRadius: BorderRadius.circular(100),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFA6E000).withValues(alpha: 0.4),
-                            blurRadius: 8,
-                          ),
-                        ],
+                        boxShadow: _isCompletedWorkout
+                            ? [
+                                BoxShadow(
+                                  color: const Color(0xFFA6E000).withValues(alpha: 0.4),
+                                  blurRadius: 8,
+                                ),
+                              ]
+                            : null,
                       ),
                     ),
                   ),
@@ -620,8 +633,8 @@ class _WorkoutCompletePageState extends State<WorkoutCompletePage> {
             statusText,
             style: _pjs(
               size: 12,
-              weight: _wasAbandoned ? FontWeight.w700 : FontWeight.w600,
-              color: _wasAbandoned ? const Color(0xFFE5484D) : const Color(0xFF5B6472),
+              weight: !_isCompletedWorkout ? FontWeight.w700 : FontWeight.w600,
+              color: const Color(0xFF5B6472),
               height: 1.35,
             ),
           ),

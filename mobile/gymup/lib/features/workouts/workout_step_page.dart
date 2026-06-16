@@ -171,12 +171,10 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
   // ── Progress reporting ────────────────────────────────────────────────────
 
   Future<void> _sendProgress(int totalExercises) async {
-    // Use the furthest point reached: either exercises explicitly marked done
-    // or the current index (when user skipped forward via the arrow).
-    final best = _completedExercises > _currentExerciseIndex
-        ? _completedExercises
-        : _currentExerciseIndex;
-    final progress = ((best / totalExercises) * 100).round().clamp(0, 100);
+    // Progress only counts exercises actually completed. Skipping ahead should
+    // never make an unfinished workout look valid to the backend.
+    final completed = _completedExercises.clamp(0, totalExercises);
+    final progress = ((completed / totalExercises) * 100).round().clamp(0, 100);
     try {
       final session = await _workoutService.updateProgress(progress);
       if (!mounted) return;
@@ -1290,12 +1288,8 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
     if (_session == null || _workout == null) return false;
     final total = _workout!.exercises.length;
     if (total == 0) return false;
-    final best = _completedExercises > _currentExerciseIndex
-        ? _completedExercises
-        : _currentExerciseIndex;
-    final localProgress = ((best / total) * 100).round().clamp(0, 100);
-    final displayProgress =
-        localProgress > _session!.progress ? localProgress : _session!.progress;
+    final completed = _completedExercises.clamp(0, total);
+    final displayProgress = ((completed / total) * 100).round().clamp(0, 100);
     final minSecs = _session!.minMinutes * 60;
     return _elapsed.inSeconds >= minSecs && displayProgress >= _session!.minProgress;
   }

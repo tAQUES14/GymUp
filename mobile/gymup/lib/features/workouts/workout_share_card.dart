@@ -59,18 +59,6 @@ class WorkoutShareCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(28),
           child: Stack(
             children: [
-              Positioned(
-                right: -18,
-                top: 34,
-                child: Container(
-                  width: 142,
-                  height: 96,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(26),
-                  ),
-                ),
-              ),
               Padding(
                 padding: const EdgeInsets.all(22),
                 child: Column(
