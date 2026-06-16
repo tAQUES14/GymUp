@@ -207,11 +207,27 @@ class User extends Authenticatable
 
     public function sendPasswordResetNotification($token): void
     {
-        $base = rtrim(config('app.frontend_url', 'https://admin.gymupapp.com.br'), '/');
-        $url = $base . '/reset-password'
-            . '?token=' . $token
-            . '&email=' . urlencode($this->getEmailForPasswordReset());
+        $url = $this->passwordResetUrl($token);
 
         $this->notify(new ResetPasswordNotification($url));
+    }
+
+    private function passwordResetUrl(string $token): string
+    {
+        $email = urlencode($this->getEmailForPasswordReset());
+
+        if ($this->role === 'user') {
+            $base = rtrim((string) config('app.mobile_frontend_url', 'gymup://reset-password'), '/');
+
+            if (str_contains($base, '://') && ! str_starts_with($base, 'http')) {
+                return $base . '?token=' . $token . '&email=' . $email;
+            }
+
+            return $base . '/reset-password?token=' . $token . '&email=' . $email;
+        }
+
+        $base = rtrim((string) config('app.frontend_url', 'https://admin.gymupapp.com.br'), '/');
+
+        return $base . '/reset-password?token=' . $token . '&email=' . $email;
     }
 }

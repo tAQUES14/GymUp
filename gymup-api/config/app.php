@@ -56,6 +56,10 @@ return [
 
     'frontend_url' => env('FRONTEND_URL', 'https://admin.gymupapp.com.br'),
 
+    'mobile_frontend_url' => env('MOBILE_FRONTEND_URL', 'gymup://reset-password'),
+
+    'mobile_login_url' => env('MOBILE_LOGIN_URL', 'gymup://login'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

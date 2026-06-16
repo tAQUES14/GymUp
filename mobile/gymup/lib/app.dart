@@ -72,13 +72,27 @@ class _GymUpAppState extends State<GymUpApp> {
   }
 
   /// Interpreta URIs:
-  ///   https://gymup.app/reset-password?token=TOKEN&email=EMAIL
+  ///   https://gymupapp.com.br/reset-password?token=TOKEN&email=EMAIL
   ///   gymup://reset-password?token=TOKEN&email=EMAIL
   void _handleDeepLink(Uri uri) {
-    final isHttpResetPath = (uri.host == 'gymup.app' || uri.host == 'localhost') &&
+    final isHttpResetPath = (uri.host == 'gymupapp.com.br' ||
+            uri.host == 'www.gymupapp.com.br' ||
+            uri.host == 'gymup.app' ||
+            uri.host == 'localhost') &&
         uri.path == '/reset-password';
     final isSchemeReset =
         uri.scheme == 'gymup' && uri.host == 'reset-password';
+    final isSchemeLogin = uri.scheme == 'gymup' && uri.host == 'login';
+    final isHttpLoginPath = (uri.host == 'gymupapp.com.br' ||
+            uri.host == 'www.gymupapp.com.br' ||
+            uri.host == 'gymup.app' ||
+            uri.host == 'localhost') &&
+        uri.path == '/login';
+
+    if (isSchemeLogin || isHttpLoginPath) {
+      _navigatorKey.currentState?.pushNamedAndRemoveUntil('/login', (_) => false);
+      return;
+    }
 
     if (!isHttpResetPath && !isSchemeReset) return;
 

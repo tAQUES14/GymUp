@@ -255,9 +255,13 @@ class AuthController extends Controller
             $user->forceFill(['email_verified_at' => now()])->save();
         }
 
-        $base = rtrim((string) config('app.frontend_url', 'https://admin.gymupapp.com.br'), '/');
+        $base = $user->role === 'user'
+            ? rtrim((string) config('app.mobile_login_url', 'gymup://login'), '/')
+            : rtrim((string) config('app.frontend_url', 'https://admin.gymupapp.com.br'), '/') . '/login';
 
-        return redirect()->away($base . '/login?verified=1');
+        $separator = str_contains($base, '?') ? '&' : '?';
+
+        return redirect()->away($base . $separator . 'verified=1');
     }
 
     public function logout(Request $request)
