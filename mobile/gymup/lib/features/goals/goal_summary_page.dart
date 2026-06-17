@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/widgets/gym_feedback.dart';
 import '../../core/widgets/gymup_loading.dart';
 import 'create_goal_page.dart';
 import 'goal_api_service.dart';
@@ -274,13 +275,10 @@ class _GoalSummaryPageState extends State<GoalSummaryPage> {
   }
 
   void _snack(String message, {bool success = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: success ? _kGreen : _kRed,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      ),
+    showGymSnack(
+      context,
+      message,
+      kind: success ? GymFeedbackKind.success : GymFeedbackKind.error,
     );
   }
 }

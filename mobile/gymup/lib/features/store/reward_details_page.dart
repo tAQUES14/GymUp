@@ -2,7 +2,7 @@
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../core/theme/app_colors.dart';
+import '../../core/widgets/gym_feedback.dart';
 import '../auth/auth_api_service.dart';
 import 'reward_api_service.dart';
 import 'reward_model.dart';
@@ -76,15 +76,7 @@ class _RewardDetailsPageState extends State<RewardDetailsPage> {
         Navigator.pushReplacementNamed(context, '/login');
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        ),
-      );
+      showGymSnack(context, msg, kind: GymFeedbackKind.error);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -885,40 +877,111 @@ class _SuccessDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-      contentPadding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+      contentPadding: EdgeInsets.zero,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 72,
-            height: 72,
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(24, 26, 24, 24),
             decoration: BoxDecoration(
-              color: _kGreen.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [_kBlueDark, _kBlue, Color(0xFF4A8CFF)],
+              ),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
             ),
-            child: const Icon(Icons.check_rounded, color: _kGreen, size: 36),
+            child: Column(
+              children: [
+                Container(
+                  width: 66,
+                  height: 66,
+                  decoration: BoxDecoration(
+                    color: _kLime,
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _kLime.withValues(alpha: 0.35),
+                        blurRadius: 22,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.check_rounded,
+                    color: _kBlueDark,
+                    size: 36,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Pedido enviado!',
+                  textAlign: TextAlign.center,
+                  style: _pjs(
+                    size: 21,
+                    weight: FontWeight.w800,
+                    color: Colors.white,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Solicitacao registrada com sucesso.',
+                  textAlign: TextAlign.center,
+                  style: _pjs(
+                    size: 13,
+                    weight: FontWeight.w600,
+                    color: Colors.white.withValues(alpha: 0.78),
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 16),
-          Text('Pedido enviado!', style: _pjs(size: 20, weight: FontWeight.w800, color: _kInk)),
-          const SizedBox(height: 10),
-          Text(
-            'Solicitacao registrada com status pendente.\nApresente na recepcao quando for aprovado.',
-            textAlign: TextAlign.center,
-            style: _pjs(size: 13, weight: FontWeight.w500, color: _kMuted, height: 1.45),
-          ),
-          const SizedBox(height: 24),
-          GestureDetector(
-            onTap: onOk,
-            child: Container(
-              height: 48,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [_kBlueDark, _kBlue]),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Center(
-                child: Text('OK', style: _pjs(size: 15, weight: FontWeight.w800, color: Colors.white)),
-              ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 18, 24, 22),
+            child: Column(
+              children: [
+                Text(
+                  'Apresente na recepcao quando for aprovado.',
+                  textAlign: TextAlign.center,
+                  style: _pjs(
+                    size: 13,
+                    weight: FontWeight.w500,
+                    color: _kMuted,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                GestureDetector(
+                  onTap: onOk,
+                  child: Container(
+                    height: 50,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [_kBlueDark, _kBlue]),
+                      borderRadius: BorderRadius.circular(100),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _kBlue.withValues(alpha: 0.22),
+                          blurRadius: 18,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(
+                        'OK',
+                        style: _pjs(
+                          size: 15,
+                          weight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

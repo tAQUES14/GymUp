@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:gymup/core/widgets/gym_feedback.dart';
 
 const authBg = Color(0xFFF4F6FA);
 const authInk = Color(0xFF000D08);
@@ -61,14 +62,10 @@ void showAuthSnack(
   String message, {
   bool success = false,
 }) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(message),
-      backgroundColor: success ? authGreen : Colors.red.shade700,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-    ),
+  showGymSnack(
+    context,
+    message,
+    kind: success ? GymFeedbackKind.success : GymFeedbackKind.error,
   );
 }
 

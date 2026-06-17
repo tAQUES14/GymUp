@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../core/widgets/gym_feedback.dart';
 import '../workouts/models/workout_model.dart';
 import '../workouts/models/workout_plan_model.dart';
 import '../workouts/workout_api_service.dart';
@@ -191,37 +192,21 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
     }
   }
 
-  void _showPermissionDialog({required bool permanent}) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Text('Permissao de camera'),
-        content: Text(
-          permanent
-              ? 'A permissao de camera foi negada permanentemente. Acesse as configuracoes do app para habilita-la.'
-              : 'O GymUp precisa da camera para escanear o QR Code da academia.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.blue,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () {
-              Navigator.pop(ctx);
-              if (permanent) openAppSettings();
-            },
-            child: Text(permanent ? 'Abrir configuracoes' : 'OK'),
-          ),
-        ],
-      ),
+  Future<void> _showPermissionDialog({required bool permanent}) async {
+    final confirmed = await showGymConfirmDialog(
+      context,
+      title: 'Permissao de camera',
+      message: permanent
+          ? 'A permissao de camera foi negada permanentemente. Acesse as configuracoes do app para habilita-la.'
+          : 'O GymUp precisa da camera para escanear o QR Code da academia.',
+      cancelLabel: 'Cancelar',
+      confirmLabel: permanent ? 'Abrir ajustes' : 'OK',
+      icon: Icons.qr_code_scanner_rounded,
+      color: AppColors.blue,
     );
+    if (confirmed && permanent) {
+      await openAppSettings();
+    }
   }
 
   void _onDetect(BarcodeCapture capture) {

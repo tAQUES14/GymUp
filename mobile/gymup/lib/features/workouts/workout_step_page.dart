@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/widgets/gym_feedback.dart';
 import 'controllers/workout_execution_controller.dart';
 import 'models/workout_model.dart';
 import 'widgets/exercise_image_widget.dart';
@@ -4159,47 +4160,16 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
     Color? confirmColor,
     bool barrierDismissible = true,
   }) async {
-    return await showDialog<bool>(
-          context: context,
-          barrierDismissible: barrierDismissible,
-          builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            title: Row(
-              children: [
-                Icon(icon, color: iconColor, size: 28),
-                const SizedBox(width: 12),
-                Expanded(child: Text(title, style: AppTypography.h3)),
-              ],
-            ),
-            content: Text(content, style: AppTypography.bodyLarge),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(
-                  cancelLabel,
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: confirmColor ?? _kBlue,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 0,
-                ),
-                onPressed: () => Navigator.pop(ctx, true),
-                child: Text(confirmLabel),
-              ),
-            ],
-          ),
-        ) ??
-        false;
+    return showGymConfirmDialog(
+      context,
+      title: title,
+      message: content,
+      cancelLabel: cancelLabel,
+      confirmLabel: confirmLabel,
+      icon: icon,
+      color: confirmColor ?? iconColor,
+      destructive: confirmColor == AppColors.error || iconColor == AppColors.error,
+    );
   }
 
   Future<void> _gymAchievementDialog(

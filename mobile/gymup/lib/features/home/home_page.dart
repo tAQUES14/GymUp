@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/widgets/gym_feedback.dart';
 import '../../core/widgets/gymup_loading.dart';
 import '../challenges/challenge_api_service.dart';
 import '../challenges/challenge_details_page.dart';
@@ -373,10 +374,10 @@ class _HomePageState extends State<HomePage> {
     final data = _dashboardData!;
 
     if (_todayWorkout == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Nenhum treino cadastrado. Crie um treino na aba Treinos.'),
-        ),
+      showGymSnack(
+        context,
+        'Nenhum treino cadastrado. Crie um treino na aba Treinos.',
+        kind: GymFeedbackKind.warning,
       );
       return;
     }
@@ -389,11 +390,11 @@ class _HomePageState extends State<HomePage> {
             ? '${elapsedMin ~/ 60}h${elapsedMin % 60 > 0 ? ' ${elapsedMin % 60}min' : ''}'
             : '${elapsedMin}min';
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Retomando treino (sessao aberta ha $label)'),
-            duration: const Duration(seconds: 3),
-          ),
+        showGymSnack(
+          context,
+          'Retomando treino (sessao aberta ha $label)',
+          kind: GymFeedbackKind.info,
+          duration: const Duration(seconds: 3),
         );
       }
       _pushWorkoutStep();
@@ -451,30 +452,17 @@ class _HomePageState extends State<HomePage> {
         Navigator.pushReplacementNamed(context, '/login');
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        ),
-      );
+      showGymSnack(context, msg, kind: GymFeedbackKind.error);
     } finally {
       if (mounted) setState(() => _isStarting = false);
     }
   }
 
   void _showNoWorkoutForCheckin() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text(
-          'Você ainda não tem treino criado ou indicado no plano. Crie um treino antes de liberar o QR Code.',
-        ),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      ),
+    showGymSnack(
+      context,
+      'Voce ainda nao tem treino criado ou indicado no plano. Crie um treino antes de liberar o QR Code.',
+      kind: GymFeedbackKind.warning,
     );
   }
 

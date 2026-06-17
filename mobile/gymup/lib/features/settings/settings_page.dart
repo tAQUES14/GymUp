@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/api_service.dart';
+import '../../core/widgets/gym_feedback.dart';
 import '../../core/widgets/gymup_loading.dart';
 
 const _kBg = Color(0xFFEDF0F6);
@@ -22,7 +23,6 @@ const _kBlue2 = Color(0xFF41B6C9);
 const _kBlueSoft = Color(0xFFEAF1FF);
 const _kLime = Color(0xFFC6EE54);
 const _kLimeInk = Color(0xFF3E5A07);
-const _kGreen = Color(0xFF0E9F6E);
 const _kRed = Color(0xFFD14343);
 
 class SettingsPage extends StatefulWidget {
@@ -232,24 +232,16 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _removeAvatar() async {
     if (_avatarUploading || _avatarUrl.trim().isEmpty) return;
 
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Remover foto?'),
-        content: const Text('Seu perfil voltara a mostrar apenas suas iniciais.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Remover'),
-          ),
-        ],
-      ),
+    final confirm = await showGymConfirmDialog(
+      context,
+      title: 'Remover foto?',
+      message: 'Seu perfil voltara a mostrar apenas suas iniciais.',
+      confirmLabel: 'Remover',
+      icon: Icons.delete_outline_rounded,
+      color: _kRed,
+      destructive: true,
     );
-    if (confirm != true) return;
+    if (!confirm) return;
 
     setState(() => _avatarUploading = true);
     try {
@@ -513,13 +505,10 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _snack(String message, {bool success = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: success ? _kGreen : _kRed,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      ),
+    showGymSnack(
+      context,
+      message,
+      kind: success ? GymFeedbackKind.success : GymFeedbackKind.error,
     );
   }
 
