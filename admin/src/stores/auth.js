@@ -87,6 +87,11 @@ export const useAuthStore = defineStore('auth', () => {
     await refreshMe()
   }
 
+  async function removeAvatar() {
+    await api.delete('/profile/avatar')
+    await refreshMe()
+  }
+
   return {
     token,
     user,
@@ -102,6 +107,7 @@ export const useAuthStore = defineStore('auth', () => {
     resetPassword,
     refreshMe,
     updateAvatar,
+    removeAvatar,
     loginRedirect,
   }
 })

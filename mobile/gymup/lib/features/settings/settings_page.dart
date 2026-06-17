@@ -229,6 +229,49 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _removeAvatar() async {
+    if (_avatarUploading || _avatarUrl.trim().isEmpty) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remover foto?'),
+        content: const Text('Seu perfil voltara a mostrar apenas suas iniciais.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remover'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _avatarUploading = true);
+    try {
+      final response = await _api.delete('/profile/avatar');
+      if (response.statusCode != 200) {
+        throw Exception(_parseApiError(response.body, response.statusCode));
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('user_avatar_url');
+
+      if (!mounted) return;
+      setState(() => _avatarUrl = '');
+      _snack('Foto removida.', success: true);
+    } catch (e) {
+      if (!mounted) return;
+      _snack(e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _avatarUploading = false);
+    }
+  }
+
   Future<Uint8List?> _showAvatarCropModal(Uint8List bytes) async {
     final imageAspect = await _imageAspectRatio(bytes);
     if (!mounted) return null;
@@ -513,6 +556,7 @@ class _SettingsPageState extends State<SettingsPage> {
                               avatarUrl: _avatarUrl.trim(),
                               uploading: _avatarUploading,
                               onPickAvatar: _pickAvatar,
+                              onRemoveAvatar: _removeAvatar,
                             ),
                             const SizedBox(height: 26),
                             const _SectionTitle(title: 'Dados pessoais'),
@@ -663,6 +707,7 @@ class _AvatarHero extends StatelessWidget {
   final String avatarUrl;
   final bool uploading;
   final VoidCallback onPickAvatar;
+  final VoidCallback onRemoveAvatar;
 
   const _AvatarHero({
     required this.name,
@@ -671,6 +716,7 @@ class _AvatarHero extends StatelessWidget {
     required this.avatarUrl,
     required this.uploading,
     required this.onPickAvatar,
+    required this.onRemoveAvatar,
   });
 
   @override
@@ -834,6 +880,29 @@ class _AvatarHero extends StatelessWidget {
                                 ),
                               ),
                             ),
+                            if (hasAvatar)
+                              GestureDetector(
+                                onTap: uploading ? null : onRemoveAvatar,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(100),
+                                    border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.delete_outline_rounded, size: 15, color: Colors.white),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Remover foto',
+                                        style: _pjs(size: 13, weight: FontWeight.w700, color: Colors.white),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ],

@@ -39,6 +39,48 @@
     <template v-else>
       <div class="space-y-5">
 
+        <!-- Perfil do administrador -->
+        <div class="card p-6 overflow-hidden relative">
+          <div class="absolute inset-x-0 top-0 h-20 bg-gradient-to-r from-brand-600 via-brand-500 to-sky-400 opacity-95" />
+          <div class="relative flex flex-col sm:flex-row sm:items-end gap-4 pt-8">
+            <div class="w-20 h-20 rounded-2xl bg-brand-600 ring-4 ring-white shadow-lg flex items-center justify-center overflow-hidden">
+              <img
+                v-if="accountAvatarUrl"
+                :src="accountAvatarUrl"
+                :alt="accountForm.name || 'Perfil'"
+                class="w-full h-full object-cover"
+              />
+              <span v-else class="text-white text-xl font-black">{{ accountInitial }}</span>
+            </div>
+
+            <div class="min-w-0 flex-1">
+              <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Perfil do administrador</p>
+              <h2 class="mt-1 text-lg font-bold text-slate-900 truncate">{{ accountForm.name || 'Sua conta' }}</h2>
+              <p class="text-sm text-slate-500 truncate">{{ accountForm.email }}</p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <label class="btn-secondary text-xs cursor-pointer">
+                <input type="file" accept="image/*" class="hidden" @change="onAdminAvatarSelected" />
+                {{ avatarSaving ? 'Enviando...' : 'Alterar foto' }}
+              </label>
+              <button
+                v-if="accountAvatarUrl"
+                type="button"
+                class="px-3 py-2 rounded-lg border border-red-100 bg-red-50 text-xs font-bold text-red-600 hover:bg-red-100 transition"
+                :disabled="avatarRemoving"
+                @click="removeAdminAvatar"
+              >
+                {{ avatarRemoving ? 'Removendo...' : 'Remover foto' }}
+              </button>
+            </div>
+          </div>
+
+          <div v-if="avatarMsg" :class="['relative mt-4 text-xs font-medium px-3 py-2 rounded-lg', avatarMsg.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700']">
+            {{ avatarMsg.text }}
+          </div>
+        </div>
+
         <!-- ── Dados da academia ──────────────────────────────────────────── -->
         <div v-if="gym" class="card p-6">
           <div class="flex items-center gap-3 mb-6">
@@ -239,7 +281,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useAuthStore } from '../stores/auth.js'
 import api from '../services/api.js'
 
@@ -260,6 +302,13 @@ const passwordSaving = ref(false)
 const gymMsg      = ref(null)
 const accountMsg  = ref(null)
 const passwordMsg = ref(null)
+const avatarMsg   = ref(null)
+
+const avatarSaving = ref(false)
+const avatarRemoving = ref(false)
+
+const accountAvatarUrl = computed(() => auth.user?.avatar_url || '')
+const accountInitial = computed(() => (accountForm.name || auth.user?.name || 'A').trim().charAt(0).toUpperCase())
 
 function flash(target, ok, text) {
   target.value = { ok, text }
@@ -319,6 +368,39 @@ async function saveAccount() {
     flash(accountMsg, false, msg)
   } finally {
     accountSaving.value = false
+  }
+}
+
+async function onAdminAvatarSelected(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file || avatarSaving.value) return
+
+  avatarSaving.value = true
+  try {
+    await auth.updateAvatar(file)
+    flash(avatarMsg, true, 'Foto atualizada com sucesso.')
+  } catch (e) {
+    const msg = firstValidationError(e) ?? e.response?.data?.message ?? 'Erro ao atualizar foto.'
+    flash(avatarMsg, false, msg)
+  } finally {
+    avatarSaving.value = false
+  }
+}
+
+async function removeAdminAvatar() {
+  if (avatarRemoving.value) return
+  if (!window.confirm('Remover sua foto de perfil?')) return
+
+  avatarRemoving.value = true
+  try {
+    await auth.removeAvatar()
+    flash(avatarMsg, true, 'Foto removida com sucesso.')
+  } catch (e) {
+    const msg = firstValidationError(e) ?? e.response?.data?.message ?? 'Erro ao remover foto.'
+    flash(avatarMsg, false, msg)
+  } finally {
+    avatarRemoving.value = false
   }
 }
 

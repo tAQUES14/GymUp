@@ -77,6 +77,18 @@ class ApiService {
     );
   }
 
+  Future<http.Response> delete(String endpoint) async {
+    final token = await _getToken();
+
+    return http.delete(
+      Uri.parse('$baseUrl$endpoint'),
+      headers: {
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
+    );
+  }
+
   Future<http.StreamedResponse> multipartPost(
     String endpoint, {
     Map<String, String>? fields,

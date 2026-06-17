@@ -126,16 +126,16 @@ class _HomePageState extends State<HomePage> {
     final prefs = await SharedPreferences.getInstance();
     var avatarUrl = prefs.getString('user_avatar_url') ?? '';
 
-    if (avatarUrl.trim().isEmpty) {
-      try {
-        final me = await AuthApiService().getMe();
-        avatarUrl = (me['avatar_url'] as String?) ?? '';
-        if (avatarUrl.trim().isNotEmpty) {
-          await prefs.setString('user_avatar_url', avatarUrl);
-        }
-      } catch (_) {
-        // A tela inicial continua funcionando mesmo se /me falhar.
+    try {
+      final me = await AuthApiService().getMe();
+      avatarUrl = (me['avatar_url'] as String?) ?? '';
+      if (avatarUrl.trim().isNotEmpty) {
+        await prefs.setString('user_avatar_url', avatarUrl);
+      } else {
+        await prefs.remove('user_avatar_url');
       }
+    } catch (_) {
+      // A tela inicial continua funcionando mesmo se /me falhar.
     }
 
     return avatarUrl;

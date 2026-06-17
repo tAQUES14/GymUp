@@ -105,7 +105,7 @@
             <div class="relative">
               <div class="w-14 h-14 rounded-full flex items-center justify-center text-lg font-bold text-white flex-shrink-0 ring-4 ring-white shadow-lg overflow-hidden"
                    :style="{ backgroundColor: avatarColor(top3[1]?.name) }">
-                <img v-if="avatarUrl(top3[1])" :src="avatarUrl(top3[1])" :alt="top3[1]?.name" class="w-full h-full rounded-full object-cover" />
+                <img v-if="avatarUrl(top3[1])" :src="avatarUrl(top3[1])" :alt="top3[1]?.name" class="w-full h-full rounded-full object-cover" @error="onAvatarError(top3[1])" />
                 <template v-else>{{ initials(top3[1]?.name) }}</template>
               </div>
               <span class="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-slate-400 border-2 border-white
@@ -127,7 +127,7 @@
             <div class="relative">
               <div class="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold text-white flex-shrink-0 ring-4 ring-yellow-300 shadow-xl overflow-hidden"
                    :style="{ backgroundColor: avatarColor(top3[0]?.name) }">
-                <img v-if="avatarUrl(top3[0])" :src="avatarUrl(top3[0])" :alt="top3[0]?.name" class="w-full h-full rounded-full object-cover" />
+                <img v-if="avatarUrl(top3[0])" :src="avatarUrl(top3[0])" :alt="top3[0]?.name" class="w-full h-full rounded-full object-cover" @error="onAvatarError(top3[0])" />
                 <template v-else>{{ initials(top3[0]?.name) }}</template>
               </div>
               <span class="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-7 h-7 rounded-full bg-yellow-400 border-2 border-white
@@ -148,7 +148,7 @@
             <div class="relative">
               <div class="w-14 h-14 rounded-full flex items-center justify-center text-lg font-bold text-white flex-shrink-0 ring-4 ring-white shadow-lg overflow-hidden"
                    :style="{ backgroundColor: avatarColor(top3[2]?.name) }">
-                <img v-if="avatarUrl(top3[2])" :src="avatarUrl(top3[2])" :alt="top3[2]?.name" class="w-full h-full rounded-full object-cover" />
+                <img v-if="avatarUrl(top3[2])" :src="avatarUrl(top3[2])" :alt="top3[2]?.name" class="w-full h-full rounded-full object-cover" @error="onAvatarError(top3[2])" />
                 <template v-else>{{ initials(top3[2]?.name) }}</template>
               </div>
               <span class="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-amber-600 border-2 border-white
@@ -291,7 +291,7 @@
                 <div class="flex items-center gap-3">
                   <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 shadow-sm overflow-hidden"
                        :style="{ backgroundColor: avatarColor(entry.name) }">
-                    <img v-if="avatarUrl(entry)" :src="avatarUrl(entry)" :alt="entry.name" class="w-full h-full rounded-full object-cover" />
+                    <img v-if="avatarUrl(entry)" :src="avatarUrl(entry)" :alt="entry.name" class="w-full h-full rounded-full object-cover" @error="onAvatarError(entry)" />
                     <template v-else>{{ initials(entry.name) }}</template>
                   </div>
                   <div class="min-w-0">
@@ -367,6 +367,7 @@ const rankBy  = ref('points')
 const search  = ref('')
 const loading = ref(true)
 const error   = ref('')
+const avatarFailures = ref(new Set())
 
 const periodLabel = computed(() => periods.find((p) => p.value === period.value)?.label ?? '')
 
@@ -382,6 +383,7 @@ async function load() {
   loading.value = true; error.value = ''
   try {
     const { data } = await api.get(`/admin/ranking?period=${period.value}&rank_by=${rankBy.value}&limit=100`)
+    avatarFailures.value = new Set()
     ranking.value = data.ranking ?? []
     stats.value   = {
       total_users:  data.total_users  ?? 0,
@@ -440,7 +442,24 @@ function firstName(name) {
 }
 
 function avatarUrl(entry) {
-  return entry?.avatar_url || entry?.avatarUrl || ''
+  const url = rawAvatarUrl(entry)
+  if (!url) return ''
+  if (avatarFailures.value.has(avatarFailureKey(entry, url))) return ''
+  return url
+}
+
+function rawAvatarUrl(entry) {
+  return entry?.avatar_url || entry?.avatarUrl || entry?.profile_photo_url || entry?.photo_url || entry?.avatar || ''
+}
+
+function avatarFailureKey(entry, url = rawAvatarUrl(entry)) {
+  return `${entry?.user_id ?? entry?.id ?? entry?.email ?? entry?.name ?? 'avatar'}:${url}`
+}
+
+function onAvatarError(entry) {
+  const url = rawAvatarUrl(entry)
+  if (!url) return
+  avatarFailures.value = new Set([...avatarFailures.value, avatarFailureKey(entry, url)])
 }
 
 function avatarColor(name) {

@@ -142,12 +142,22 @@ class _RankingPageState extends State<RankingPage> {
         scope: _escopo.param,
         rankBy: _tipo.param,
       );
+      var foundCurrentUser = false;
       for (final item in items) {
-        if (item.userId == _currentUserId && (item.avatarUrl ?? '').isNotEmpty) {
-          _currentUserAvatarUrl = item.avatarUrl!;
-          await prefs.setString('user_avatar_url', _currentUserAvatarUrl);
+        if (item.userId == _currentUserId) {
+          foundCurrentUser = true;
+          final avatarUrl = item.avatarUrl ?? '';
+          _currentUserAvatarUrl = avatarUrl;
+          if (avatarUrl.isNotEmpty) {
+            await prefs.setString('user_avatar_url', avatarUrl);
+          } else {
+            await prefs.remove('user_avatar_url');
+          }
           break;
         }
+      }
+      if (!foundCurrentUser) {
+        _currentUserAvatarUrl = prefs.getString('user_avatar_url') ?? '';
       }
       if (!mounted) return;
       setState(() {

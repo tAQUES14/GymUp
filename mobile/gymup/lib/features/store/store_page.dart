@@ -68,9 +68,11 @@ class _StorePageState extends State<StorePage> {
       if (!mounted) return;
       final user = results[1] as Map<String, dynamic>;
       final prefs = await SharedPreferences.getInstance();
-      final avatarUrl = user['avatar_url'] as String? ?? prefs.getString('user_avatar_url') ?? '';
+      final avatarUrl = user['avatar_url'] as String? ?? '';
       if (avatarUrl.isNotEmpty) {
         await prefs.setString('user_avatar_url', avatarUrl);
+      } else {
+        await prefs.remove('user_avatar_url');
       }
       final userName = user['name'] as String? ?? prefs.getString('user_name') ?? _userName;
       setState(() {

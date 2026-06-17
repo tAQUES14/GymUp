@@ -119,6 +119,28 @@ class ProfileController extends Controller
         ]);
     }
 
+    public function deleteAvatar(Request $request)
+    {
+        if (! Schema::hasColumn('users', 'avatar_url')) {
+            return response()->json([
+                'message' => 'A coluna avatar_url ainda nao existe na tabela users. Execute as migrations.',
+            ], 409);
+        }
+
+        $user = $request->user();
+
+        if ($user->avatar_url) {
+            $this->images->delete($user->avatar_url);
+        }
+
+        $user->update(['avatar_url' => null]);
+
+        return response()->json([
+            'message'    => 'Foto removida com sucesso.',
+            'avatar_url' => null,
+        ]);
+    }
+
     private function avatarUrl(?string $value): ?string
     {
         if (! $value) {
