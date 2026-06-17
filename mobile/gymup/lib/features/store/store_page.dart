@@ -504,7 +504,7 @@ class _StorePageState extends State<StorePage> {
             crossAxisCount: 2,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: 0.74,
+            childAspectRatio: 0.68,
           ),
           itemBuilder: (context, index) {
             return _RewardTile(
@@ -514,6 +514,7 @@ class _StorePageState extends State<StorePage> {
             );
           },
         ),
+        const SizedBox(height: 112),
       ],
     );
   }
@@ -537,6 +538,7 @@ class _StorePageState extends State<StorePage> {
     return SizedBox(
       height: 34,
       child: ListView.separated(
+        padding: const EdgeInsets.only(right: 20),
         scrollDirection: Axis.horizontal,
         itemCount: items.length,
         separatorBuilder: (_, _) => const SizedBox(width: 8),
@@ -848,11 +850,11 @@ class _RewardTile extends StatelessWidget {
               _RewardArt(
                 reward: reward,
                 style: style,
-                height: 100,
+                height: 94,
                 iconSize: 38,
                 boxSize: 54,
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               _CategoryPill(style: style),
               const SizedBox(height: 6),
               Text(
@@ -861,7 +863,7 @@ class _RewardTile extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: _pjs(size: 14, weight: FontWeight.w800, color: _kInk, height: 1.18, letterSpacing: -0.25),
               ),
-              const SizedBox(height: 14),
+              const Spacer(),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [

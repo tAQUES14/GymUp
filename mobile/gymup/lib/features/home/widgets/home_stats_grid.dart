@@ -62,7 +62,7 @@ class HomeStatsGrid extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 10,
       mainAxisSpacing: 10,
-      childAspectRatio: 1.5315,
+      childAspectRatio: 1.42,
       children: items.map((item) => _StatCard(item: item)).toList(),
     );
   }
@@ -102,7 +102,7 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -143,6 +143,7 @@ class _StatCard extends StatelessWidget {
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               SizedBox(
                 width: 142,
@@ -155,11 +156,11 @@ class _StatCard extends StatelessWidget {
                     weight: FontWeight.w700,
                     color: AppColors.ink,
                     letterSpacing: -0.5,
-                    height: 1,
+                    height: 0.96,
                   ),
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               SizedBox(
                 width: 142,
                 child: Text(
