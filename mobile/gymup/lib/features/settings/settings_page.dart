@@ -230,6 +230,8 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<Uint8List?> _showAvatarCropModal(Uint8List bytes) async {
+    final imageAspect = await _imageAspectRatio(bytes);
+    if (!mounted) return null;
     final cropKey = GlobalKey();
     final result = await showGeneralDialog<Uint8List>(
       context: context,
@@ -260,6 +262,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
             final width = MediaQuery.sizeOf(ctx).width;
             final cropSize = (width - 48).clamp(280.0, 360.0);
+            final imageWidth = imageAspect >= 1 ? cropSize * imageAspect : cropSize;
+            final imageHeight = imageAspect >= 1 ? cropSize : cropSize / imageAspect;
 
             return Material(
               color: const Color(0xFF0E1116),
@@ -317,17 +321,20 @@ class _SettingsPageState extends State<SettingsPage> {
                                   width: cropSize,
                                   height: cropSize,
                                   child: InteractiveViewer(
+                                    constrained: false,
                                     minScale: 1,
                                     maxScale: 6,
                                     boundaryMargin: const EdgeInsets.all(220),
-                                    child: Image.memory(
-                                      bytes,
-                                      width: cropSize,
-                                      height: cropSize,
-                                      fit: BoxFit.contain,
-                                      cacheWidth: 1200,
-                                      cacheHeight: 1200,
-                                      filterQuality: FilterQuality.medium,
+                                    child: SizedBox(
+                                      width: imageWidth,
+                                      height: imageHeight,
+                                      child: Image.memory(
+                                        bytes,
+                                        fit: BoxFit.cover,
+                                        cacheWidth: 1200,
+                                        cacheHeight: 1200,
+                                        filterQuality: FilterQuality.medium,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -390,6 +397,21 @@ class _SettingsPageState extends State<SettingsPage> {
       },
     );
     return result;
+  }
+
+  Future<double> _imageAspectRatio(Uint8List bytes) async {
+    try {
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      final aspect = image.width / image.height;
+      image.dispose();
+      codec.dispose();
+      if (aspect.isFinite && aspect > 0) return aspect;
+    } catch (_) {
+      // Fallback quadrado caso o decoder do sistema falhe.
+    }
+    return 1;
   }
 
   String? _emptyToNull(TextEditingController ctrl) {
