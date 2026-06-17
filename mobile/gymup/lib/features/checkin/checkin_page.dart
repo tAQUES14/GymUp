@@ -6,7 +6,6 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
-import '../../core/widgets/gym_feedback.dart';
 import '../workouts/models/workout_model.dart';
 import '../workouts/models/workout_plan_model.dart';
 import '../workouts/workout_api_service.dart';
@@ -21,10 +20,7 @@ class CheckinPageArgs {
   final WorkoutModel? workout;
   final bool isRestDayWorkout;
 
-  const CheckinPageArgs({
-    this.workout,
-    this.isRestDayWorkout = false,
-  });
+  const CheckinPageArgs({this.workout, this.isRestDayWorkout = false});
 }
 
 class CheckinPage extends StatefulWidget {
@@ -85,7 +81,9 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
   Future<void> _startScanner() async {
     if (_disposed || _scannerActive || _state != _CheckinState.scanning) return;
     _scannerOp = _scannerOp.then((_) async {
-      if (_disposed || _scannerRunning || _state != _CheckinState.scanning) return;
+      if (_disposed || _scannerRunning || _state != _CheckinState.scanning) {
+        return;
+      }
       if (mounted) {
         setState(() => _scannerActive = true);
       }
@@ -183,29 +181,8 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
     if (!mounted) return;
     if (status.isGranted) {
       unawaited(_startScanner());
-      return;
-    }
-    if (status.isPermanentlyDenied) {
-      _showPermissionDialog(permanent: true);
     } else {
-      _showPermissionDialog(permanent: false);
-    }
-  }
-
-  Future<void> _showPermissionDialog({required bool permanent}) async {
-    final confirmed = await showGymConfirmDialog(
-      context,
-      title: 'Permissao de camera',
-      message: permanent
-          ? 'A permissao de camera foi negada permanentemente. Acesse as configuracoes do app para habilita-la.'
-          : 'O GymUp precisa da camera para escanear o QR Code da academia.',
-      cancelLabel: 'Cancelar',
-      confirmLabel: permanent ? 'Abrir ajustes' : 'OK',
-      icon: Icons.qr_code_scanner_rounded,
-      color: AppColors.blue,
-    );
-    if (confirmed && permanent) {
-      await openAppSettings();
+      _forceScannerInactive();
     }
   }
 
@@ -341,7 +318,8 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
     } catch (_) {
       _showInvalidState(
         title: 'Nao foi possivel validar',
-        message: 'Tivemos um problema ao recuperar seu treino.\nTente novamente.',
+        message:
+            'Tivemos um problema ao recuperar seu treino.\nTente novamente.',
       );
     }
   }
@@ -358,7 +336,10 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
     unawaited(_stopScanner());
   }
 
-  WorkoutModel? _resolveWorkout(TodayWorkoutPlan? plan, List<WorkoutModel> workouts) {
+  WorkoutModel? _resolveWorkout(
+    TodayWorkoutPlan? plan,
+    List<WorkoutModel> workouts,
+  ) {
     if (plan != null && !plan.isRestDay && plan.today.exercises.isNotEmpty) {
       return workoutFromPlan(plan);
     }
@@ -586,7 +567,11 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.keyboard_rounded, color: Colors.white, size: 15),
+                const Icon(
+                  Icons.keyboard_rounded,
+                  color: Colors.white,
+                  size: 15,
+                ),
                 const SizedBox(width: 7),
                 Text(
                   'Nao consegue escanear? Inserir codigo',
@@ -700,8 +685,10 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
                       ),
                       filled: true,
                       fillColor: const Color(0xFFF7F9FC),
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 15, vertical: 16),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 15,
+                        vertical: 16,
+                      ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
                         borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
@@ -820,7 +807,9 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(26),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.30)),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.30),
+                    ),
                   ),
                   child: Container(
                     decoration: BoxDecoration(
@@ -836,7 +825,9 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  _isRestDayFlow ? 'Treino livre liberado!' : 'Presença confirmada!',
+                  _isRestDayFlow
+                      ? 'Treino livre liberado!'
+                      : 'Presença confirmada!',
                   textAlign: TextAlign.center,
                   style: AppText.pjs(
                     size: 24,
@@ -985,11 +976,17 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
                     color: Color(0xFF5BA300),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.check_rounded, color: Colors.white, size: 12),
+                  child: const Icon(
+                    Icons.check_rounded,
+                    color: Colors.white,
+                    size: 12,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  _isRestDayFlow ? 'Opcional e validado' : 'Pronto para iniciar',
+                  _isRestDayFlow
+                      ? 'Opcional e validado'
+                      : 'Pronto para iniciar',
                   style: AppText.pjs(
                     size: 12.5,
                     weight: FontWeight.w700,
@@ -1023,7 +1020,11 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
               color: Colors.white,
               borderRadius: BorderRadius.circular(9),
             ),
-            child: const Icon(Icons.info_outline_rounded, color: AppColors.blue, size: 16),
+            child: const Icon(
+              Icons.info_outline_rounded,
+              color: AppColors.blue,
+              size: 16,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1040,7 +1041,9 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
                     style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                   TextSpan(
-                    text: _isRestDayFlow ? ', mas nao aumenta sua ' : ' e manter sua ',
+                    text: _isRestDayFlow
+                        ? ', mas nao aumenta sua '
+                        : ' e manter sua ',
                   ),
                   TextSpan(
                     text: 'sequencia',
@@ -1084,7 +1087,9 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
           children: [
             if (workout != null)
               _primaryButton(
-                label: _isRestDayFlow ? 'Iniciar treino livre' : 'Iniciar treino',
+                label: _isRestDayFlow
+                    ? 'Iniciar treino livre'
+                    : 'Iniciar treino',
                 icon: Icons.play_arrow_rounded,
                 onTap: () => Navigator.pushReplacementNamed(
                   context,
@@ -1139,10 +1144,7 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
                 ],
               ),
             ),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: _errorBottomDock(),
-            ),
+            Align(alignment: Alignment.bottomCenter, child: _errorBottomDock()),
           ],
         ),
       ),
@@ -1237,7 +1239,9 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
               decoration: BoxDecoration(
                 border: i == reasons.length - 1
                     ? null
-                    : const Border(bottom: BorderSide(color: Color(0x0C0E1116))),
+                    : const Border(
+                        bottom: BorderSide(color: Color(0x0C0E1116)),
+                      ),
               ),
               child: Row(
                 children: [
@@ -1305,7 +1309,11 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.keyboard_rounded, color: AppColors.blue, size: 14),
+                  const Icon(
+                    Icons.keyboard_rounded,
+                    color: AppColors.blue,
+                    size: 14,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     'Inserir codigo manualmente',
@@ -1480,22 +1488,28 @@ class _CheckinScannerOverlayPainter extends CustomPainter {
       Rect.fromLTWH(0, rect.bottom, size.width, size.height - rect.bottom),
       overlayPaint,
     );
-    canvas.drawRect(Rect.fromLTWH(0, rect.top, rect.left, rect.height), overlayPaint);
+    canvas.drawRect(
+      Rect.fromLTWH(0, rect.top, rect.left, rect.height),
+      overlayPaint,
+    );
     canvas.drawRect(
       Rect.fromLTWH(rect.right, rect.top, rect.left, rect.height),
       overlayPaint,
     );
 
     final linePaint = Paint()
-      ..shader = const LinearGradient(
-        colors: [
-          Color(0x002F6FED),
-          Color(0xFF2F6FED),
-          Color(0xFF4A8CFF),
-          Color(0xFF2F6FED),
-          Color(0x002F6FED),
-        ],
-      ).createShader(Rect.fromLTWH(rect.left + 18, rect.center.dy, rect.width - 36, 2))
+      ..shader =
+          const LinearGradient(
+            colors: [
+              Color(0x002F6FED),
+              Color(0xFF2F6FED),
+              Color(0xFF4A8CFF),
+              Color(0xFF2F6FED),
+              Color(0x002F6FED),
+            ],
+          ).createShader(
+            Rect.fromLTWH(rect.left + 18, rect.center.dy, rect.width - 36, 2),
+          )
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
     canvas.drawLine(
@@ -1515,10 +1529,26 @@ class _CheckinScannerOverlayPainter extends CustomPainter {
       canvas.drawLine(start, vEnd, cornerPaint);
     }
 
-    corner(rect.topLeft, rect.topLeft + const Offset(len, 0), rect.topLeft + const Offset(0, len));
-    corner(rect.topRight, rect.topRight - const Offset(len, 0), rect.topRight + const Offset(0, len));
-    corner(rect.bottomLeft, rect.bottomLeft + const Offset(len, 0), rect.bottomLeft - const Offset(0, len));
-    corner(rect.bottomRight, rect.bottomRight - const Offset(len, 0), rect.bottomRight - const Offset(0, len));
+    corner(
+      rect.topLeft,
+      rect.topLeft + const Offset(len, 0),
+      rect.topLeft + const Offset(0, len),
+    );
+    corner(
+      rect.topRight,
+      rect.topRight - const Offset(len, 0),
+      rect.topRight + const Offset(0, len),
+    );
+    corner(
+      rect.bottomLeft,
+      rect.bottomLeft + const Offset(len, 0),
+      rect.bottomLeft - const Offset(0, len),
+    );
+    corner(
+      rect.bottomRight,
+      rect.bottomRight - const Offset(len, 0),
+      rect.bottomRight - const Offset(0, len),
+    );
   }
 
   @override

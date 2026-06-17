@@ -136,23 +136,39 @@ Future<bool> showGymConfirmDialog(
                 children: [
                   Expanded(
                     child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
                       onPressed: () => Navigator.pop(ctx, false),
-                      child: Text(cancelLabel),
+                      child: Text(
+                        cancelLabel,
+                        textAlign: TextAlign.center,
+                        style: AppText.pjs(size: 13, weight: FontWeight.w700),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            destructive ? AppColors.error : color,
+                        backgroundColor: destructive ? AppColors.error : color,
                         foregroundColor: Colors.white,
+                        minimumSize: const Size(0, 48),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(100),
+                          borderRadius: BorderRadius.circular(14),
                         ),
                       ),
                       onPressed: () => Navigator.pop(ctx, true),
-                      child: Text(confirmLabel),
+                      child: Text(
+                        confirmLabel,
+                        textAlign: TextAlign.center,
+                        style: AppText.pjs(size: 13, weight: FontWeight.w800),
+                      ),
                     ),
                   ),
                 ],

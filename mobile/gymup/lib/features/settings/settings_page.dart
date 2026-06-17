@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -79,7 +80,9 @@ class _SettingsPageState extends State<SettingsPage> {
       final prefs = await SharedPreferences.getInstance();
       final results = await Future.wait<http.Response>([
         _api.get('/profile'),
-        _api.get('/body-weight?limit=1').catchError((_) => http.Response('[]', 200)),
+        _api
+            .get('/body-weight?limit=1')
+            .catchError((_) => http.Response('[]', 200)),
         _api.get('/goals/current').catchError((_) => http.Response('{}', 404)),
       ]);
       final response = results[0];
@@ -102,8 +105,14 @@ class _SettingsPageState extends State<SettingsPage> {
       final profileHeight = _toDouble(data['height']);
       _nameCtrl.text = data['name'] as String? ?? '';
       _phoneCtrl.text = data['phone'] as String? ?? '';
-      _weightCtrl.text = _formatNumber(profileWeight ?? latestWeight ?? goalData.weight, decimals: 1);
-      _heightCtrl.text = _formatNumber(profileHeight ?? goalData.height, decimals: 0);
+      _weightCtrl.text = _formatNumber(
+        profileWeight ?? latestWeight ?? goalData.weight,
+        decimals: 1,
+      );
+      _heightCtrl.text = _formatNumber(
+        profileHeight ?? goalData.height,
+        decimals: 0,
+      );
       if (avatarUrl.isNotEmpty) {
         await prefs.setString('user_avatar_url', avatarUrl);
       } else {
@@ -134,8 +143,12 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _saving = true);
 
     try {
-      final weight = double.tryParse(_weightCtrl.text.trim().replaceAll(',', '.'));
-      final height = double.tryParse(_heightCtrl.text.trim().replaceAll(',', '.'));
+      final weight = double.tryParse(
+        _weightCtrl.text.trim().replaceAll(',', '.'),
+      );
+      final height = double.tryParse(
+        _heightCtrl.text.trim().replaceAll(',', '.'),
+      );
       final response = await _api.put('/profile', {
         'name': _nameCtrl.text.trim(),
         'phone': _emptyToNull(_phoneCtrl),
@@ -148,7 +161,9 @@ class _SettingsPageState extends State<SettingsPage> {
       }
 
       if (weight != null) {
-        await _api.post('/body-weight', {'weight': weight}).catchError((_) => http.Response('{}', 500));
+        await _api
+            .post('/body-weight', {'weight': weight})
+            .catchError((_) => http.Response('{}', 500));
       }
 
       final prefs = await SharedPreferences.getInstance();
@@ -278,15 +293,54 @@ class _SettingsPageState extends State<SettingsPage> {
         var saving = false;
         return StatefulBuilder(
           builder: (ctx, setSheetState) {
+            final width = MediaQuery.sizeOf(ctx).width;
+            final height = MediaQuery.sizeOf(ctx).height;
+            final cropSize = (width - 80).clamp(260.0, 340.0);
+            final editorWidth = width;
+            final editorHeight = (height * 0.56).clamp(400.0, 590.0);
+            final imageWidth = math.max(editorWidth, cropSize * imageAspect);
+            final imageHeight = imageWidth / imageAspect;
+
             Future<void> capture() async {
               if (saving) return;
               setSheetState(() => saving = true);
               await Future<void>.delayed(const Duration(milliseconds: 60));
               try {
                 final boundary =
-                    cropKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-                final image = await boundary?.toImage(pixelRatio: 1.25);
-                final data = await image?.toByteData(format: ui.ImageByteFormat.png);
+                    cropKey.currentContext?.findRenderObject()
+                        as RenderRepaintBoundary?;
+                final source = await boundary?.toImage(pixelRatio: 1.5);
+                if (source == null) throw StateError('Imagem indisponivel');
+                final cropPixels = (cropSize * 1.5).round();
+                final left = (source.width - cropPixels) / 2;
+                final top = (source.height - cropPixels) / 2;
+                final recorder = ui.PictureRecorder();
+                final canvas = Canvas(recorder);
+                canvas.drawImageRect(
+                  source,
+                  Rect.fromLTWH(
+                    left,
+                    top,
+                    cropPixels.toDouble(),
+                    cropPixels.toDouble(),
+                  ),
+                  Rect.fromLTWH(
+                    0,
+                    0,
+                    cropPixels.toDouble(),
+                    cropPixels.toDouble(),
+                  ),
+                  Paint()..filterQuality = FilterQuality.high,
+                );
+                final cropped = await recorder.endRecording().toImage(
+                  cropPixels,
+                  cropPixels,
+                );
+                final data = await cropped.toByteData(
+                  format: ui.ImageByteFormat.png,
+                );
+                source.dispose();
+                cropped.dispose();
                 if (ctx.mounted) {
                   Navigator.pop(ctx, data?.buffer.asUint8List());
                 }
@@ -295,134 +349,131 @@ class _SettingsPageState extends State<SettingsPage> {
               }
             }
 
-            final width = MediaQuery.sizeOf(ctx).width;
-            final cropSize = (width - 48).clamp(280.0, 360.0);
-            final imageWidth = imageAspect >= 1 ? cropSize * imageAspect : cropSize;
-            final imageHeight = imageAspect >= 1 ? cropSize : cropSize / imageAspect;
-
             return Material(
               color: const Color(0xFF0E1116),
               child: SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
                   child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        _CircleButton(
-                          icon: Icons.close_rounded,
-                          onTap: saving ? () {} : () => Navigator.pop(ctx),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Text(
-                            'Recortar foto',
-                            textAlign: TextAlign.center,
-                            style: _pjs(
-                              size: 18,
-                              weight: FontWeight.w800,
-                              color: Colors.white,
-                              letterSpacing: -0.3,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          _CircleButton(
+                            icon: Icons.close_rounded,
+                            onTap: saving ? () {} : () => Navigator.pop(ctx),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Text(
+                              'Recortar foto',
+                              textAlign: TextAlign.center,
+                              style: _pjs(
+                                size: 18,
+                                weight: FontWeight.w800,
+                                color: Colors.white,
+                                letterSpacing: -0.3,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 56),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      'Arraste e aproxime a imagem para enquadrar seu avatar.',
-                      textAlign: TextAlign.center,
-                      style: _pjs(
-                        size: 13,
-                        weight: FontWeight.w500,
-                        color: Colors.white.withValues(alpha: 0.72),
-                        height: 1.45,
+                          const SizedBox(width: 56),
+                        ],
                       ),
-                    ),
-                    const Spacer(),
-                    Center(
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(28),
-                            child: RepaintBoundary(
-                              key: cropKey,
-                              child: ColoredBox(
-                                color: Colors.black,
-                                child: SizedBox(
-                                  width: cropSize,
-                                  height: cropSize,
+                      const SizedBox(height: 18),
+                      Text(
+                        'Arraste e aproxime a imagem para enquadrar seu avatar.',
+                        textAlign: TextAlign.center,
+                        style: _pjs(
+                          size: 13,
+                          weight: FontWeight.w500,
+                          color: Colors.white.withValues(alpha: 0.72),
+                          height: 1.45,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Center(
+                        child: SizedBox(
+                          width: editorWidth,
+                          height: editorHeight,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              RepaintBoundary(
+                                key: cropKey,
+                                child: ColoredBox(
+                                  color: Colors.black,
                                   child: InteractiveViewer(
                                     constrained: false,
+                                    alignment: Alignment.center,
                                     minScale: 1,
                                     maxScale: 6,
-                                    boundaryMargin: const EdgeInsets.all(220),
+                                    boundaryMargin: EdgeInsets.zero,
                                     child: SizedBox(
                                       width: imageWidth,
                                       height: imageHeight,
                                       child: Image.memory(
                                         bytes,
-                                        fit: BoxFit.cover,
-                                        cacheWidth: 1200,
-                                        cacheHeight: 1200,
-                                        filterQuality: FilterQuality.medium,
+                                        fit: BoxFit.fill,
+                                        filterQuality: FilterQuality.high,
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
+                              IgnorePointer(
+                                child: CustomPaint(
+                                  painter: _AvatarCropOverlayPainter(cropSize),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: saving
+                                  ? null
+                                  : () => Navigator.pop(ctx),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 15,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(100),
+                                ),
+                                side: BorderSide(
+                                  color: Colors.white.withValues(alpha: 0.24),
+                                ),
+                              ),
+                              child: const Text('Cancelar'),
                             ),
                           ),
-                          IgnorePointer(
-                            child: Container(
-                              width: cropSize,
-                              height: cropSize,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(28),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.88),
-                                  width: 2,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: saving ? null : capture,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _kBlue,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 15,
                                 ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(100),
+                                ),
+                              ),
+                              child: Text(
+                                saving ? 'Salvando...' : 'Cortar e salvar',
                               ),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    const Spacer(),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: saving ? null : () => Navigator.pop(ctx),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 15),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                              side: BorderSide(color: Colors.white.withValues(alpha: 0.24)),
-                            ),
-                            child: const Text('Cancelar'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: saving ? null : capture,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _kBlue,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 15),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                            ),
-                            child: Text(saving ? 'Salvando...' : 'Cortar e salvar'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                    ],
                   ),
                 ),
               ),
@@ -531,7 +582,12 @@ class _SettingsPageState extends State<SettingsPage> {
                       key: _formKey,
                       child: ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
-                        padding: EdgeInsets.fromLTRB(16, 18, 16, 124 + bottomInset),
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          18,
+                          16,
+                          124 + bottomInset,
+                        ),
                         children: [
                           _Header(onBack: () => Navigator.pop(context)),
                           const SizedBox(height: 14),
@@ -559,7 +615,9 @@ class _SettingsPageState extends State<SettingsPage> {
                                   textInputAction: TextInputAction.next,
                                   onChanged: (_) => setState(() {}),
                                   validator: (value) {
-                                    if ((value ?? '').trim().isEmpty) return 'Informe seu nome.';
+                                    if ((value ?? '').trim().isEmpty) {
+                                      return 'Informe seu nome.';
+                                    }
                                     return null;
                                   },
                                 ),
@@ -571,7 +629,9 @@ class _SettingsPageState extends State<SettingsPage> {
                                   keyboardType: TextInputType.phone,
                                   textInputAction: TextInputAction.next,
                                   inputFormatters: [
-                                    FilteringTextInputFormatter.allow(RegExp(r'[0-9()+\-\s]')),
+                                    FilteringTextInputFormatter.allow(
+                                      RegExp(r'[0-9()+\-\s]'),
+                                    ),
                                   ],
                                 ),
                               ],
@@ -590,10 +650,15 @@ class _SettingsPageState extends State<SettingsPage> {
                                         label: 'Peso',
                                         suffix: 'kg',
                                         icon: Icons.monitor_weight_outlined,
-                                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                        keyboardType:
+                                            const TextInputType.numberWithOptions(
+                                              decimal: true,
+                                            ),
                                         textInputAction: TextInputAction.next,
                                         inputFormatters: [
-                                          FilteringTextInputFormatter.allow(RegExp(r'^\d{0,3}([,.]\d{0,1})?')),
+                                          FilteringTextInputFormatter.allow(
+                                            RegExp(r'^\d{0,3}([,.]\d{0,1})?'),
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -607,7 +672,8 @@ class _SettingsPageState extends State<SettingsPage> {
                                         keyboardType: TextInputType.number,
                                         textInputAction: TextInputAction.done,
                                         inputFormatters: [
-                                          FilteringTextInputFormatter.digitsOnly,
+                                          FilteringTextInputFormatter
+                                              .digitsOnly,
                                         ],
                                       ),
                                     ),
@@ -622,24 +688,30 @@ class _SettingsPageState extends State<SettingsPage> {
                               children: [
                                 _SwitchRow(
                                   title: 'Notificações',
-                                  subtitle: 'Avisos de desafios, recompensas e novidades.',
+                                  subtitle:
+                                      'Avisos de desafios, recompensas e novidades.',
                                   icon: Icons.notifications_none_rounded,
                                   value: _notifications,
-                                  onChanged: (value) => setState(() => _notifications = value),
+                                  onChanged: (value) =>
+                                      setState(() => _notifications = value),
                                 ),
                                 _SwitchRow(
                                   title: 'Lembrete de treino',
-                                  subtitle: 'Ajuda a manter sua consistência semanal.',
+                                  subtitle:
+                                      'Ajuda a manter sua consistência semanal.',
                                   icon: Icons.alarm_rounded,
                                   value: _workoutReminder,
-                                  onChanged: (value) => setState(() => _workoutReminder = value),
+                                  onChanged: (value) =>
+                                      setState(() => _workoutReminder = value),
                                 ),
                                 _SwitchRow(
                                   title: 'Aparecer no ranking',
-                                  subtitle: 'Controle local para sua preferência de privacidade.',
+                                  subtitle:
+                                      'Controle local para sua preferência de privacidade.',
                                   icon: Icons.emoji_events_outlined,
                                   value: _rankingVisible,
-                                  onChanged: (value) => setState(() => _rankingVisible = value),
+                                  onChanged: (value) =>
+                                      setState(() => _rankingVisible = value),
                                   showDivider: false,
                                 ),
                               ],
@@ -680,7 +752,12 @@ class _Header extends StatelessWidget {
           child: Text(
             'Configurações',
             textAlign: TextAlign.center,
-            style: _pjs(size: 18, weight: FontWeight.w800, color: _kInk, letterSpacing: -0.3),
+            style: _pjs(
+              size: 18,
+              weight: FontWeight.w800,
+              color: _kInk,
+              letterSpacing: -0.3,
+            ),
           ),
         ),
         const SizedBox(width: 42),
@@ -747,7 +824,9 @@ class _AvatarHero extends StatelessWidget {
                           width: 70,
                           height: 70,
                           decoration: BoxDecoration(
-                            color: hasAvatar ? Colors.transparent : Colors.white,
+                            color: hasAvatar
+                                ? Colors.transparent
+                                : Colors.white,
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
@@ -766,7 +845,10 @@ class _AvatarHero extends StatelessWidget {
                                   cacheWidth: 180,
                                   cacheHeight: 180,
                                   filterQuality: FilterQuality.medium,
-                                  errorBuilder: (_, _, _) => _Initials(initials: initials, color: _kBlue),
+                                  errorBuilder: (_, _, _) => _Initials(
+                                    initials: initials,
+                                    color: _kBlue,
+                                  ),
                                 )
                               : _Initials(initials: initials, color: _kBlue),
                         ),
@@ -779,7 +861,10 @@ class _AvatarHero extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: _kLime,
                               shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.95), width: 2.5),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.95),
+                                width: 2.5,
+                              ),
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.black.withValues(alpha: 0.20),
@@ -791,9 +876,16 @@ class _AvatarHero extends StatelessWidget {
                             child: uploading
                                 ? const Padding(
                                     padding: EdgeInsets.all(6),
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: _kLimeInk),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: _kLimeInk,
+                                    ),
                                   )
-                                : const Icon(Icons.photo_camera_outlined, size: 13, color: _kLimeInk),
+                                : const Icon(
+                                    Icons.photo_camera_outlined,
+                                    size: 13,
+                                    color: _kLimeInk,
+                                  ),
                           ),
                         ),
                       ],
@@ -808,14 +900,24 @@ class _AvatarHero extends StatelessWidget {
                           name.trim().isEmpty ? 'Seu perfil' : name.trim(),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: _pjs(size: 21, weight: FontWeight.w800, color: Colors.white, height: 1.1, letterSpacing: -0.4),
+                          style: _pjs(
+                            size: 21,
+                            weight: FontWeight.w800,
+                            color: Colors.white,
+                            height: 1.1,
+                            letterSpacing: -0.4,
+                          ),
                         ),
                         const SizedBox(height: 5),
                         Text(
                           email,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: _pjs(size: 13.5, weight: FontWeight.w500, color: Colors.white.withValues(alpha: 0.82)),
+                          style: _pjs(
+                            size: 13.5,
+                            weight: FontWeight.w500,
+                            color: Colors.white.withValues(alpha: 0.82),
+                          ),
                         ),
                         const SizedBox(height: 12),
                         Wrap(
@@ -824,7 +926,12 @@ class _AvatarHero extends StatelessWidget {
                           children: [
                             if (gymName.isNotEmpty)
                               Container(
-                                padding: const EdgeInsets.fromLTRB(10, 7, 13, 7),
+                                padding: const EdgeInsets.fromLTRB(
+                                  10,
+                                  7,
+                                  13,
+                                  7,
+                                ),
                                 decoration: BoxDecoration(
                                   color: Colors.white.withValues(alpha: 0.16),
                                   borderRadius: BorderRadius.circular(100),
@@ -832,13 +939,22 @@ class _AvatarHero extends StatelessWidget {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(Icons.fitness_center_rounded, size: 15, color: Colors.white),
+                                    const Icon(
+                                      Icons.fitness_center_rounded,
+                                      size: 15,
+                                      color: Colors.white,
+                                    ),
                                     const SizedBox(width: 7),
                                     Text(
                                       gymName,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: _pjs(size: 13, weight: FontWeight.w700, color: Colors.white, letterSpacing: -0.1),
+                                      style: _pjs(
+                                        size: 13,
+                                        weight: FontWeight.w700,
+                                        color: Colors.white,
+                                        letterSpacing: -0.1,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -846,24 +962,37 @@ class _AvatarHero extends StatelessWidget {
                             GestureDetector(
                               onTap: uploading ? null : onPickAvatar,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 8,
+                                ),
                                 decoration: BoxDecoration(
                                   color: Colors.white.withValues(alpha: 0.16),
                                   borderRadius: BorderRadius.circular(100),
-                                  border: Border.all(color: Colors.white.withValues(alpha: 0.30)),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.30),
+                                  ),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(
-                                      uploading ? Icons.hourglass_top_rounded : Icons.image_outlined,
+                                      uploading
+                                          ? Icons.hourglass_top_rounded
+                                          : Icons.image_outlined,
                                       size: 15,
                                       color: Colors.white,
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
-                                      uploading ? 'Enviando foto' : 'Alterar foto',
-                                      style: _pjs(size: 13, weight: FontWeight.w700, color: Colors.white),
+                                      uploading
+                                          ? 'Enviando foto'
+                                          : 'Alterar foto',
+                                      style: _pjs(
+                                        size: 13,
+                                        weight: FontWeight.w700,
+                                        color: Colors.white,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -873,20 +1002,35 @@ class _AvatarHero extends StatelessWidget {
                               GestureDetector(
                                 onTap: uploading ? null : onRemoveAvatar,
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 8,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: Colors.white.withValues(alpha: 0.12),
                                     borderRadius: BorderRadius.circular(100),
-                                    border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+                                    border: Border.all(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.22,
+                                      ),
+                                    ),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Icon(Icons.delete_outline_rounded, size: 15, color: Colors.white),
+                                      const Icon(
+                                        Icons.delete_outline_rounded,
+                                        size: 15,
+                                        color: Colors.white,
+                                      ),
                                       const SizedBox(width: 6),
                                       Text(
                                         'Remover foto',
-                                        style: _pjs(size: 13, weight: FontWeight.w700, color: Colors.white),
+                                        style: _pjs(
+                                          size: 13,
+                                          weight: FontWeight.w700,
+                                          color: Colors.white,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -918,7 +1062,12 @@ class _Initials extends StatelessWidget {
     return Center(
       child: Text(
         initials,
-        style: _pjs(size: 24, weight: FontWeight.w800, color: color, letterSpacing: -0.4),
+        style: _pjs(
+          size: 24,
+          weight: FontWeight.w800,
+          color: color,
+          letterSpacing: -0.4,
+        ),
       ),
     );
   }
@@ -1000,7 +1149,12 @@ class _SettingsField extends StatelessWidget {
               children: [
                 Text(
                   label.toUpperCase(),
-                  style: _pjs(size: 11.5, weight: FontWeight.w700, color: _kSoft, letterSpacing: 0.5),
+                  style: _pjs(
+                    size: 11.5,
+                    weight: FontWeight.w700,
+                    color: _kSoft,
+                    letterSpacing: 0.5,
+                  ),
                 ),
                 const SizedBox(height: 3),
                 TextFormField(
@@ -1010,7 +1164,12 @@ class _SettingsField extends StatelessWidget {
                   inputFormatters: inputFormatters,
                   onChanged: onChanged,
                   validator: validator,
-                  style: _pjs(size: 16.5, weight: FontWeight.w600, color: _kInk, letterSpacing: -0.1),
+                  style: _pjs(
+                    size: 16.5,
+                    weight: FontWeight.w600,
+                    color: _kInk,
+                    letterSpacing: -0.1,
+                  ),
                   decoration: const InputDecoration(
                     isDense: true,
                     border: InputBorder.none,
@@ -1062,7 +1221,12 @@ class _MetricField extends StatelessWidget {
               const SizedBox(width: 9),
               Text(
                 label.toUpperCase(),
-                style: _pjs(size: 11.5, weight: FontWeight.w700, color: _kSoft, letterSpacing: 0.6),
+                style: _pjs(
+                  size: 11.5,
+                  weight: FontWeight.w700,
+                  color: _kSoft,
+                  letterSpacing: 0.6,
+                ),
               ),
             ],
           ),
@@ -1076,7 +1240,12 @@ class _MetricField extends StatelessWidget {
                   keyboardType: keyboardType,
                   textInputAction: textInputAction,
                   inputFormatters: inputFormatters,
-                  style: _pjs(size: 27, weight: FontWeight.w700, color: _kInk, letterSpacing: -0.6),
+                  style: _pjs(
+                    size: 27,
+                    weight: FontWeight.w700,
+                    color: _kInk,
+                    letterSpacing: -0.6,
+                  ),
                   decoration: const InputDecoration(
                     isDense: true,
                     border: InputBorder.none,
@@ -1088,7 +1257,10 @@ class _MetricField extends StatelessWidget {
               ),
               Padding(
                 padding: const EdgeInsets.only(bottom: 5),
-                child: Text(suffix, style: _pjs(size: 14, weight: FontWeight.w600, color: _kSoft)),
+                child: Text(
+                  suffix,
+                  style: _pjs(size: 14, weight: FontWeight.w600, color: _kSoft),
+                ),
               ),
             ],
           ),
@@ -1156,9 +1328,25 @@ class _SwitchRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: _pjs(size: 14.5, weight: FontWeight.w800, color: _kInk, letterSpacing: -0.2)),
+                    Text(
+                      title,
+                      style: _pjs(
+                        size: 14.5,
+                        weight: FontWeight.w800,
+                        color: _kInk,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
                     const SizedBox(height: 3),
-                    Text(subtitle, style: _pjs(size: 12.5, weight: FontWeight.w500, color: _kSoft, height: 1.35)),
+                    Text(
+                      subtitle,
+                      style: _pjs(
+                        size: 12.5,
+                        weight: FontWeight.w500,
+                        color: _kSoft,
+                        height: 1.35,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1238,11 +1426,19 @@ class _BottomBar extends StatelessWidget {
                   ? const SizedBox(
                       width: 22,
                       height: 22,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.4),
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.4,
+                      ),
                     )
                   : Text(
                       'Salvar configurações',
-                      style: _pjs(size: 16.5, weight: FontWeight.w800, color: Colors.white, letterSpacing: -0.2),
+                      style: _pjs(
+                        size: 16.5,
+                        weight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: -0.2,
+                      ),
                     ),
             ),
           ),
@@ -1263,7 +1459,12 @@ class _SectionTitle extends StatelessWidget {
       padding: const EdgeInsets.only(left: 6, bottom: 1),
       child: Text(
         title.toUpperCase(),
-        style: _pjs(size: 13, weight: FontWeight.w700, color: const Color(0xFF6B7588), letterSpacing: 0.8),
+        style: _pjs(
+          size: 13,
+          weight: FontWeight.w700,
+          color: const Color(0xFF6B7588),
+          letterSpacing: 0.8,
+        ),
       ),
     );
   }
@@ -1285,25 +1486,84 @@ class _StateCard extends StatelessWidget {
           Container(
             width: 58,
             height: 58,
-            decoration: BoxDecoration(color: _kRed.withValues(alpha: 0.10), shape: BoxShape.circle),
+            decoration: BoxDecoration(
+              color: _kRed.withValues(alpha: 0.10),
+              shape: BoxShape.circle,
+            ),
             child: const Icon(Icons.wifi_off_rounded, color: _kRed, size: 28),
           ),
           const SizedBox(height: 14),
-          Text('Erro ao carregar', style: _pjs(size: 17, weight: FontWeight.w800, color: _kInk)),
+          Text(
+            'Erro ao carregar',
+            style: _pjs(size: 17, weight: FontWeight.w800, color: _kInk),
+          ),
           const SizedBox(height: 8),
-          Text(error, textAlign: TextAlign.center, style: _pjs(size: 12.5, weight: FontWeight.w500, color: _kMuted, height: 1.4)),
+          Text(
+            error,
+            textAlign: TextAlign.center,
+            style: _pjs(
+              size: 12.5,
+              weight: FontWeight.w500,
+              color: _kMuted,
+              height: 1.4,
+            ),
+          ),
           const SizedBox(height: 16),
           GestureDetector(
             onTap: onRetry,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(color: _kBlue, borderRadius: BorderRadius.circular(14)),
-              child: Text('Tentar novamente', style: _pjs(size: 13, weight: FontWeight.w800, color: Colors.white)),
+              decoration: BoxDecoration(
+                color: _kBlue,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                'Tentar novamente',
+                style: _pjs(
+                  size: 13,
+                  weight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+class _AvatarCropOverlayPainter extends CustomPainter {
+  final double cropSize;
+
+  const _AvatarCropOverlayPainter(this.cropSize);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = cropSize / 2;
+    final overlay = Path()
+      ..fillType = PathFillType.evenOdd
+      ..addRect(Offset.zero & size)
+      ..addOval(Rect.fromCircle(center: center, radius: radius));
+
+    canvas.drawPath(
+      overlay,
+      Paint()..color = Colors.black.withValues(alpha: 0.58),
+    );
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = Colors.white.withValues(alpha: 0.92),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _AvatarCropOverlayPainter oldDelegate) {
+    return oldDelegate.cropSize != cropSize;
   }
 }
 
@@ -1333,10 +1593,15 @@ class _CircleButton extends StatelessWidget {
 }
 
 String _initials(String name) {
-  final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+  final parts = name
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((p) => p.isNotEmpty)
+      .toList();
   if (parts.isEmpty) return '?';
   if (parts.length == 1) return parts.first.characters.first.toUpperCase();
-  return '${parts.first.characters.first}${parts.last.characters.first}'.toUpperCase();
+  return '${parts.first.characters.first}${parts.last.characters.first}'
+      .toUpperCase();
 }
 
 BoxDecoration _whiteDecoration(double radius) {
