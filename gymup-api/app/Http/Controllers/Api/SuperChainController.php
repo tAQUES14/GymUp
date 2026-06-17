@@ -262,6 +262,51 @@ class SuperChainController extends Controller
         ]);
     }
 
+    public function storeGym(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name'     => 'required|string|max:255',
+            'email'    => 'nullable|email|max:255',
+            'phone'    => 'nullable|string|max:50',
+            'address'  => 'nullable|string|max:500',
+            'city'     => 'nullable|string|max:100',
+            'active'   => 'nullable|boolean',
+            'chain_id' => 'nullable|integer|exists:gym_chains,id',
+        ]);
+
+        if (! empty($data['chain_id'])) {
+            $chain = GymChain::findOrFail($data['chain_id']);
+
+            if (($chain->status ?? 'active') === 'closed') {
+                return response()->json([
+                    'message' => 'Reative a rede antes de criar uma academia nela.',
+                ], 422);
+            }
+        }
+
+        $gym = Gym::create([
+            'name'     => $data['name'],
+            'email'    => $data['email'] ?? null,
+            'phone'    => $data['phone'] ?? null,
+            'address'  => $data['address'] ?? null,
+            'city'     => $data['city'] ?? null,
+            'active'   => $data['active'] ?? true,
+            'chain_id' => $data['chain_id'] ?? null,
+        ]);
+
+        return response()->json([
+            'message' => $gym->chain_id
+                ? 'Academia criada e vinculada a rede com sucesso.'
+                : 'Academia independente criada com sucesso.',
+            'gym' => [
+                'id'          => $gym->id,
+                'name'        => $gym->name,
+                'invite_code' => $gym->invite_code,
+                'chain_id'    => $gym->chain_id,
+            ],
+        ], 201);
+    }
+
     private function format(GymChain $chain): array
     {
         return [
