@@ -27,6 +27,7 @@ import 'package:gymup/features/challenges/challenges_page.dart';
 import 'package:gymup/features/challenges/my_achievements_page.dart';
 import 'package:gymup/features/goals/create_goal_page.dart';
 import 'package:gymup/features/goals/goal_summary_page.dart';
+import 'package:gymup/features/notifications/notifications_page.dart';
 import 'package:gymup/features/settings/settings_page.dart';
 
 class GymUpApp extends StatefulWidget {
@@ -140,6 +141,7 @@ class _GymUpAppState extends State<GymUpApp> {
         '/achievements':     (context) => const MyAchievementsPage(),
         '/goals/create':     (context) => const CreateGoalPage(),
         '/goals':            (context) => const GoalSummaryPage(),
+        '/notifications':    (context) => const NotificationsPage(),
         '/settings':         (context) => const SettingsPage(),
         '/workout-generated':(context) => const WorkoutGeneratedPage(),
         '/workout-concept':  (context) => const WorkoutConceptPage(),

@@ -6,6 +6,7 @@ use App\Models\ChallengeParticipant;
 use App\Models\ChallengeWeeklyRanking;
 use App\Models\GymChallenge;
 use App\Models\User;
+use App\Models\UserNotification;
 use App\Models\WorkoutSession;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -469,6 +470,12 @@ class ChallengeService
                 $participant->update(['reward_granted' => true]);
             }
 
+            UserNotification::notify(
+                $user->id,
+                'Desafio concluido!',
+                'Parabens, voce concluiu o desafio ' . $challenge->name . ($pointsAwarded > 0 ? " e recebeu {$pointsAwarded} pts." : '.')
+            );
+
             return ['completed' => true, 'points_awarded' => $pointsAwarded];
         }
 
@@ -612,6 +619,12 @@ class ChallengeService
                         "Desafio semanal: {$challenge->name}",
                         'challenge',
                         $challenge->id
+                    );
+
+                    UserNotification::notify(
+                        $winner->id,
+                        'Desafio vencido!',
+                        "Parabens, voce venceu o desafio {$challenge->name} em {$assignedPos}o lugar e recebeu {$pointsAwarded} pts."
                     );
                 }
 

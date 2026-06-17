@@ -8,6 +8,7 @@ class HomeHeader extends StatelessWidget {
   final VoidCallback? onCalendar;
   final VoidCallback? onBell;
   final bool hasNotification;
+  final int notificationCount;
   final String avatarUrl;
 
   const HomeHeader({
@@ -16,7 +17,8 @@ class HomeHeader extends StatelessWidget {
     this.points = 0,
     this.onCalendar,
     this.onBell,
-    this.hasNotification = true,
+    this.hasNotification = false,
+    this.notificationCount = 0,
     this.avatarUrl = '',
   });
 
@@ -29,6 +31,9 @@ class HomeHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final showNotificationBadge = hasNotification || notificationCount > 0;
+    final notificationLabel = notificationCount > 9 ? '9+' : '$notificationCount';
+
     return Row(
       children: [
         // ── Avatar com gradiente e inicial ────────────────────────────────
@@ -95,18 +100,35 @@ class HomeHeader extends StatelessWidget {
                 size: 22,
                 color: AppColors.ink,
               ),
-              if (hasNotification)
+              if (showNotificationBadge)
                 Positioned(
-                  right: -1,
-                  top: -1,
+                  right: notificationCount > 0 ? -8 : -1,
+                  top: notificationCount > 0 ? -7 : -1,
                   child: Container(
-                    width: 8,
-                    height: 8,
+                    constraints: BoxConstraints(
+                      minWidth: notificationCount > 0 ? 17 : 8,
+                      minHeight: notificationCount > 0 ? 17 : 8,
+                    ),
+                    padding: notificationCount > 0 ? const EdgeInsets.symmetric(horizontal: 4) : EdgeInsets.zero,
                     decoration: BoxDecoration(
                       color: AppColors.orange,
-                      shape: BoxShape.circle,
+                      shape: notificationCount > 0 ? BoxShape.rectangle : BoxShape.circle,
+                      borderRadius: notificationCount > 0 ? BorderRadius.circular(99) : null,
                       border: Border.all(color: Colors.white, width: 1.5),
                     ),
+                    child: notificationCount > 0
+                        ? Center(
+                            child: Text(
+                              notificationLabel,
+                              style: AppText.pjs(
+                                size: 8.5,
+                                weight: FontWeight.w800,
+                                color: Colors.white,
+                                height: 1,
+                              ),
+                            ),
+                          )
+                        : null,
                   ),
                 ),
             ],

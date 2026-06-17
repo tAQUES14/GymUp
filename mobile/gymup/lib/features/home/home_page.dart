@@ -14,6 +14,7 @@ import '../workouts/workout_plan_api_service.dart';
 import '../workouts/workout_plan_utils.dart';
 import '../ranking/ranking_api_service.dart';
 import '../auth/auth_api_service.dart';
+import '../notifications/notification_api_service.dart';
 import 'widgets/home_header.dart';
 import 'widgets/home_weekly_card.dart';
 import 'widgets/home_checkin_button.dart';
@@ -34,6 +35,7 @@ class _HomePageState extends State<HomePage> {
   WorkoutModel?  _todayWorkout;
   TodayWorkoutPlan? _todayPlan;
   int? _pointsRanking;
+  int _unreadNotifications = 0;
   String _avatarUrl = '';
   bool _hasWorkoutAvailable = false;
 
@@ -63,6 +65,7 @@ class _HomePageState extends State<HomePage> {
         ChallengeApiService().getActiveChallenge().catchError((_) => null),
         WorkoutPlanApiService().getTodayWorkout().catchError((_) => null),
         _loadPointsRanking().catchError((_) => null),
+        NotificationApiService().unreadCount().catchError((_) => 0),
       ]);
 
       if (!mounted || seq != _loadSeq) return;
@@ -71,6 +74,7 @@ class _HomePageState extends State<HomePage> {
       final workouts = results[1] as List<WorkoutModel>;
       final plan     = results[3] as TodayWorkoutPlan?;
       final pointsRanking = results[4] as int?;
+      final unreadNotifications = results[5] as int? ?? 0;
       final avatarUrl = await _loadAvatarUrl();
 
       if (!mounted || seq != _loadSeq) return;
@@ -79,6 +83,7 @@ class _HomePageState extends State<HomePage> {
         _dashboardData = data;
         _todayPlan     = plan;
         _pointsRanking = pointsRanking ?? (data.ranking > 0 ? data.ranking : null);
+        _unreadNotifications = unreadNotifications;
         _avatarUrl     = avatarUrl;
         if (plan != null && !plan.isRestDay) {
           _todayWorkout = _workoutFromPlan(plan);
@@ -180,9 +185,13 @@ class _HomePageState extends State<HomePage> {
                     nome:            data.name,
                     points:          data.pointsBalance,
                     avatarUrl:       _avatarUrl,
-                    hasNotification: true,
+                    hasNotification: _unreadNotifications > 0,
+                    notificationCount: _unreadNotifications,
                     onCalendar:      () => Navigator.pushNamed(context, '/history'),
-                    onBell:          () {},
+                    onBell:          () async {
+                      await Navigator.pushNamed(context, '/notifications');
+                      if (mounted) _loadDashboard();
+                    },
                   ),
                 ),
 

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Achievement;
 use App\Models\User;
 use App\Models\UserAchievement;
+use App\Models\UserNotification;
 use App\Models\WorkoutSession;
 use Illuminate\Support\Facades\DB;
 
@@ -71,6 +72,12 @@ class AchievementService
                             $achievement->id
                         );
                     }
+
+                    UserNotification::notify(
+                        $user->id,
+                        'Conquista desbloqueada!',
+                        'Voce desbloqueou ' . $achievement->title . ($points > 0 ? " e recebeu {$points} pts." : '.')
+                    );
 
                     $unlocked[] = $this->serialize(
                         $achievement,
