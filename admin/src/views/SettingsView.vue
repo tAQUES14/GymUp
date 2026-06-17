@@ -40,43 +40,44 @@
       <div class="space-y-5">
 
         <!-- Perfil do administrador -->
-        <div class="card p-6 overflow-hidden relative">
-          <div class="absolute inset-x-0 top-0 h-20 bg-gradient-to-r from-brand-600 via-brand-500 to-sky-400 opacity-95" />
-          <div class="relative flex flex-col sm:flex-row sm:items-end gap-4 pt-8">
-            <div class="w-20 h-20 rounded-2xl bg-brand-600 ring-4 ring-white shadow-lg flex items-center justify-center overflow-hidden">
-              <img
-                v-if="accountAvatarUrl"
-                :src="accountAvatarUrl"
-                :alt="accountForm.name || 'Perfil'"
-                class="w-full h-full object-cover"
-              />
-              <span v-else class="text-white text-xl font-black">{{ accountInitial }}</span>
-            </div>
+        <div class="card overflow-hidden">
+          <div class="bg-gradient-to-r from-brand-700 via-brand-600 to-sky-400 px-6 py-5">
+            <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+              <div class="w-20 h-20 rounded-2xl bg-white/15 ring-4 ring-white/70 shadow-lg flex items-center justify-center overflow-hidden shrink-0">
+                <img
+                  v-if="accountAvatarUrl"
+                  :src="accountAvatarUrl"
+                  :alt="accountForm.name || 'Perfil'"
+                  class="w-full h-full object-cover"
+                />
+                <span v-else class="text-white text-xl font-black">{{ accountInitial }}</span>
+              </div>
 
-            <div class="min-w-0 flex-1">
-              <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Perfil do administrador</p>
-              <h2 class="mt-1 text-lg font-bold text-slate-900 truncate">{{ accountForm.name || 'Sua conta' }}</h2>
-              <p class="text-sm text-slate-500 truncate">{{ accountForm.email }}</p>
-            </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-xs font-bold uppercase tracking-[0.14em] text-white/65">Perfil do administrador</p>
+                <h2 class="mt-1 text-xl font-bold text-white truncate">{{ accountForm.name || 'Sua conta' }}</h2>
+                <p class="text-sm text-white/75 truncate">{{ accountForm.email }}</p>
+              </div>
 
-            <div class="flex flex-wrap gap-2">
-              <label class="btn-secondary text-xs cursor-pointer">
-                <input type="file" accept="image/*" class="hidden" @change="onAdminAvatarSelected" />
-                {{ avatarSaving ? 'Enviando...' : 'Alterar foto' }}
-              </label>
-              <button
-                v-if="accountAvatarUrl"
-                type="button"
-                class="px-3 py-2 rounded-lg border border-red-100 bg-red-50 text-xs font-bold text-red-600 hover:bg-red-100 transition"
-                :disabled="avatarRemoving"
-                @click="removeAdminAvatar"
-              >
-                {{ avatarRemoving ? 'Removendo...' : 'Remover foto' }}
-              </button>
+              <div class="flex flex-wrap gap-2">
+                <label class="inline-flex items-center justify-center px-3 py-2 rounded-xl border border-white/30 bg-white/15 text-xs font-bold text-white hover:bg-white/20 transition cursor-pointer">
+                  <input type="file" accept="image/*" class="hidden" @change="onAdminAvatarSelected" />
+                  {{ avatarSaving ? 'Enviando...' : 'Alterar foto' }}
+                </label>
+                <button
+                  v-if="accountAvatarUrl"
+                  type="button"
+                  class="px-3 py-2 rounded-xl border border-white/30 bg-white text-xs font-bold text-red-600 hover:bg-red-50 transition"
+                  :disabled="avatarRemoving"
+                  @click="removeAdminAvatar"
+                >
+                  {{ avatarRemoving ? 'Removendo...' : 'Remover foto' }}
+                </button>
+              </div>
             </div>
           </div>
 
-          <div v-if="avatarMsg" :class="['relative mt-4 text-xs font-medium px-3 py-2 rounded-lg', avatarMsg.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700']">
+          <div v-if="avatarMsg" :class="['m-4 text-xs font-medium px-3 py-2 rounded-lg', avatarMsg.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700']">
             {{ avatarMsg.text }}
           </div>
         </div>
