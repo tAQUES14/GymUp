@@ -391,41 +391,23 @@
       </div>
 
       <!-- ── Assign to student ───────────────────────────────────────────── -->
-      <div class="card p-6">
-        <h3 class="text-sm font-semibold text-slate-900 mb-4">Atribuir Plano a um Aluno</h3>
-        <div class="relative max-w-sm">
-          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round"
-              d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-          </svg>
-          <input v-model="userSearch" type="text" placeholder="Buscar aluno por nome…"
-            @input="searchUsers"
-            class="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg bg-white
-                   focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent
-                   placeholder-slate-400" />
-        </div>
-        <div v-if="userResults.length" class="mt-3 border border-slate-200 rounded-lg overflow-hidden max-w-sm">
-          <div v-for="user in userResults" :key="user.id"
-            class="flex items-center justify-between px-4 py-3 hover:bg-slate-50
-                   border-b border-slate-100 last:border-0 transition-colors">
-            <div>
-              <p class="text-sm font-semibold text-slate-800">{{ user.name }}</p>
-              <p class="text-xs text-slate-500">{{ user.email }}</p>
-            </div>
-            <button @click="assignToUser(user)" :disabled="assigning === user.id"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 text-white text-xs
-                     font-semibold rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-60">
-              <svg v-if="assigning === user.id" class="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-              </svg>
-              {{ assigning === user.id ? 'Atribuindo…' : 'Atribuir' }}
-            </button>
+      <div class="card flex flex-col gap-4 p-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div class="flex items-center gap-3">
+          <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 9.75a3.375 3.375 0 100-6.75 3.375 3.375 0 000 6.75z" />
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-slate-900">Atribuir plano</h3>
+            <p class="mt-0.5 text-xs text-slate-500">Selecione um aluno da academia para receber este plano.</p>
           </div>
         </div>
-        <p v-if="assignSuccess" class="text-xs text-green-600 mt-2">{{ assignSuccess }}</p>
-        <p v-if="assignError"   class="text-xs text-red-500 mt-2">{{ assignError }}</p>
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700" @click="assignModalOpen = true">
+          Selecionar aluno
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+        </button>
+        <div v-if="assignSuccess" class="basis-full rounded-xl bg-emerald-50 px-3 py-2.5 text-xs font-medium text-emerald-700 sm:order-3">{{ assignSuccess }}</div>
       </div>
 
     </template>
@@ -463,6 +445,12 @@
       :in-plan-context="true"
       @saved="onWorkoutModalSaved" />
 
+    <PlanAssignModal
+      v-model="assignModalOpen"
+      :plan-id="planId"
+      :plan-name="plan?.name"
+      @assigned="onPlanAssigned" />
+
   </div>
 </template>
 
@@ -471,6 +459,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '../services/api.js'
 import WorkoutModal from '../components/workouts/WorkoutModal.vue'
+import PlanAssignModal from '../components/workout-plans/PlanAssignModal.vue'
 
 const route  = useRoute()
 const router = useRouter()
@@ -531,11 +520,8 @@ const deletingDay     = ref(false)
 const deleteDayError  = ref('')
 
 // ── Assign ────────────────────────────────────────────────────────────────────
-const userSearch    = ref('')
-const userResults   = ref([])
-const assigning     = ref(null)
+const assignModalOpen = ref(false)
 const assignSuccess = ref('')
-const assignError   = ref('')
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const techniqueLabel = t => ({ superset: 'SS', dropset: 'DS', circuit: 'CIR' }[t] ?? '')
@@ -867,34 +853,10 @@ async function confirmDeleteDay() {
 }
 
 // ── Assign ────────────────────────────────────────────────────────────────────
-let userSearchTimer = null
-function searchUsers() {
-  clearTimeout(userSearchTimer)
-  const q = userSearch.value.trim()
-  if (q.length < 2) { userResults.value = []; return }
-  userSearchTimer = setTimeout(async () => {
-    try {
-      const { data } = await api.get('/admin/users', { params: { search: q } })
-      userResults.value = (data.users ?? []).slice(0, 8)
-    } catch { userResults.value = [] }
-  }, 300)
-}
-
-async function assignToUser(user) {
-  assigning.value     = user.id
-  assignSuccess.value = ''
-  assignError.value   = ''
-  try {
-    const res = await api.post(`/admin/users/${user.id}/assign-plan`, { plan_id: Number(planId) })
-    // Backend retorna `pending: true` quando o plano só entra em vigor na próxima semana.
-    const isPending = res.data?.pending === true
-    assignSuccess.value = isPending
-      ? `Plano agendado para ${user.name}. Entrará em vigor na próxima semana.`
-      : `Plano atribuído a ${user.name} com sucesso.`
-    userResults.value = []; userSearch.value = ''
-  } catch (e) {
-    assignError.value = e.response?.data?.message ?? 'Erro ao atribuir plano.'
-  } finally { assigning.value = null }
+function onPlanAssigned({ user, pending }) {
+  assignSuccess.value = pending
+    ? `Plano agendado para ${user.name}. Entrará em vigor na próxima semana.`
+    : `Plano atribuído a ${user.name} com sucesso.`
 }
 
 // ── Change day_of_week inline ─────────────────────────────────────────────────
