@@ -34,23 +34,17 @@ class WorkoutExecutionController extends ChangeNotifier {
 
   WorkoutExecutionController({required this.workout})
       : _service = WorkoutExecutionService() {
-    debugPrint(
-      '[Controller] CRIADO para workout=${workout.id} "${workout.name}" '
-      '(hashCode=$hashCode)',
-    );
+
 
     final invalidExercises = workout.exercises.where((e) => e.id <= 0).toList();
     if (invalidExercises.isNotEmpty) {
-      debugPrint(
-        '[Controller] ATENÇÃO: ${invalidExercises.length} exercício(s) com ID inválido (≤ 0). '
-        'Use workouts carregados do backend, não de WorkoutsMock.',
-      );
+
     }
   }
 
   @override
   void dispose() {
-    debugPrint('[Controller] DISPOSE workout=${workout.id} (hashCode=$hashCode)');
+
     for (final t in _saveTimers.values) {
       t.cancel();
     }
@@ -69,19 +63,13 @@ class WorkoutExecutionController extends ChangeNotifier {
   /// Em caso de erro, define [saveError] e notifica listeners para exibição na UI.
   void setWeight(int exerciseId, int setNumber, double weight, {int reps = 0}) {
     if (exerciseId <= 0) {
-      debugPrint(
-        '[Controller] setWeight BLOQUEADO: exerciseId=$exerciseId é inválido (≤ 0).',
-      );
+
       return;
     }
 
     _weights.putIfAbsent(exerciseId, () => {})[setNumber] = weight;
 
-    debugPrint(
-      '[Controller] setWeight exerciseId=$exerciseId '
-      'setNumber=$setNumber weight=$weight  '
-      'map agora=${_weights[exerciseId]}',
-    );
+
 
     notifyListeners();
 
@@ -106,7 +94,7 @@ class WorkoutExecutionController extends ChangeNotifier {
         }
       }).catchError((e) {
         saveError = 'Erro ao salvar carga. Verifique sua conexão.';
-        debugPrint('[Controller] saveSetWeight ERRO: $e');
+
         notifyListeners();
       });
     });
@@ -135,11 +123,7 @@ class WorkoutExecutionController extends ChangeNotifier {
       sets.remove(setNumber);
     }
 
-    debugPrint(
-      '[Controller] markSetCompleted exerciseId=$exerciseId '
-      'setNumber=$setNumber completed=$completed  '
-      'concluídas=$sets',
-    );
+
 
     // One-way exercise lock
     if (!_completedExerciseIds.contains(exerciseId)) {
@@ -149,7 +133,7 @@ class WorkoutExecutionController extends ChangeNotifier {
       );
       if (exercise.workoutSets.every((s) => sets.contains(s.number))) {
         _completedExerciseIds.add(exerciseId);
-        debugPrint('[Controller] exercício $exerciseId CONCLUÍDO');
+
       }
     }
 
@@ -181,10 +165,7 @@ class WorkoutExecutionController extends ChangeNotifier {
   /// mas valores já definidos localmente (pelo usuário digitando) NUNCA
   /// são sobrescritos.
   Future<void> loadAllWeights() async {
-    debugPrint(
-      '[Controller] loadAllWeights INÍCIO '
-      '(hashCode=$hashCode workout=${workout.id})',
-    );
+
     isLoadingWeights = true;
     notifyListeners();
 
@@ -206,23 +187,15 @@ class WorkoutExecutionController extends ChangeNotifier {
           );
           _weights[exercise.id] = {...weights, ...existing};
 
-          debugPrint(
-            '[Controller] loadAllWeights exercício=${exercise.id} '
-            'backend=$weights  local=$existing  '
-            'resultado=${_weights[exercise.id]}',
-          );
+
         } catch (e) {
-          debugPrint(
-            '[Controller] loadAllWeights exercício=${exercise.id} ERRO: $e',
-          );
+
           _weights.putIfAbsent(exercise.id, () => {});
         }
       }),
     );
 
-    debugPrint(
-      '[Controller] loadAllWeights CONCLUÍDO. _weights=$_weights',
-    );
+
     isLoadingWeights = false;
     notifyListeners();
   }

@@ -25,7 +25,7 @@ class _WorkoutExecutionExercisePageState
 
   late final WorkoutExecutionController _ctrl;
 
-  // ─── Navegação de exercício / série 
+  // ─── Navegação de exercício / série
   int _currentExerciseIndex = 0;
   int _currentSetIndex = 0;
 
@@ -52,10 +52,7 @@ class _WorkoutExecutionExercisePageState
     // controller com _weights = {}.
     _ctrl = WorkoutExecutionController(workout: widget.workout);
 
-    debugPrint(
-      '[ExercisePage] initState — controller CRIADO '
-      '(hashCode=${_ctrl.hashCode}) workout=${widget.workout.id}',
-    );
+
 
     _weightController = TextEditingController();
     _weightFocusNode = FocusNode();
@@ -102,10 +99,7 @@ class _WorkoutExecutionExercisePageState
 
   @override
   void dispose() {
-    debugPrint(
-      '[ExercisePage] dispose — controller DESTRUÍDO '
-      '(hashCode=${_ctrl.hashCode})',
-    );
+
     _ctrl.removeListener(_onControllerSaveError);
     _workoutTimer?.cancel();
     _elapsedTime.dispose();
@@ -150,11 +144,7 @@ class _WorkoutExecutionExercisePageState
     final w = _ctrl.getWeight(_currentExercise.id, _currentSet.number);
     final text = w > 0 ? w.toStringAsFixed(1) : '';
 
-    debugPrint(
-      '[ExercisePage] _fillWeightFieldForCurrentSet '
-      'exercício=${_currentExercise.id} série=${_currentSet.number} '
-      'peso=$w → campo="$text"',
-    );
+
 
     _weightController.text = text;
     _weightController.selection = TextSelection.collapsed(
@@ -168,11 +158,7 @@ class _WorkoutExecutionExercisePageState
 
   /// Avança para a próxima série do exercício atual.
   void _advanceToNextSet() {
-    debugPrint(
-      '[ExercisePage] TROCA DE SÉRIE: '
-      '${_currentSetIndex + 1} → ${_currentSetIndex + 2} '
-      '(exercício=${_currentExercise.id})',
-    );
+
     setState(() => _currentSetIndex++);
     _fillWeightFieldForCurrentSet();
   }
@@ -180,11 +166,7 @@ class _WorkoutExecutionExercisePageState
   /// Retorna para a série anterior do exercício atual.
   void _goToPreviousSet() {
     if (_currentSetIndex == 0) return;
-    debugPrint(
-      '[ExercisePage] VOLTA DE SÉRIE: '
-      '${_currentSetIndex + 1} → $_currentSetIndex '
-      '(exercício=${_currentExercise.id})',
-    );
+
     setState(() => _currentSetIndex--);
     _fillWeightFieldForCurrentSet();
   }
@@ -194,10 +176,7 @@ class _WorkoutExecutionExercisePageState
   // ─────────────────────────────────────────────────────────────────────────
 
   void _advanceToNextExercise() {
-    debugPrint(
-      '[ExercisePage] TROCA DE EXERCÍCIO: '
-      '${_currentExerciseIndex + 1} → ${_currentExerciseIndex + 2}',
-    );
+
     setState(() {
       _currentExerciseIndex++;
       _currentSetIndex = 0;
@@ -216,10 +195,7 @@ class _WorkoutExecutionExercisePageState
     final enteredWeight = double.tryParse(_weightController.text) ??
         _ctrl.getWeight(_currentExercise.id, _currentSet.number);
 
-    debugPrint(
-      '[ExercisePage] REALIZADO — exercício=${_currentExercise.id} '
-      'série=${_currentSet.number} peso=$enteredWeight',
-    );
+
 
     if (enteredWeight > 0) {
       _ctrl.setWeight(_currentExercise.id, _currentSet.number, enteredWeight);
@@ -321,11 +297,7 @@ class _WorkoutExecutionExercisePageState
 
   @override
   Widget build(BuildContext context) {
-    debugPrint(
-      '[ExercisePage] build — exercício=$_currentExerciseIndex '
-      'série=$_currentSetIndex  '
-      '_ctrl.hashCode=${_ctrl.hashCode}',
-    );
+
 
     // Expõe o controller via Provider para que qualquer widget filho possa
     // acessá-lo com context.read/watch sem precisar de passagem manual.
@@ -481,11 +453,7 @@ class _WorkoutExecutionExerciseBody extends StatelessWidget {
                         onChanged: (val) {
                           final parsed = double.tryParse(val);
                           if (parsed != null && parsed > 0) {
-                            debugPrint(
-                              '[ExercisePage] onChanged peso=$parsed '
-                              'exercício=${_currentExercise.id} '
-                              'série=${_currentSet.number}',
-                            );
+
                             ctrl.setWeight(
                               _currentExercise.id,
                               _currentSet.number,

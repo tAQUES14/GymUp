@@ -25,10 +25,6 @@ class _WorkoutExecutionPageState extends State<WorkoutExecutionPage> {
       final args = ModalRoute.of(context)?.settings.arguments;
       if (args is WorkoutModel) {
         _controller = WorkoutExecutionController(workout: args);
-        debugPrint(
-          '[ExecutionPage] controller CRIADO '
-          '(hashCode=${_controller.hashCode}) workout=${args.id}',
-        );
         // Load all weights in parallel — controller notifies listeners when done
         _controller!.loadAllWeights();
       }

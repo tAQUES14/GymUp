@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import '../../../core/api/api_service.dart';
 
 class WorkoutExecutionService {
@@ -20,25 +19,17 @@ class WorkoutExecutionService {
     int reps = 0,
   }) async {
     if (exerciseId <= 0) {
-      debugPrint(
-        '[ExecService] saveSetWeight BLOQUEADO: exerciseId=$exerciseId é inválido (≤ 0).',
-      );
+
       return;
     }
 
     final body = {'set_number': setNumber, 'weight': weight, 'reps': reps};
 
-    debugPrint(
-      '[ExecService] saveSetWeight HTTP PUT /exercises/$exerciseId/weight/set '
-      'body=$body',
-    );
+
 
     final response = await _api.put('/exercises/$exerciseId/weight/set', body);
 
-    debugPrint(
-      '[ExecService] saveSetWeight RESPONSE status=${response.statusCode} '
-      'body=${response.body}',
-    );
+
 
     if (response.statusCode != 201 && response.statusCode != 200) {
       throw Exception(
@@ -58,9 +49,7 @@ class WorkoutExecutionService {
     required int exerciseId,
   }) async {
     if (exerciseId <= 0) {
-      debugPrint(
-        '[ExecService] loadExerciseWeights BLOQUEADO: exerciseId=$exerciseId é inválido (≤ 0).',
-      );
+
       return {};
     }
 

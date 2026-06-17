@@ -135,7 +135,6 @@ class ExerciseGifPanel extends StatelessWidget {
             );
           },
           errorBuilder: (context, error, stackTrace) {
-            debugPrint('[GIF] ERROR loading $gifUri: $error');
             return _GifFallbackWide(exercise.muscleGroup, height);
           },
         ),

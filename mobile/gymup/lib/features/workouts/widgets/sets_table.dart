@@ -93,11 +93,7 @@ class _SetsTableState extends State<SetsTable> {
       final text = w > 0 ? w.toStringAsFixed(1) : '';
 
       if (_weightControllers[i].text != text) {
-        debugPrint(
-          '[SetsTable] _syncWeights exerciseId=${widget.exerciseId} '
-          'set=${widget.sets[i].number} '
-          '"${_weightControllers[i].text}" → "$text"',
-        );
+
         _weightControllers[i].text = text;
       }
     }
@@ -166,10 +162,7 @@ class _SetsTableState extends State<SetsTable> {
             onWeightChanged: (val) {
               final parsed = double.tryParse(val);
               if (parsed != null && parsed > 0) {
-                debugPrint(
-                  '[SetsTable] onWeightChanged exerciseId=${widget.exerciseId} '
-                  'set=${set.number} peso=$parsed',
-                );
+
                 // Usa _ctrl (state) em vez de ctrl capturado do build
                 _ctrl?.setWeight(widget.exerciseId, set.number, parsed);
               }
@@ -183,10 +176,7 @@ class _SetsTableState extends State<SetsTable> {
                 final typed =
                     double.tryParse(_weightControllers[i].text) ?? 0;
                 if (typed > 0) {
-                  debugPrint(
-                    '[SetsTable] onToggleDone flush peso=$typed '
-                    'exerciseId=${widget.exerciseId} set=${set.number}',
-                  );
+
                   _ctrl?.setWeight(widget.exerciseId, set.number, typed);
                 }
               }
