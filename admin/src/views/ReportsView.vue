@@ -150,25 +150,61 @@
               {{ data.kpis.total_workouts.toLocaleString('pt-BR') }} total
             </span>
           </div>
-          <div class="h-48 flex items-end gap-1.5 pt-5">
-            <div
-              v-for="day in workoutsBars"
-              :key="day.date"
-              class="flex-1 min-w-0 h-full flex flex-col justify-end gap-2 group"
-            >
-              <div class="relative flex-1 flex items-end">
-                <div
-                  class="w-full min-h-[6px] rounded-t-lg bg-gradient-to-t from-brand-100 to-brand-500 transition-all group-hover:from-brand-200 group-hover:to-brand-600"
-                  :style="{ height: `${day.height}%` }"
+          <div class="relative h-56 pt-4">
+            <div class="absolute inset-x-0 top-4 bottom-8 flex flex-col justify-between">
+              <div v-for="line in 4" :key="line" class="border-t border-slate-100" />
+            </div>
+
+            <svg class="relative z-10 h-48 w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="workoutLineFill" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stop-color="#2F6FED" stop-opacity="0.20" />
+                  <stop offset="100%" stop-color="#2F6FED" stop-opacity="0.02" />
+                </linearGradient>
+              </defs>
+              <path
+                v-if="workoutsLine.areaPath"
+                :d="workoutsLine.areaPath"
+                fill="url(#workoutLineFill)"
+              />
+              <path
+                v-if="workoutsLine.linePath"
+                :d="workoutsLine.linePath"
+                fill="none"
+                stroke="#2F6FED"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                vector-effect="non-scaling-stroke"
+              />
+            </svg>
+
+            <div class="absolute inset-x-0 top-4 z-20 h-48">
+              <div
+                v-for="point in workoutsLine.points"
+                :key="point.date"
+                class="group absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2"
+                :style="{ left: `${point.x}%`, top: `${point.y}%` }"
+              >
+                <span
+                  class="block h-3 w-3 rounded-full border-2 border-white shadow-sm"
+                  :class="point.workouts > 0 ? 'bg-brand-600' : 'bg-slate-300'"
                 />
-                <div
-                  class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded-lg bg-slate-900 text-white text-[11px] font-semibold whitespace-nowrap shadow-lg"
+                <span
+                  class="pointer-events-none absolute bottom-5 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded-lg bg-slate-900 text-white text-[11px] font-semibold whitespace-nowrap shadow-lg"
                 >
-                  {{ day.workouts }} treino{{ day.workouts === 1 ? '' : 's' }}
-                </div>
+                  {{ point.label }} · {{ point.workouts }} treino{{ point.workouts === 1 ? '' : 's' }}
+                </span>
               </div>
-              <span class="text-[10px] font-semibold text-slate-400 text-center truncate">
-                {{ day.showLabel ? day.label : '' }}
+            </div>
+
+            <div class="relative z-10 mt-1 flex justify-between">
+              <span
+                v-for="day in workoutsLine.labels"
+                :key="day.date"
+                class="text-[10px] font-semibold text-slate-400"
+              >
+                {{ day.label }}
               </span>
             </div>
           </div>
@@ -326,16 +362,41 @@ const data         = ref(null)
 const loading      = ref(true)
 const error        = ref('')
 
-const workoutsBars = computed(() => {
+const workoutsLine = computed(() => {
   const days = data.value?.workouts_by_day ?? []
-  const max = Math.max(...days.map((day) => day.workouts), 1)
-  const labelEvery = days.length <= 10 ? 1 : Math.ceil(days.length / 8)
+  if (!days.length) {
+    return { points: [], labels: [], linePath: '', areaPath: '' }
+  }
 
-  return days.map((day, index) => ({
-    ...day,
-    height: day.workouts > 0 ? Math.max(10, Math.round((day.workouts / max) * 100)) : 4,
-    showLabel: index === 0 || index === days.length - 1 || index % labelEvery === 0,
-  }))
+  const max = Math.max(...days.map((day) => day.workouts), 1)
+  const xStep = days.length === 1 ? 0 : 100 / (days.length - 1)
+  const labelEvery = days.length <= 10 ? 1 : Math.ceil(days.length / 6)
+
+  const points = days.map((day, index) => {
+    const x = days.length === 1 ? 50 : index * xStep
+    const y = 88 - ((day.workouts / max) * 76)
+
+    return {
+      ...day,
+      x: Number(x.toFixed(2)),
+      y: Number(y.toFixed(2)),
+    }
+  })
+
+  const linePath = points
+    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+    .join(' ')
+
+  const first = points[0]
+  const last = points[points.length - 1]
+  const areaPath = `${linePath} L ${last.x} 92 L ${first.x} 92 Z`
+
+  return {
+    points,
+    linePath,
+    areaPath,
+    labels: points.filter((_, index) => index === 0 || index === points.length - 1 || index % labelEvery === 0),
+  }
 })
 
 const checkinBars = computed(() => {
