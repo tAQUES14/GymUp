@@ -15,6 +15,7 @@ class WorkoutFinishService
         private readonly StreakService            $streak,
         private readonly WorkoutPlanService       $planService,
         private readonly ChallengeService         $challenges,
+        private readonly AchievementService       $achievements,
         private readonly WorkoutSetService        $setService,
         private readonly ExerciseProgressService  $progressService,
     ) {}
@@ -37,7 +38,7 @@ class WorkoutFinishService
 
         if ($validation['status'] === WorkoutValidationService::STATUS_PARTIAL_CONFIRM) {
             $streakState = $this->streak->getStreakState($user);
-            return $this->buildResponse($validation, 0, false, $streakState, null, [], null, [], 0, $session);
+            return $this->buildResponse($validation, 0, false, $streakState, null, [], [], null, [], 0, $session);
         }
 
         $isValid = $validation['status'] === WorkoutValidationService::STATUS_VALID;
@@ -122,6 +123,7 @@ class WorkoutFinishService
 
         $challengeProgress          = null;
         $personalChallengesProgress = [];
+        $celebrations               = [];
         $progressMessage            = null;
         $prMessages                 = [];
         $workoutVolume              = 0;
@@ -134,6 +136,7 @@ class WorkoutFinishService
                 $challengeProgress = array_merge($progressData, [
                     'simple_goal_just_completed' => $communityResult['simple_goal_just_completed'],
                 ]);
+                $celebrations = array_merge($celebrations, $communityResult['celebrations'] ?? []);
             }
 
             foreach ($challengeResults['personal'] ?? [] as $personalResult) {
@@ -141,6 +144,7 @@ class WorkoutFinishService
                 $personalChallengesProgress[] = array_merge($progressData, [
                     'simple_goal_just_completed' => $personalResult['simple_goal_just_completed'],
                 ]);
+                $celebrations = array_merge($celebrations, $personalResult['celebrations'] ?? []);
             }
 
             $prBonus = $this->points->grantPrBonus($user, $session->id);
@@ -152,6 +156,16 @@ class WorkoutFinishService
             $progressMessage = $this->setService->detectProgress($user->id, $session->id);
             $prMessages      = $this->progressService->detectPRs($user->id, $session->id);
             $workoutVolume   = (int) round($this->progressService->getSessionVolume($session->id));
+
+            foreach ($this->achievements->grantNewlyUnlocked($user) as $achievement) {
+                $celebrations[] = [
+                    'type' => 'achievement',
+                    'title' => 'Conquista desbloqueada!',
+                    'message' => "Parabens! Voce desbloqueou {$achievement['title']} e recebeu {$achievement['points_reward']} pts.",
+                    'points' => (int) $achievement['points_reward'],
+                    'achievement' => $achievement,
+                ];
+            }
         }
 
         return $this->buildResponse(
@@ -161,6 +175,7 @@ class WorkoutFinishService
             $streakState,
             $challengeProgress,
             $personalChallengesProgress,
+            $celebrations,
             $progressMessage,
             $prMessages,
             $workoutVolume,
@@ -175,6 +190,7 @@ class WorkoutFinishService
         array          $streakState,
         ?array         $challengeProgress,
         array          $personalChallengesProgress,
+        array          $celebrations,
         ?string        $progressMessage,
         array          $prMessages,
         int            $workoutVolume,
@@ -191,6 +207,7 @@ class WorkoutFinishService
             'remaining_workouts_this_week'  => $streakState['remaining_workouts_this_week'],
             'challenge_progress'            => $challengeProgress,
             'personal_challenges_progress'  => $personalChallengesProgress,
+            'celebrations'                   => $celebrations,
             'progress_message'              => $progressMessage,
             'pr_messages'                   => $prMessages,
             'workout_volume'                => $workoutVolume,

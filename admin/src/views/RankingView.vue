@@ -103,9 +103,10 @@
           <!-- 2nd place -->
           <div class="flex flex-col items-center gap-2 flex-1 max-w-[160px]">
             <div class="relative">
-              <div class="w-14 h-14 rounded-full flex items-center justify-center text-lg font-bold text-white flex-shrink-0 ring-4 ring-white shadow-lg"
+              <div class="w-14 h-14 rounded-full flex items-center justify-center text-lg font-bold text-white flex-shrink-0 ring-4 ring-white shadow-lg overflow-hidden"
                    :style="{ backgroundColor: avatarColor(top3[1]?.name) }">
-                {{ initials(top3[1]?.name) }}
+                <img v-if="avatarUrl(top3[1])" :src="avatarUrl(top3[1])" :alt="top3[1]?.name" class="w-full h-full rounded-full object-cover" />
+                <template v-else>{{ initials(top3[1]?.name) }}</template>
               </div>
               <span class="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-slate-400 border-2 border-white
                            flex items-center justify-center text-[10px] font-black text-white shadow">2</span>
@@ -124,9 +125,10 @@
           <div class="flex flex-col items-center gap-2 flex-1 max-w-[180px]">
             <div class="text-2xl mb-1">🏆</div>
             <div class="relative">
-              <div class="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold text-white flex-shrink-0 ring-4 ring-yellow-300 shadow-xl"
+              <div class="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold text-white flex-shrink-0 ring-4 ring-yellow-300 shadow-xl overflow-hidden"
                    :style="{ backgroundColor: avatarColor(top3[0]?.name) }">
-                {{ initials(top3[0]?.name) }}
+                <img v-if="avatarUrl(top3[0])" :src="avatarUrl(top3[0])" :alt="top3[0]?.name" class="w-full h-full rounded-full object-cover" />
+                <template v-else>{{ initials(top3[0]?.name) }}</template>
               </div>
               <span class="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-7 h-7 rounded-full bg-yellow-400 border-2 border-white
                            flex items-center justify-center text-[11px] font-black text-white shadow-lg">1</span>
@@ -144,9 +146,10 @@
           <!-- 3rd place -->
           <div v-if="top3.length >= 3" class="flex flex-col items-center gap-2 flex-1 max-w-[160px]">
             <div class="relative">
-              <div class="w-14 h-14 rounded-full flex items-center justify-center text-lg font-bold text-white flex-shrink-0 ring-4 ring-white shadow-lg"
+              <div class="w-14 h-14 rounded-full flex items-center justify-center text-lg font-bold text-white flex-shrink-0 ring-4 ring-white shadow-lg overflow-hidden"
                    :style="{ backgroundColor: avatarColor(top3[2]?.name) }">
-                {{ initials(top3[2]?.name) }}
+                <img v-if="avatarUrl(top3[2])" :src="avatarUrl(top3[2])" :alt="top3[2]?.name" class="w-full h-full rounded-full object-cover" />
+                <template v-else>{{ initials(top3[2]?.name) }}</template>
               </div>
               <span class="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-amber-600 border-2 border-white
                            flex items-center justify-center text-[10px] font-black text-white shadow">3</span>
@@ -286,9 +289,10 @@
               <!-- Aluno -->
               <td class="px-4 py-3.5">
                 <div class="flex items-center gap-3">
-                  <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 shadow-sm"
+                  <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 shadow-sm overflow-hidden"
                        :style="{ backgroundColor: avatarColor(entry.name) }">
-                    {{ initials(entry.name) }}
+                    <img v-if="avatarUrl(entry)" :src="avatarUrl(entry)" :alt="entry.name" class="w-full h-full rounded-full object-cover" />
+                    <template v-else>{{ initials(entry.name) }}</template>
                   </div>
                   <div class="min-w-0">
                     <p class="text-sm font-semibold text-slate-800 truncate leading-tight">{{ entry.name }}</p>
@@ -433,6 +437,10 @@ function initials(name) {
 
 function firstName(name) {
   return (name ?? '').split(' ')[0]
+}
+
+function avatarUrl(entry) {
+  return entry?.avatar_url || entry?.avatarUrl || ''
 }
 
 function avatarColor(name) {

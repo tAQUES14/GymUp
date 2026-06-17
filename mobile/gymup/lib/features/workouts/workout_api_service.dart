@@ -304,6 +304,7 @@ class WorkoutFinishResult {
   final int remainingWorkoutsThisWeek;
   final WorkoutSessionData session;
   final Map<String, dynamic>? challengeProgress;
+  final List<Map<String, dynamic>> celebrations;
   final String? progressMessage;
   final List<String> prMessages;
   final int workoutVolume;
@@ -321,6 +322,7 @@ class WorkoutFinishResult {
     required this.remainingWorkoutsThisWeek,
     required this.session,
     this.challengeProgress,
+    this.celebrations = const [],
     this.progressMessage,
     this.prMessages = const [],
     this.workoutVolume = 0,
@@ -350,6 +352,10 @@ class WorkoutFinishResult {
         json['session'] as Map<String, dynamic>,
       ),
       challengeProgress: json['challenge_progress'] as Map<String, dynamic>?,
+      celebrations: (json['celebrations'] as List<dynamic>?)
+              ?.whereType<Map<String, dynamic>>()
+              .toList() ??
+          const [],
       progressMessage:   json['progress_message'] as String?,
       prMessages: (json['pr_messages'] as List<dynamic>?)
               ?.map((e) => e as String)

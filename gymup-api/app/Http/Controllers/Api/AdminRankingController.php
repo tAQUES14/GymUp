@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\DB;
 
 class AdminRankingController extends Controller
 {
+    private const FALLBACK_PUBLIC_STORAGE_BASE_URL = 'https://s3.us-west-004.backblazeb2.com/gymup-storage';
+
     /**
      * GET /api/admin/ranking?period=all|weekly|monthly|quarterly&limit=50
      *
@@ -49,6 +51,7 @@ class AdminRankingController extends Controller
                 'users.id',
                 'users.name',
                 'users.email',
+                'users.avatar_url',
                 'users.points_balance',
                 'users.current_streak',
                 DB::raw('COALESCE(SUM(point_transactions.points), 0) as period_points'),
@@ -58,6 +61,7 @@ class AdminRankingController extends Controller
                 'users.id',
                 'users.name',
                 'users.email',
+                'users.avatar_url',
                 'users.points_balance',
                 'users.current_streak',
                 'ws.total_workouts'
@@ -76,6 +80,7 @@ class AdminRankingController extends Controller
                 'user_id'        => $u->id,
                 'name'           => $u->name,
                 'email'          => $u->email,
+                'avatar_url'     => $this->avatarUrl($u->avatar_url),
                 'period_points'  => (int) $u->period_points,
                 'points_balance' => (int) $u->points_balance,
                 'weekly_streak'  => (int) $u->current_streak,
@@ -94,5 +99,51 @@ class AdminRankingController extends Controller
             'total_points' => $totalPoints,
             'active_count' => $activeCount,
         ]);
+    }
+
+    private function avatarUrl(?string $value): ?string
+    {
+        if (! $value) {
+            return null;
+        }
+
+        if (str_starts_with($value, 'http') && ! str_contains($value, 'gymup-api.onrender.com/storage')) {
+            return $value;
+        }
+
+        $path = $this->normalizeAvatarPath($value);
+        if (! $path) {
+            return null;
+        }
+
+        $encoded = implode('/', array_map('rawurlencode', explode('/', $path)));
+        return rtrim($this->publicStorageBaseUrl(), '/') . '/' . $encoded;
+    }
+
+    private function normalizeAvatarPath(string $value): string
+    {
+        if (! str_starts_with($value, 'http')) {
+            return ltrim($value, '/');
+        }
+
+        $path = rawurldecode(parse_url($value, PHP_URL_PATH) ?: '');
+
+        if (preg_match('#/(?:storage|img)/(.+)$#', $path, $matches)) {
+            return ltrim($matches[1], '/');
+        }
+
+        if (preg_match('#/(avatars/.+)$#', $path, $matches)) {
+            return ltrim($matches[1], '/');
+        }
+
+        return ltrim($path, '/');
+    }
+
+    private function publicStorageBaseUrl(): string
+    {
+        return env('PUBLIC_DISK_URL')
+            ?: env('PUBLIC_DISK_ENDPOINT')
+            ?: env('PUBLIC_DISK_BASE_URL')
+            ?: self::FALLBACK_PUBLIC_STORAGE_BASE_URL;
     }
 }

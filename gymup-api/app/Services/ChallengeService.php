@@ -241,10 +241,10 @@ class ChallengeService
      * Finaliza todas as semanas concluídas do desafio competitivo (lazy).
      * Uma semana está concluída quando seu domingo já passou.
      */
-    public function finalizeCompletedWeeks(GymChallenge $challenge): void
+    public function finalizeCompletedWeeks(GymChallenge $challenge): array
     {
         if (!$challenge->isCompetitive()) {
-            return;
+            return [];
         }
 
         $currentWeekStart = Carbon::now()->startOfWeek(Carbon::MONDAY)->toDateString();
@@ -256,9 +256,16 @@ class ChallengeService
             ->distinct()
             ->pluck('week_start');
 
+        $awards = [];
+
         foreach ($weekStarts as $weekStart) {
-            $this->finalizeWeek($challenge, Carbon::parse($weekStart)->toDateString());
+            $awards = array_merge(
+                $awards,
+                $this->finalizeWeek($challenge, Carbon::parse($weekStart)->toDateString())
+            );
         }
+
+        return $awards;
     }
 
     /**
@@ -338,22 +345,51 @@ class ChallengeService
         WorkoutSession $session,
     ): array {
         $simpleGoalJustCompleted = false;
+        $rewardPoints = 0;
 
-        DB::transaction(function () use ($challenge, $user, $session, &$simpleGoalJustCompleted) {
+        DB::transaction(function () use ($challenge, $user, $session, &$simpleGoalJustCompleted, &$rewardPoints) {
             $participant = $this->getOrCreateParticipant($challenge, $user);
 
             if ($challenge->isCompetitive()) {
                 $this->processCompetitiveWorkout($challenge, $user, $session);
             } else {
-                $simpleGoalJustCompleted = $this->processSimpleWorkout($challenge, $user, $participant);
+                $result = $this->processSimpleWorkout($challenge, $user, $participant);
+                $simpleGoalJustCompleted = $result['completed'];
+                $rewardPoints = $result['points_awarded'];
             }
         });
 
-        $this->finalizeCompletedWeeks($challenge);
+        $weeklyCelebrations = collect($this->finalizeCompletedWeeks($challenge))
+            ->where('user_id', $user->id)
+            ->map(fn (array $award) => [
+                'type' => 'challenge_winner',
+                'title' => 'Desafio vencido!',
+                'message' => "Parabens, voce venceu o desafio {$challenge->name} e recebeu {$award['points']} pts.",
+                'points' => $award['points'],
+                'challenge_id' => $challenge->id,
+                'challenge_name' => $challenge->name,
+                'position' => $award['position'],
+                'week_start' => $award['week_start'],
+            ])
+            ->values()
+            ->all();
+
+        $celebrations = $weeklyCelebrations;
+        if ($simpleGoalJustCompleted && $rewardPoints > 0) {
+            $celebrations[] = [
+                'type' => 'challenge_completed',
+                'title' => 'Desafio concluido!',
+                'message' => "Parabens, voce concluiu o desafio {$challenge->name} e recebeu {$rewardPoints} pts.",
+                'points' => $rewardPoints,
+                'challenge_id' => $challenge->id,
+                'challenge_name' => $challenge->name,
+            ];
+        }
 
         return [
             'challenge'                  => $challenge,
             'simple_goal_just_completed' => $simpleGoalJustCompleted,
+            'celebrations'               => $celebrations,
         ];
     }
 
@@ -402,9 +438,9 @@ class ChallengeService
         GymChallenge        $challenge,
         User                $user,
         ChallengeParticipant $participant
-    ): bool {
+    ): array {
         if ($participant->goal_completed) {
-            return false;
+            return ['completed' => false, 'points_awarded' => 0];
         }
 
         $participant->increment('workouts_this_challenge');
@@ -416,12 +452,15 @@ class ChallengeService
                 'goal_completed_at' => now(),
             ]);
 
+            $pointsAwarded = 0;
+
             if (!$participant->reward_granted
                 && $challenge->reward_type === 'points'
                 && (int) ($challenge->reward_points ?? 0) > 0) {
+                $pointsAwarded = (int) $challenge->reward_points;
                 $this->pointService->earnPoints(
                     $user,
-                    (int) $challenge->reward_points,
+                    $pointsAwarded,
                     "Desafio concluído: {$challenge->name}",
                     'challenge',
                     $challenge->id
@@ -430,10 +469,10 @@ class ChallengeService
                 $participant->update(['reward_granted' => true]);
             }
 
-            return true;
+            return ['completed' => true, 'points_awarded' => $pointsAwarded];
         }
 
-        return false;
+        return ['completed' => false, 'points_awarded' => 0];
     }
 
     /**
@@ -519,7 +558,7 @@ class ChallengeService
      * e o próximo bloco recebe a posição seguinte ao número total de empatados.
      * Posições fora da tabela recebem 0 pontos.
      */
-    private function finalizeWeek(GymChallenge $challenge, string $weekStart): void
+    private function finalizeWeek(GymChallenge $challenge, string $weekStart): array
     {
         $minWorkouts  = (int) ($challenge->min_weekly_workouts ?? 1);
         $pointsConfig = $this->getEffectiveScoringTable($challenge);
@@ -533,6 +572,8 @@ class ChallengeService
         $position  = 1;
         $prevCount = null;
         $prevPos   = 1;
+
+        $awards = [];
 
         foreach ($entries as $entry) {
             if ($entry->workouts_count < $minWorkouts) {
@@ -562,9 +603,29 @@ class ChallengeService
                 ChallengeParticipant::where('challenge_id', $challenge->id)
                     ->where('user_id', $entry->user_id)
                     ->increment('total_challenge_points', $pointsAwarded);
+
+                $winner = $entry->user;
+                if ($winner) {
+                    $this->pointService->earnPoints(
+                        $winner,
+                        $pointsAwarded,
+                        "Desafio semanal: {$challenge->name}",
+                        'challenge',
+                        $challenge->id
+                    );
+                }
+
+                $awards[] = [
+                    'user_id' => $entry->user_id,
+                    'points' => $pointsAwarded,
+                    'position' => $assignedPos,
+                    'week_start' => $weekStart,
+                ];
             }
 
             $position++;
         }
+
+        return $awards;
     }
 }

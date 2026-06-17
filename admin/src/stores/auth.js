@@ -79,6 +79,14 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function updateAvatar(file) {
+    const formData = new FormData()
+    formData.append('avatar', file)
+
+    await api.post('/profile/avatar', formData)
+    await refreshMe()
+  }
+
   return {
     token,
     user,
@@ -93,6 +101,7 @@ export const useAuthStore = defineStore('auth', () => {
     forgotPassword,
     resetPassword,
     refreshMe,
+    updateAvatar,
     loginRedirect,
   }
 })

@@ -901,9 +901,28 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
         if (!mounted) return;
       }
 
+      final hasChallengeCelebration = finishResult.celebrations.any(
+        (event) => (event['type'] as String? ?? '').startsWith('challenge_'),
+      );
+
+      for (final event in finishResult.celebrations) {
+        if (!mounted) return;
+        final type = event['type'] as String? ?? '';
+        await _gymAchievementDialog(
+          context,
+          icon: type == 'achievement'
+              ? Icons.workspace_premium_rounded
+              : Icons.emoji_events_rounded,
+          iconColor: type == 'achievement' ? _kDone : _kAmber,
+          title: event['title'] as String? ?? 'Boa!',
+          content: event['message'] as String? ?? 'Progresso salvo com sucesso.',
+        );
+      }
+      if (!mounted) return;
+
       // Feedback de desafio ativo (aparece somente quando o treino conta pontos)
       final cp = finishResult.challengeProgress;
-      if (cp != null && mounted) {
+      if (cp != null && mounted && !hasChallengeCelebration) {
         final String challengeMsg = _buildChallengeMessage(cp);
         await _gymAchievementDialog(
           context,
