@@ -11,6 +11,10 @@ const _androidDevHost = '192.168.0.104';
 const _productionBaseUrl = 'https://api.gymupapp.com.br/api';
 
 class ApiService {
+  // Reuse one client so requests share persistent HTTP connections instead of
+  // paying for a new TLS handshake on every API call.
+  static final http.Client _client = http.Client();
+
   /// URL base da API.
   ///
   /// No Android emulator, `localhost` aponta para o próprio dispositivo —
@@ -40,19 +44,16 @@ class ApiService {
   Future<http.Response> get(String endpoint) async {
     final token = await _getToken();
 
-    return http.get(
+    return _client.get(
       Uri.parse('$baseUrl$endpoint'),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
+      headers: {'Accept': 'application/json', 'Authorization': 'Bearer $token'},
     );
   }
 
   Future<http.Response> post(String endpoint, Map<String, dynamic> body) async {
     final token = await _getToken();
 
-    return http.post(
+    return _client.post(
       Uri.parse('$baseUrl$endpoint'),
       headers: {
         'Accept': 'application/json',
@@ -66,7 +67,7 @@ class ApiService {
   Future<http.Response> put(String endpoint, Map<String, dynamic> body) async {
     final token = await _getToken();
 
-    return http.put(
+    return _client.put(
       Uri.parse('$baseUrl$endpoint'),
       headers: {
         'Accept': 'application/json',
@@ -80,7 +81,7 @@ class ApiService {
   Future<http.Response> delete(String endpoint) async {
     final token = await _getToken();
 
-    return http.delete(
+    return _client.delete(
       Uri.parse('$baseUrl$endpoint'),
       headers: {
         'Accept': 'application/json',
@@ -95,13 +96,16 @@ class ApiService {
     List<http.MultipartFile>? files,
   }) async {
     final token = await _getToken();
-    final request = http.MultipartRequest('POST', Uri.parse('$baseUrl$endpoint'));
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl$endpoint'),
+    );
 
     request.headers['Accept'] = 'application/json';
     if (token != null) request.headers['Authorization'] = 'Bearer $token';
     if (fields != null) request.fields.addAll(fields);
     if (files != null) request.files.addAll(files);
 
-    return request.send();
+    return _client.send(request);
   }
 }

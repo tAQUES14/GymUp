@@ -17,42 +17,21 @@ class _Tab {
   final String icon;
   final String label;
 
-  const _Tab({
-    required this.icon,
-    required this.label,
-  });
+  const _Tab({required this.icon, required this.label});
 }
 
 const _tabs = [
-  _Tab(
-    icon: 'assets/icons/nav/home.svg',
-    label: 'Início',
-  ),
-  _Tab(
-    icon: 'assets/icons/nav/workouts.svg',
-    label: 'Treinos',
-  ),
-  _Tab(
-    icon: 'assets/icons/nav/store.svg',
-    label: 'Loja',
-  ),
-  _Tab(
-    icon: 'assets/icons/nav/ranking.svg',
-    label: 'Ranking',
-  ),
-  _Tab(
-    icon: 'assets/icons/nav/profile.svg',
-    label: 'Perfil',
-  ),
+  _Tab(icon: 'assets/icons/nav/home.svg', label: 'Início'),
+  _Tab(icon: 'assets/icons/nav/workouts.svg', label: 'Treinos'),
+  _Tab(icon: 'assets/icons/nav/store.svg', label: 'Loja'),
+  _Tab(icon: 'assets/icons/nav/ranking.svg', label: 'Ranking'),
+  _Tab(icon: 'assets/icons/nav/profile.svg', label: 'Perfil'),
 ];
 
 class AppShell extends StatefulWidget {
   final int initialIndex;
 
-  const AppShell({
-    super.key,
-    this.initialIndex = 0,
-  });
+  const AppShell({super.key, this.initialIndex = 0});
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -62,26 +41,30 @@ class _AppShellState extends State<AppShell> {
   static const _kTabKey = 'last_tab_index';
 
   late int _currentIndex;
-
-  late final List<Widget> _pages = const [
-    HomePage(),
-    WorkoutsPage(),
-    StorePage(),
-    RankingPage(),
-    ProfilePage(),
-  ];
+  late final List<Widget?> _pages = List<Widget?>.filled(_tabs.length, null);
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex.clamp(0, _pages.length - 1);
+    _pages[_currentIndex] = _buildPage(_currentIndex);
   }
+
+  Widget _buildPage(int index) => switch (index) {
+    0 => const HomePage(),
+    1 => const WorkoutsPage(),
+    2 => const StorePage(),
+    3 => const RankingPage(),
+    4 => const ProfilePage(),
+    _ => const SizedBox.shrink(),
+  };
 
   void _onTabTapped(int index) {
     if (_currentIndex == index) return;
     HapticFeedback.selectionClick();
     setState(() {
       _currentIndex = index;
+      _pages[index] ??= _buildPage(index);
     });
     SharedPreferences.getInstance().then((p) => p.setInt(_kTabKey, index));
   }
@@ -102,7 +85,13 @@ class _AppShellState extends State<AppShell> {
                   child: SafeArea(
                     bottom: false,
                     minimum: const EdgeInsets.only(top: 8),
-                    child: IndexedStack(index: _currentIndex, children: _pages),
+                    child: IndexedStack(
+                      index: _currentIndex,
+                      children: List<Widget>.generate(
+                        _pages.length,
+                        (index) => _pages[index] ?? const SizedBox.shrink(),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -145,10 +134,7 @@ class _NavDock extends StatelessWidget {
                   return const LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.white,
-                    ],
+                    colors: [Colors.transparent, Colors.white],
                     stops: [0.0, 0.42],
                   ).createShader(bounds);
                 },
@@ -248,7 +234,8 @@ class _NavItem extends StatefulWidget {
   State<_NavItem> createState() => _NavItemState();
 }
 
-class _NavItemState extends State<_NavItem> with SingleTickerProviderStateMixin {
+class _NavItemState extends State<_NavItem>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _scale;
 
@@ -320,7 +307,9 @@ class _NavItemState extends State<_NavItem> with SingleTickerProviderStateMixin 
                   width: 20,
                   height: 20,
                   colorFilter: ColorFilter.mode(
-                    selected ? Colors.white : _kInactive.withValues(alpha: 0.85),
+                    selected
+                        ? Colors.white
+                        : _kInactive.withValues(alpha: 0.85),
                     BlendMode.srcIn,
                   ),
                 ),
