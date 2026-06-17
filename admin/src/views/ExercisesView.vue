@@ -244,7 +244,7 @@
               <!-- Basic info -->
               <section>
                 <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Informações básicas</p>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div class="col-span-2">
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Nome *</label>
                     <input v-model="form.name" type="text" placeholder="Ex: Supino Reto com Barra"

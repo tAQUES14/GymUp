@@ -56,7 +56,7 @@
               </svg>
               Carregando sugestões…
             </div>
-            <div v-else class="grid grid-cols-3 gap-3 mb-4">
+            <div v-else class="grid grid-cols-1 gap-3 mb-4 sm:grid-cols-3">
               <button v-for="sug in displaySuggestions" :key="sug.file"
                 @click="selectSuggestion(sug)"
                 :class="[

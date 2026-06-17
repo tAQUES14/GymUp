@@ -172,7 +172,7 @@
             </div>
 
             <form @submit.prevent="createGym" class="p-6 space-y-5">
-              <div class="grid grid-cols-2 gap-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button type="button" @click="createForm.kind = 'independent'"
                   class="text-left rounded-2xl border p-4 transition-colors"
                   :class="createForm.kind === 'independent'

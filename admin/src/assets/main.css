@@ -9,6 +9,8 @@
 
   body {
     @apply bg-slate-50 text-slate-900 font-sans;
+    min-width: 320px;
+    overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -28,6 +30,22 @@
 
   ::-webkit-scrollbar-thumb:hover {
     @apply bg-slate-400;
+  }
+}
+
+@media (max-width: 767px) {
+  .card:has(> table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .card > table {
+    min-width: 40rem;
+  }
+
+  .card > table th,
+  .card > table td {
+    white-space: nowrap;
   }
 }
 

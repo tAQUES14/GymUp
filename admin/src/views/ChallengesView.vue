@@ -34,7 +34,7 @@
     <template v-else>
 
       <!-- Stats strip -->
-      <div class="grid grid-cols-3 gap-4 mb-6">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <!-- Total -->
         <div class="card px-4 py-3.5 flex items-center gap-3">
           <div class="w-8 h-8 rounded-lg bg-brand-50 flex items-center justify-center flex-shrink-0">

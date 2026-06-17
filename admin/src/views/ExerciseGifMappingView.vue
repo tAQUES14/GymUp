@@ -16,7 +16,7 @@
     </div>
 
     <!-- Stats -->
-    <div v-if="!loading && !error" class="grid grid-cols-3 gap-4 mb-6">
+    <div v-if="!loading && !error" class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
       <div class="card p-4 text-center">
         <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Sem GIF</p>
         <p class="text-3xl font-bold text-red-500">{{ stats.missing }}</p>

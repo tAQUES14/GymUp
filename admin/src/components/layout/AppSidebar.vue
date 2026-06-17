@@ -1,5 +1,8 @@
 <template>
-  <aside class="fixed inset-y-0 left-0 w-64 bg-slate-900 flex flex-col z-30">
+  <aside
+    class="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[86vw] flex-col bg-slate-900 shadow-2xl transition-transform duration-200 lg:z-30 lg:w-64 lg:max-w-none lg:translate-x-0 lg:shadow-none"
+    :class="open ? 'translate-x-0' : '-translate-x-full'"
+  >
 
     <!-- Logo -->
     <div class="flex items-center gap-3 px-6 h-16 border-b border-slate-800">
@@ -11,6 +14,14 @@
       </div>
       <span class="text-white font-bold text-lg tracking-tight">GymUp</span>
       <span class="ml-auto text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Admin</span>
+      <button
+        type="button"
+        class="ml-1 rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-white lg:hidden"
+        aria-label="Fechar menu"
+        @click="$emit('close')"
+      >
+        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+      </button>
     </div>
 
     <!-- Navigation -->
@@ -69,13 +80,19 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth.js'
 import NavItem from './NavItem.vue'
 
 const auth   = useAuthStore()
 const router = useRouter()
+const route  = useRoute()
+
+defineProps({ open: { type: Boolean, default: false } })
+const emit = defineEmits(['close'])
+
+watch(() => route.fullPath, () => emit('close'))
 
 const userInitial = computed(() => auth.user?.name?.[0]?.toUpperCase() ?? 'A')
 const roleLabel   = computed(() => {
