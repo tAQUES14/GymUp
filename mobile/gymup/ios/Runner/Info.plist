@@ -45,8 +45,12 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Permita que o GymUp use a câmera para ler o QR Code de check-in da academia.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Permita que o GymUp acesse suas fotos para escolher uma foto de perfil.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Permita que o GymUp salve imagens de compartilhamento na sua galeria.</string>
 	<!-- URL Scheme: gymup://reset-password?token=...&email=... (fallback / dev) -->
 	<key>CFBundleURLTypes</key>
 	<array>

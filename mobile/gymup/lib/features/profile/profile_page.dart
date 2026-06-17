@@ -106,6 +106,8 @@ class _ProfilePageState extends State<ProfilePage>
     }
     if (avatarUrl != null && avatarUrl.isNotEmpty) {
       await prefs.setString('user_avatar_url', avatarUrl);
+    } else {
+      await prefs.remove('user_avatar_url');
     }
     await prefs.setString('user_name', data['name'] as String? ?? '');
     await prefs.setString('profile_name', data['name'] as String? ?? '');

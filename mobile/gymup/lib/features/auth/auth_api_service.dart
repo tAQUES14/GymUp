@@ -117,7 +117,9 @@ class AuthApiService {
       throw Exception(data['message'] ?? 'Erro ao criar conta');
     }
 
-    await _saveSession(data);
+    if (data['token'] != null) {
+      await _saveSession(data);
+    }
     return data;
   }
 
@@ -152,18 +154,7 @@ class AuthApiService {
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
 
-    // Persiste chain_id para que o toggle de rede no ranking funcione sem
-    // depender de uma chamada extra.
-    final chainId = data['gym_chain_id'];
-    if (chainId != null) {
-      await prefs.setInt('gym_chain_id', (chainId as num).toInt());
-    } else {
-      await prefs.remove('gym_chain_id');
-    }
-    final avatarUrl = data['avatar_url'] as String?;
-    if (avatarUrl != null && avatarUrl.isNotEmpty) {
-      await prefs.setString('user_avatar_url', avatarUrl);
-    }
+    await _persistUser(data, prefs);
 
     return data;
   }
@@ -241,8 +232,7 @@ class AuthApiService {
 
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('auth_token');
-    await prefs.remove('user_id');
+    await _clearUserCache(prefs, includeToken: true);
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -252,18 +242,83 @@ class AuthApiService {
   /// Salva token e user_id no SharedPreferences.
   Future<void> _saveSession(Map<String, dynamic> data) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('auth_token', data['token'] as String);
+    final token = data['token']?.toString();
+    if (token == null || token.isEmpty) return;
+
+    await _clearUserCache(prefs, includeToken: false);
+    await prefs.setString('auth_token', token);
 
     final user = data['user'] as Map<String, dynamic>?;
     if (user != null) {
-      await prefs.setInt('user_id', (user['id'] as num).toInt());
-      final name = user['name'] as String?;
-      if (name != null) await prefs.setString('user_name', name);
-      final avatarUrl = user['avatar_url'] as String?;
-      if (avatarUrl != null && avatarUrl.isNotEmpty) {
-        await prefs.setString('user_avatar_url', avatarUrl);
-      }
+      await _persistUser(user, prefs);
     }
+  }
+
+  Future<void> _persistUser(
+    Map<String, dynamic> user,
+    SharedPreferences prefs,
+  ) async {
+    final id = user['id'];
+    if (id is num) {
+      await prefs.setInt('user_id', id.toInt());
+    }
+
+    final name = user['name']?.toString() ?? '';
+    final email = user['email']?.toString() ?? '';
+    await prefs.setString('user_name', name);
+    await prefs.setString('profile_name', name);
+    await prefs.setString('profile_email', email);
+
+    final avatarUrl = user['avatar_url']?.toString() ?? '';
+    if (avatarUrl.trim().isEmpty) {
+      await prefs.remove('user_avatar_url');
+    } else {
+      await prefs.setString('user_avatar_url', avatarUrl);
+    }
+
+    final points = user['points_balance'];
+    if (points is num) {
+      await prefs.setInt('profile_points_balance', points.toInt());
+    }
+
+    final checkins = user['total_checkins'];
+    if (checkins is num) {
+      await prefs.setInt('profile_total_checkins', checkins.toInt());
+    }
+
+    final streak = user['current_streak'];
+    if (streak is num) {
+      await prefs.setInt('profile_current_streak', streak.toInt());
+    }
+
+    final chainId = user['gym_chain_id'];
+    if (chainId is num) {
+      await prefs.setInt('gym_chain_id', chainId.toInt());
+    } else {
+      await prefs.remove('gym_chain_id');
+    }
+  }
+
+  Future<void> _clearUserCache(
+    SharedPreferences prefs, {
+    required bool includeToken,
+  }) async {
+    if (includeToken) {
+      await prefs.remove('auth_token');
+      await prefs.remove('token');
+    }
+    await prefs.remove('auth_user');
+    await prefs.remove('user');
+    await prefs.remove('user_id');
+    await prefs.remove('user_name');
+    await prefs.remove('user_avatar_url');
+    await prefs.remove('profile_name');
+    await prefs.remove('profile_email');
+    await prefs.remove('profile_points_balance');
+    await prefs.remove('profile_total_checkins');
+    await prefs.remove('profile_current_streak');
+    await prefs.remove('gym_name');
+    await prefs.remove('gym_chain_id');
   }
 
   Future<void> resendVerificationEmail({required String email}) async {

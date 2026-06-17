@@ -1,7 +1,9 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../auth/auth_api_service.dart';
 import 'reward_api_service.dart';
 import 'reward_model.dart';
 
@@ -28,10 +30,31 @@ class RewardDetailsPage extends StatefulWidget {
 
 class _RewardDetailsPageState extends State<RewardDetailsPage> {
   bool _isLoading = false;
+  late int _userPoints = widget.userPoints;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentBalance();
+  }
+
+  Future<void> _loadCurrentBalance() async {
+    try {
+      final user = await AuthApiService().getMe();
+      final points = (user['points_balance'] as num?)?.toInt();
+      if (!mounted || points == null) return;
+      setState(() => _userPoints = points);
+    } catch (_) {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getInt('profile_points_balance');
+      if (!mounted || cached == null) return;
+      setState(() => _userPoints = cached);
+    }
+  }
 
   Future<void> _resgatar(int custoPontos) async {
     final reward = widget.reward;
-    if (reward == null || widget.userPoints < custoPontos) return;
+    if (reward == null || _userPoints < custoPontos) return;
     setState(() => _isLoading = true);
     try {
       await RewardApiService().redeemReward(reward.id);
@@ -75,7 +98,7 @@ class _RewardDetailsPageState extends State<RewardDetailsPage> {
     }
 
     final category = _rewardCategory(reward);
-    final canRedeem = widget.userPoints >= reward.pointsCost;
+    final canRedeem = _userPoints >= reward.pointsCost;
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
@@ -100,7 +123,7 @@ class _RewardDetailsPageState extends State<RewardDetailsPage> {
                       const SizedBox(height: 14),
                       _CostBalanceCard(
                         cost: reward.pointsCost,
-                        balance: widget.userPoints,
+                        balance: _userPoints,
                         canRedeem: canRedeem,
                       ),
                       const SizedBox(height: 18),
@@ -127,7 +150,7 @@ class _RewardDetailsPageState extends State<RewardDetailsPage> {
               isLoading: _isLoading,
               bottomInset: bottomInset,
               onRedeem: () => _resgatar(reward.pointsCost),
-              missing: canRedeem ? 0 : reward.pointsCost - widget.userPoints,
+              missing: canRedeem ? 0 : reward.pointsCost - _userPoints,
             ),
           ),
         ],

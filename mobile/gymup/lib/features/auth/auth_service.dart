@@ -77,6 +77,16 @@ class AuthService {
     // Remove também chaves legadas para não deixar estado inconsistente
     await prefs.remove('token');
     await prefs.remove('user');
+    await prefs.remove('user_id');
+    await prefs.remove('user_name');
+    await prefs.remove('user_avatar_url');
+    await prefs.remove('profile_name');
+    await prefs.remove('profile_email');
+    await prefs.remove('profile_points_balance');
+    await prefs.remove('profile_total_checkins');
+    await prefs.remove('profile_current_streak');
+    await prefs.remove('gym_name');
+    await prefs.remove('gym_chain_id');
   }
 
   Future<String?> getToken() async {

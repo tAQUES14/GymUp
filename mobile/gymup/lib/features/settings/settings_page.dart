@@ -106,6 +106,8 @@ class _SettingsPageState extends State<SettingsPage> {
       _heightCtrl.text = _formatNumber(profileHeight ?? goalData.height, decimals: 0);
       if (avatarUrl.isNotEmpty) {
         await prefs.setString('user_avatar_url', avatarUrl);
+      } else {
+        await prefs.remove('user_avatar_url');
       }
 
       if (!mounted) return;
