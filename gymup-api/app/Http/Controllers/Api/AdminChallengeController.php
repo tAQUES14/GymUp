@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\DB;
 
 class AdminChallengeController extends Controller
 {
+    private const FALLBACK_PUBLIC_STORAGE_BASE_URL = 'https://s3.us-west-004.backblazeb2.com/gymup-storage';
+
     public function __construct(private ChallengeService $challengeService) {}
 
     /**
@@ -40,7 +42,7 @@ class AdminChallengeController extends Controller
             ->firstOrFail();
 
         $participants = $challenge->participants()
-            ->with('user:id,name,email')
+            ->with('user:id,name,email,avatar_url')
             ->orderByDesc('total_challenge_points')
             ->orderByDesc('workouts_this_challenge')
             ->get()
@@ -49,6 +51,7 @@ class AdminChallengeController extends Controller
                 'user_id'                => $p->user_id,
                 'name'                   => $p->user->name ?? '—',
                 'email'                  => $p->user->email ?? '—',
+                'avatar_url'             => $this->avatarUrl($p->user->avatar_url ?? null),
                 'total_challenge_points' => $p->total_challenge_points,
                 'workouts_this_challenge'=> $p->workouts_this_challenge,
                 'goal_completed'         => $p->goal_completed,
@@ -210,5 +213,20 @@ class AdminChallengeController extends Controller
             'message'   => 'Desafio encerrado com sucesso.',
             'challenge' => $challenge->fresh(),
         ]);
+    }
+
+    private function avatarUrl(?string $value): ?string
+    {
+        if (! $value) return null;
+        if (str_starts_with($value, 'http') && ! str_contains($value, 'gymup-api.onrender.com/storage')) return $value;
+
+        $path = str_starts_with($value, 'http')
+            ? rawurldecode(parse_url($value, PHP_URL_PATH) ?: '')
+            : $value;
+        $path = preg_replace('#^.*?/(?:storage|img)/#', '', $path);
+        $path = ltrim(str_starts_with($path, 'storage/') ? substr($path, 8) : $path, '/');
+
+        return rtrim(env('PUBLIC_DISK_URL') ?: env('PUBLIC_DISK_ENDPOINT') ?: env('PUBLIC_DISK_BASE_URL') ?: self::FALLBACK_PUBLIC_STORAGE_BASE_URL, '/')
+            . '/' . implode('/', array_map('rawurlencode', explode('/', $path)));
     }
 }

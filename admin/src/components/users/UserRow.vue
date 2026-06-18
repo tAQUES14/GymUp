@@ -7,10 +7,11 @@
     <td class="px-5 py-3.5">
       <div class="flex items-center gap-3">
         <div
-          class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 select-none"
+          class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 select-none overflow-hidden"
           :class="avatarColor"
         >
-          {{ initials }}
+          <img v-if="avatarUrl" :src="avatarUrl" :alt="user.name" class="w-full h-full object-cover" @error="avatarFailed = true" />
+          <template v-else>{{ initials }}</template>
         </div>
         <div class="min-w-0">
           <div class="flex items-center gap-1.5">
@@ -81,13 +82,16 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 const props = defineProps({
   user: { type: Object, required: true },
 })
 
 defineEmits(['view'])
+
+const avatarFailed = ref(false)
+const avatarUrl = computed(() => avatarFailed.value ? '' : (props.user.avatar_url ?? ''))
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
 

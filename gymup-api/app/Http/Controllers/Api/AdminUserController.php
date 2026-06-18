@@ -11,6 +11,8 @@ use Illuminate\Http\Request;
 
 class AdminUserController extends Controller
 {
+    private const FALLBACK_PUBLIC_STORAGE_BASE_URL = 'https://s3.us-west-004.backblazeb2.com/gymup-storage';
+
     // ── LIST ──────────────────────────────────────────────────────────────────
 
     public function index(Request $request): JsonResponse
@@ -46,6 +48,7 @@ class AdminUserController extends Controller
             'id'             => $user->id,
             'name'           => $user->name,
             'email'          => $user->email,
+            'avatar_url'     => $this->avatarUrl($user->avatar_url),
             'points_balance' => $user->points_balance,
             'workouts_total' => $user->workouts_total ?? 0,
             'last_activity'  => $user->last_activity_at
@@ -160,6 +163,7 @@ class AdminUserController extends Controller
             'id'                  => $user->id,
             'name'                => $user->name,
             'email'               => $user->email,
+            'avatar_url'          => $this->avatarUrl($user->avatar_url),
             'birth_date'          => $user->birth_date?->format('Y-m-d'),
             'height'              => $user->height,
             'weight'              => $user->weight,
@@ -307,5 +311,52 @@ class AdminUserController extends Controller
         return Carbon::parse($lastActivityAt)->gte(now()->subDays(30))
             ? 'active'
             : 'inactive';
+    }
+
+    private function avatarUrl(?string $value): ?string
+    {
+        if (! $value) {
+            return null;
+        }
+
+        if (str_starts_with($value, 'http') && ! str_contains($value, 'gymup-api.onrender.com/storage')) {
+            return $value;
+        }
+
+        $path = $this->normalizeAvatarPath($value);
+        if (! $path) {
+            return null;
+        }
+
+        $encoded = implode('/', array_map('rawurlencode', explode('/', $path)));
+
+        return rtrim($this->publicStorageBaseUrl(), '/') . '/' . $encoded;
+    }
+
+    private function normalizeAvatarPath(string $value): string
+    {
+        if (! str_starts_with($value, 'http')) {
+            return ltrim(str_starts_with($value, 'storage/') ? substr($value, 8) : $value, '/');
+        }
+
+        $path = rawurldecode(parse_url($value, PHP_URL_PATH) ?: '');
+
+        if (preg_match('#/(?:storage|img)/(.+)$#', $path, $matches)) {
+            return ltrim($matches[1], '/');
+        }
+
+        if (preg_match('#/(avatars/.+)$#', $path, $matches)) {
+            return ltrim($matches[1], '/');
+        }
+
+        return ltrim($path, '/');
+    }
+
+    private function publicStorageBaseUrl(): string
+    {
+        return env('PUBLIC_DISK_URL')
+            ?: env('PUBLIC_DISK_ENDPOINT')
+            ?: env('PUBLIC_DISK_BASE_URL')
+            ?: self::FALLBACK_PUBLIC_STORAGE_BASE_URL;
     }
 }

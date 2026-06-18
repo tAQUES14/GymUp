@@ -41,9 +41,10 @@
 
           <!-- Avatar + info -->
           <div class="flex items-center gap-4 flex-1 min-w-0">
-            <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold text-white flex-shrink-0 shadow-md"
+            <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold text-white flex-shrink-0 shadow-md overflow-hidden"
                  :style="{ backgroundColor: avatarColor(user.name) }">
-              {{ initials(user.name) }}
+              <img v-if="userAvatarUrl" :src="userAvatarUrl" :alt="user.name" class="w-full h-full object-cover" @error="avatarFailed = true" />
+              <template v-else>{{ initials(user.name) }}</template>
             </div>
             <div class="min-w-0">
               <h1 class="text-xl font-bold text-slate-900 leading-tight truncate">{{ user.name }}</h1>
@@ -446,6 +447,8 @@ const adjustOpen    = ref(false)
 const deleteConfirm = ref(false)
 const deleting      = ref(false)
 const deleteError   = ref('')
+const avatarFailed  = ref(false)
+const userAvatarUrl = computed(() => avatarFailed.value ? '' : (user.value?.avatar_url ?? ''))
 
 
 const tabs = computed(() => [
@@ -484,6 +487,7 @@ async function load() {
   loading.value = true; error.value = ''
   try {
     const { data } = await api.get(`/admin/users/${route.params.id}`)
+    avatarFailed.value = false
     user.value = data
   } catch {
     error.value = 'Não foi possível carregar o aluno.'

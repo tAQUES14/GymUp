@@ -305,9 +305,10 @@
                 <!-- Aluno -->
                 <td class="px-5 py-3.5">
                   <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 overflow-hidden"
                          :style="{ backgroundColor: avatarColor(p.name) }">
-                      {{ initials(p.name) }}
+                      <img v-if="participantAvatar(p)" :src="participantAvatar(p)" :alt="p.name" class="w-full h-full object-cover" @error="onParticipantAvatarError(p)" />
+                      <template v-else>{{ initials(p.name) }}</template>
                     </div>
                     <div class="min-w-0">
                       <p class="text-sm font-semibold text-slate-800 truncate">{{ p.name }}</p>
@@ -439,6 +440,7 @@ const route        = useRoute()
 const router       = useRouter()
 const challenge    = ref(null)
 const participants = ref([])
+const avatarFailures = ref(new Set())
 const loading      = ref(true)
 const error        = ref('')
 const activeTab    = ref('config')
@@ -564,6 +566,15 @@ function avatarColor(name) {
   let h = 0
   for (const c of (name ?? '')) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff
   return colors[Math.abs(h) % colors.length]
+}
+
+function participantAvatar(participant) {
+  if (!participant?.avatar_url || avatarFailures.value.has(participant.user_id)) return ''
+  return participant.avatar_url
+}
+
+function onParticipantAvatarError(participant) {
+  avatarFailures.value = new Set([...avatarFailures.value, participant.user_id])
 }
 
 onMounted(loadChallenge)
