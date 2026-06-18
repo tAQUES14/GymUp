@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -109,27 +109,25 @@ class _RewardDetailsPageState extends State<RewardDetailsPage> {
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(20, 0, 20, 118 + bottomInset),
                 sliver: SliverList(
-                  delegate: SliverChildListDelegate(
-                    [
-                      _ProductIntro(reward: reward, category: category),
-                      const SizedBox(height: 14),
-                      _CostBalanceCard(
-                        cost: reward.pointsCost,
-                        balance: _userPoints,
-                        canRedeem: canRedeem,
-                      ),
-                      const SizedBox(height: 18),
-                      _sectionTitle('Detalhes'),
-                      const SizedBox(height: 10),
-                      _DetailsCard(reward: reward),
-                      const SizedBox(height: 18),
-                      _sectionTitle('Como funciona'),
-                      const SizedBox(height: 10),
-                      _HowItWorksCard(cost: reward.pointsCost),
-                      const SizedBox(height: 18),
-                      _StockCard(reward: reward),
-                    ],
-                  ),
+                  delegate: SliverChildListDelegate([
+                    _ProductIntro(reward: reward, category: category),
+                    const SizedBox(height: 14),
+                    _CostBalanceCard(
+                      cost: reward.pointsCost,
+                      balance: _userPoints,
+                      canRedeem: canRedeem,
+                    ),
+                    const SizedBox(height: 18),
+                    _sectionTitle('Detalhes'),
+                    const SizedBox(height: 10),
+                    _DetailsCard(reward: reward),
+                    const SizedBox(height: 18),
+                    _sectionTitle('Como funciona'),
+                    const SizedBox(height: 10),
+                    _HowItWorksCard(cost: reward.pointsCost),
+                    const SizedBox(height: 18),
+                    _StockCard(reward: reward),
+                  ]),
                 ),
               ),
             ],
@@ -203,11 +201,6 @@ class _ProductHero extends StatelessWidget {
               ),
             ),
           ),
-          Positioned(
-            left: 20,
-            top: 90,
-            child: _HotBadge(),
-          ),
           SafeArea(
             bottom: false,
             child: Padding(
@@ -244,18 +237,7 @@ class _ProductIntro extends StatelessWidget {
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 8,
             runSpacing: 6,
-            children: [
-              _CategoryChip(category: category),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.star_rounded, size: 13, color: _kOrange),
-                  const SizedBox(width: 3),
-                  Text('4,8', style: _sg(size: 11, weight: FontWeight.w700, color: _kInk)),
-                  Text(' · 86', style: _pjs(size: 11, weight: FontWeight.w700, color: _kSoft)),
-                ],
-              ),
-            ],
+            children: [_CategoryChip(category: category)],
           ),
           const SizedBox(height: 10),
           Text(
@@ -376,7 +358,11 @@ class _CostBalanceCard extends StatelessWidget {
                           color: _kGreen,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.check_rounded, color: Colors.white, size: 12),
+                        child: const Icon(
+                          Icons.check_rounded,
+                          color: Colors.white,
+                          size: 12,
+                        ),
                       )
                     : null,
               ),
@@ -435,15 +421,19 @@ class _MetricBlock extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    Text(suffix, style: _sg(size: 12, weight: FontWeight.w700, color: _kSoft)),
+                    Text(
+                      suffix,
+                      style: _sg(
+                        size: 12,
+                        weight: FontWeight.w700,
+                        color: _kSoft,
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
-            if (trailing != null) ...[
-              const SizedBox(width: 6),
-              trailing!,
-            ],
+            if (trailing != null) ...[const SizedBox(width: 6), trailing!],
           ],
         ),
       ],
@@ -481,7 +471,9 @@ class _DetailsCard extends StatelessWidget {
                 Expanded(
                   child: _DetailTile(
                     spec: specs[1],
-                    border: Border(bottom: BorderSide(color: _kInk.withValues(alpha: 0.06))),
+                    border: Border(
+                      bottom: BorderSide(color: _kInk.withValues(alpha: 0.06)),
+                    ),
                   ),
                 ),
               ],
@@ -493,7 +485,9 @@ class _DetailsCard extends StatelessWidget {
                 Expanded(
                   child: _DetailTile(
                     spec: specs[2],
-                    border: Border(right: BorderSide(color: _kInk.withValues(alpha: 0.06))),
+                    border: Border(
+                      right: BorderSide(color: _kInk.withValues(alpha: 0.06)),
+                    ),
                   ),
                 ),
                 Expanded(child: _DetailTile(spec: specs[3])),
@@ -542,12 +536,24 @@ class _DetailTile extends StatelessWidget {
                         spec.value,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: _sg(size: 14, weight: FontWeight.w700, color: _kInk, letterSpacing: -0.2),
+                        style: _sg(
+                          size: 14,
+                          weight: FontWeight.w700,
+                          color: _kInk,
+                          letterSpacing: -0.2,
+                        ),
                       ),
                     ),
                     if (spec.suffix != null) ...[
                       const SizedBox(width: 3),
-                      Text(spec.suffix!, style: _sg(size: 10.5, weight: FontWeight.w700, color: _kSoft)),
+                      Text(
+                        spec.suffix!,
+                        style: _sg(
+                          size: 10.5,
+                          weight: FontWeight.w700,
+                          color: _kSoft,
+                        ),
+                      ),
                     ],
                   ],
                 ),
@@ -587,7 +593,11 @@ class _HowItWorksCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final steps = [
-      ('01', 'Toque em Resgatar', '${_fmtPoints(cost)} pts serao reservados do seu saldo.'),
+      (
+        '01',
+        'Toque em Resgatar',
+        '${_fmtPoints(cost)} pts serao reservados do seu saldo.',
+      ),
       ('02', 'Aguarde aprovacao', 'A academia revisa o pedido em ate 48h.'),
       ('03', 'Retire na recepcao', 'Apresente o codigo de resgate no app.'),
     ];
@@ -629,7 +639,9 @@ class _StepRow extends StatelessWidget {
       padding: EdgeInsets.only(bottom: isLast ? 0 : 15, top: isLast ? 0 : 0),
       margin: EdgeInsets.only(bottom: isLast ? 0 : 14),
       decoration: BoxDecoration(
-        border: isLast ? null : Border(bottom: BorderSide(color: _kInk.withValues(alpha: 0.05))),
+        border: isLast
+            ? null
+            : Border(bottom: BorderSide(color: _kInk.withValues(alpha: 0.05))),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -644,7 +656,12 @@ class _StepRow extends StatelessWidget {
             alignment: Alignment.center,
             child: Text(
               number,
-              style: _sg(size: 13, weight: FontWeight.w700, color: _kBlueDark, letterSpacing: -0.2),
+              style: _sg(
+                size: 13,
+                weight: FontWeight.w700,
+                color: _kBlueDark,
+                letterSpacing: -0.2,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -654,12 +671,22 @@ class _StepRow extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: _pjs(size: 13.5, weight: FontWeight.w800, color: _kInk, letterSpacing: -0.2),
+                  style: _pjs(
+                    size: 13.5,
+                    weight: FontWeight.w800,
+                    color: _kInk,
+                    letterSpacing: -0.2,
+                  ),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   subtitle,
-                  style: _pjs(size: 12, weight: FontWeight.w500, color: _kMuted, height: 1.45),
+                  style: _pjs(
+                    size: 12,
+                    weight: FontWeight.w500,
+                    color: _kMuted,
+                    height: 1.45,
+                  ),
                 ),
               ],
             ),
@@ -688,7 +715,9 @@ class _StockCard extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: hasStock ? const Color(0xFFEDFBD3) : const Color(0xFFFFEDDC),
+              color: hasStock
+                  ? const Color(0xFFEDFBD3)
+                  : const Color(0xFFFFEDDC),
               borderRadius: BorderRadius.circular(11),
             ),
             child: Icon(
@@ -703,13 +732,24 @@ class _StockCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  stock == null ? 'Disponivel para resgate' : '$stock unidades disponiveis',
-                  style: _pjs(size: 13.5, weight: FontWeight.w800, color: _kInk, letterSpacing: -0.2),
+                  stock == null
+                      ? 'Disponivel para resgate'
+                      : '$stock unidades disponiveis',
+                  style: _pjs(
+                    size: 13.5,
+                    weight: FontWeight.w800,
+                    color: _kInk,
+                    letterSpacing: -0.2,
+                  ),
                 ),
                 const SizedBox(height: 1),
                 Text(
                   'Retirada na recepcao da academia',
-                  style: _pjs(size: 12, weight: FontWeight.w500, color: _kMuted),
+                  style: _pjs(
+                    size: 12,
+                    weight: FontWeight.w500,
+                    color: _kMuted,
+                  ),
                 ),
               ],
             ),
@@ -717,7 +757,9 @@ class _StockCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
             decoration: BoxDecoration(
-              color: hasStock ? const Color(0xFFEDFBD3) : const Color(0xFFFFEDDC),
+              color: hasStock
+                  ? const Color(0xFFEDFBD3)
+                  : const Color(0xFFFFEDDC),
               borderRadius: BorderRadius.circular(100),
             ),
             child: Text(
@@ -791,7 +833,14 @@ class _BottomDock extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 3),
-                  Text('pts', style: _sg(size: 11, weight: FontWeight.w700, color: _kMuted)),
+                  Text(
+                    'pts',
+                    style: _sg(
+                      size: 11,
+                      weight: FontWeight.w700,
+                      color: _kMuted,
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -805,7 +854,10 @@ class _BottomDock extends StatelessWidget {
                 opacity: isLoading ? 0.70 : 1,
                 child: Container(
                   height: 52,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 16,
+                  ),
                   decoration: BoxDecoration(
                     gradient: canRedeem
                         ? const LinearGradient(
@@ -831,20 +883,27 @@ class _BottomDock extends StatelessWidget {
                         ? const SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
                           )
                         : Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(
-                                canRedeem ? Icons.card_giftcard_rounded : Icons.lock_rounded,
+                                canRedeem
+                                    ? Icons.card_giftcard_rounded
+                                    : Icons.lock_rounded,
                                 color: canRedeem ? Colors.white : _kSoft,
                                 size: 17,
                               ),
                               const SizedBox(width: 8),
                               Flexible(
                                 child: Text(
-                                  canRedeem ? 'Resgatar' : 'Faltam ${_fmtPoints(missing)} pontos',
+                                  canRedeem
+                                      ? 'Resgatar'
+                                      : 'Faltam ${_fmtPoints(missing)} pontos',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   textAlign: TextAlign.center,
@@ -890,7 +949,9 @@ class _SuccessDialog extends StatelessWidget {
                 end: Alignment.bottomRight,
                 colors: [_kBlueDark, _kBlue, Color(0xFF4A8CFF)],
               ),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
             ),
             child: Column(
               children: [
@@ -959,7 +1020,9 @@ class _SuccessDialog extends StatelessWidget {
                   child: Container(
                     height: 50,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [_kBlueDark, _kBlue]),
+                      gradient: const LinearGradient(
+                        colors: [_kBlueDark, _kBlue],
+                      ),
                       borderRadius: BorderRadius.circular(100),
                       boxShadow: [
                         BoxShadow(
@@ -1004,39 +1067,13 @@ class _CategoryChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(100),
       ),
       child: Text(
-        '${category.label.toUpperCase()} · EDICAO LIMITADA',
-        style: _pjs(size: 10, weight: FontWeight.w800, color: category.accent, letterSpacing: 0.5),
-      ),
-    );
-  }
-}
-
-class _HotBadge extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(8, 5, 10, 5),
-      decoration: BoxDecoration(
-        color: _kOrange,
-        borderRadius: BorderRadius.circular(100),
-        boxShadow: [
-          BoxShadow(
-            color: _kOrange.withValues(alpha: 0.32),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.local_fire_department_rounded, color: Colors.white, size: 12),
-          const SizedBox(width: 5),
-          Text(
-            'MAIS RESGATADO',
-            style: _pjs(size: 10, weight: FontWeight.w800, color: Colors.white, letterSpacing: 0.5),
-          ),
-        ],
+        category.label.toUpperCase(),
+        style: _pjs(
+          size: 10,
+          weight: FontWeight.w800,
+          color: category.accent,
+          letterSpacing: 0.5,
+        ),
       ),
     );
   }
@@ -1075,8 +1112,11 @@ class _Spec {
 }
 
 _RewardCategory _rewardCategory(Reward reward) {
-  final text = '${reward.category ?? ''} ${reward.name} ${reward.description}'.toLowerCase();
-  if (text.contains('desconto') || text.contains('mensalidade') || text.contains('cupom')) {
+  final text = '${reward.category ?? ''} ${reward.name} ${reward.description}'
+      .toLowerCase();
+  if (text.contains('desconto') ||
+      text.contains('mensalidade') ||
+      text.contains('cupom')) {
     return const _RewardCategory(
       label: 'Desconto',
       bg: Color(0xFFFFEDDC),
@@ -1105,47 +1145,49 @@ _RewardCategory _rewardCategory(Reward reward) {
 }
 
 List<_Spec> _specsFor(Reward reward) {
-  final text = '${reward.name} ${reward.description}'.toLowerCase();
-  if (text.contains('desconto') || text.contains('mensalidade') || text.contains('cupom')) {
-    return const [
-      _Spec(label: 'TIPO', value: 'Plano', suffix: 'anual', bg: Color(0xFFFFEDDC), accent: Color(0xFFB85A00), icon: Icons.percent_rounded),
-      _Spec(label: 'APLICACAO', value: 'Mensalidade', bg: Color(0xFFE7EEFE), accent: _kBlue, icon: Icons.receipt_long_rounded),
-      _Spec(label: 'VALIDADE', value: '30', suffix: 'dias', bg: Color(0xFFEDFBD3), accent: _kGreen, icon: Icons.event_available_rounded),
-      _Spec(label: 'USO', value: '1', suffix: 'vez', bg: Color(0xFFEFE9FD), accent: _kPurple, icon: Icons.verified_user_outlined),
-    ];
-  }
-  if (text.contains('benef') ||
-      text.contains('spa') ||
-      text.contains('pass') ||
-      text.contains('avaliacao') ||
-      text.contains('aula')) {
-    return const [
-      _Spec(label: 'TIPO', value: 'Servico', bg: Color(0xFFEFE9FD), accent: _kPurple, icon: Icons.spa_rounded),
-      _Spec(label: 'DURACAO', value: '1', suffix: 'uso', bg: Color(0xFFE7EEFE), accent: _kBlue, icon: Icons.timer_outlined),
-      _Spec(label: 'VALIDADE', value: '30', suffix: 'dias', bg: Color(0xFFEDFBD3), accent: _kGreen, icon: Icons.event_available_rounded),
-      _Spec(label: 'RETIRADA', value: 'Recepcao', bg: Color(0xFFFFEDDC), accent: _kOrange, icon: Icons.storefront_rounded),
-    ];
-  }
-  if (text.contains('camiseta') || text.contains('dry')) {
-    return const [
-      _Spec(label: 'TAMANHO', value: 'P ao GG', bg: Color(0xFFE7EEFE), accent: _kBlue, icon: Icons.straighten_rounded),
-      _Spec(label: 'MATERIAL', value: 'Dry', suffix: 'fit', bg: Color(0xFFEDFBD3), accent: _kGreen, icon: Icons.checkroom_rounded),
-      _Spec(label: 'PESO', value: '120', suffix: 'g', bg: Color(0xFFFFEDDC), accent: _kOrange, icon: Icons.monitor_weight_outlined),
-      _Spec(label: 'GARANTIA', value: '30', suffix: 'dias', bg: Color(0xFFEFE9FD), accent: _kPurple, icon: Icons.verified_user_outlined),
-    ];
-  }
-  return const [
-    _Spec(label: 'TAMANHO', value: '600', suffix: 'ml', bg: Color(0xFFE7EEFE), accent: _kBlue, icon: Icons.water_drop_outlined),
-    _Spec(label: 'MATERIAL', value: 'BPA', suffix: 'free', bg: Color(0xFFEDFBD3), accent: _kGreen, icon: Icons.eco_outlined),
-    _Spec(label: 'PESO', value: '180', suffix: 'g', bg: Color(0xFFFFEDDC), accent: _kOrange, icon: Icons.monitor_weight_outlined),
-    _Spec(label: 'GARANTIA', value: '6', suffix: 'meses', bg: Color(0xFFEFE9FD), accent: _kPurple, icon: Icons.verified_user_outlined),
+  final category = _rewardCategory(reward);
+  return [
+    _Spec(
+      label: 'CATEGORIA',
+      value: category.label,
+      bg: category.bg,
+      accent: category.accent,
+      icon: category.icon,
+    ),
+    _Spec(
+      label: 'ESTOQUE',
+      value: reward.stock == null ? 'Ilimitado' : '${reward.stock}',
+      bg: const Color(0xFFEDFBD3),
+      accent: _kGreen,
+      icon: Icons.inventory_2_outlined,
+    ),
+    _Spec(
+      label: 'CUSTO',
+      value: _fmtPoints(reward.pointsCost),
+      suffix: 'pts',
+      bg: const Color(0xFFFFEDDC),
+      accent: _kOrange,
+      icon: Icons.stars_rounded,
+    ),
+    const _Spec(
+      label: 'RETIRADA',
+      value: 'Recepcao',
+      bg: Color(0xFFEFE9FD),
+      accent: _kPurple,
+      icon: Icons.storefront_rounded,
+    ),
   ];
 }
 
 Widget _sectionTitle(String text) {
   return Text(
     text,
-    style: _pjs(size: 14, weight: FontWeight.w800, color: _kInk, letterSpacing: -0.2),
+    style: _pjs(
+      size: 14,
+      weight: FontWeight.w800,
+      color: _kInk,
+      letterSpacing: -0.2,
+    ),
   );
 }
 
@@ -1210,7 +1252,12 @@ String _fmtPoints(int points) {
 }
 
 TextStyle _eyebrow({required double size, required double letterSpacing}) {
-  return _pjs(size: size, weight: FontWeight.w800, color: _kSoft, letterSpacing: letterSpacing);
+  return _pjs(
+    size: size,
+    weight: FontWeight.w800,
+    color: _kSoft,
+    letterSpacing: letterSpacing,
+  );
 }
 
 TextStyle _pjs({

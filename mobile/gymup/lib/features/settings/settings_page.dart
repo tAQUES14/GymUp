@@ -298,8 +298,15 @@ class _SettingsPageState extends State<SettingsPage> {
             final cropSize = (width - 80).clamp(260.0, 340.0);
             final editorWidth = width;
             final editorHeight = (height * 0.56).clamp(400.0, 590.0);
-            final imageWidth = math.max(editorWidth, cropSize * imageAspect);
+            final editorAspect = editorWidth / editorHeight;
+            final imageWidth = imageAspect >= editorAspect
+                ? editorWidth
+                : editorHeight * imageAspect;
             final imageHeight = imageWidth / imageAspect;
+            final minScale = math.min(
+              1.0,
+              cropSize / math.min(imageWidth, imageHeight),
+            );
 
             Future<void> capture() async {
               if (saving) return;
@@ -405,9 +412,11 @@ class _SettingsPageState extends State<SettingsPage> {
                                   child: InteractiveViewer(
                                     constrained: false,
                                     alignment: Alignment.center,
-                                    minScale: 1,
+                                    minScale: minScale,
                                     maxScale: 6,
-                                    boundaryMargin: EdgeInsets.zero,
+                                    boundaryMargin: EdgeInsets.all(
+                                      editorHeight,
+                                    ),
                                     child: SizedBox(
                                       width: imageWidth,
                                       height: imageHeight,

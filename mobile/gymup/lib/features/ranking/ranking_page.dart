@@ -27,14 +27,14 @@ enum RankingTipo { points, streak }
 
 extension RankingTipoExt on RankingTipo {
   String get label => switch (this) {
-        RankingTipo.points => 'Pontos',
-        RankingTipo.streak => 'Streak',
-      };
+    RankingTipo.points => 'Pontos',
+    RankingTipo.streak => 'Streak',
+  };
 
   String get param => switch (this) {
-        RankingTipo.points => 'points',
-        RankingTipo.streak => 'streak',
-      };
+    RankingTipo.points => 'points',
+    RankingTipo.streak => 'streak',
+  };
 }
 
 class RankingPage extends StatefulWidget {
@@ -56,7 +56,10 @@ class _RankingPageState extends State<RankingPage> {
   bool _hasChain = false;
   bool _isLoading = false;
   String? _error;
-  Future<void>? _activeFetch;
+  final Map<String, List<RankingItem>> _rankingCache = {};
+  int _fetchSequence = 0;
+
+  String get _cacheKey => '${_periodo.param}:${_escopo.param}:${_tipo.param}';
 
   @override
   void initState() {
@@ -71,7 +74,8 @@ class _RankingPageState extends State<RankingPage> {
   Future<void> _loadNetworkInfo() async {
     final prefs = await SharedPreferences.getInstance();
     _currentUserName = prefs.getString('user_name') ?? _currentUserName;
-    _currentUserAvatarUrl = prefs.getString('user_avatar_url') ?? _currentUserAvatarUrl;
+    _currentUserAvatarUrl =
+        prefs.getString('user_avatar_url') ?? _currentUserAvatarUrl;
     var chainId = prefs.getInt('gym_chain_id');
 
     if (chainId == null && prefs.getString('auth_token') != null) {
@@ -85,62 +89,56 @@ class _RankingPageState extends State<RankingPage> {
   }
 
   Future<void> _loadRanking() async {
-    if (_activeFetch != null) return;
+    final cached = _rankingCache[_cacheKey];
+    if (cached != null) {
+      setState(() {
+        _ranking = cached;
+        _isLoading = false;
+        _error = null;
+      });
+      return;
+    }
     setState(() {
       _isLoading = true;
       _error = null;
     });
-    try {
-      _activeFetch = _executeFetch();
-      await _activeFetch;
-    } finally {
-      _activeFetch = null;
-    }
+    await _executeFetch();
   }
 
   void _changePeriod(RankingPeriodo period) {
-    if (_periodo == period || _activeFetch != null) return;
-    setState(() {
-      _periodo = period;
-      _isLoading = true;
-      _error = null;
-    });
-    _activeFetch = _executeFetch();
-    _activeFetch!.whenComplete(() => _activeFetch = null);
+    if (_periodo == period) return;
+    setState(() => _periodo = period);
+    _loadRanking();
   }
 
   void _changeScope(RankingEscopo scope) {
-    if (_escopo == scope || _activeFetch != null) return;
-    setState(() {
-      _escopo = scope;
-      _isLoading = true;
-      _error = null;
-    });
-    _activeFetch = _executeFetch();
-    _activeFetch!.whenComplete(() => _activeFetch = null);
+    if (_escopo == scope) return;
+    setState(() => _escopo = scope);
+    _loadRanking();
   }
 
   void _changeType(RankingTipo type) {
-    if (_tipo == type || _activeFetch != null) return;
-    setState(() {
-      _tipo = type;
-      _isLoading = true;
-      _error = null;
-    });
-    _activeFetch = _executeFetch();
-    _activeFetch!.whenComplete(() => _activeFetch = null);
+    if (_tipo == type) return;
+    setState(() => _tipo = type);
+    _loadRanking();
   }
 
   Future<void> _executeFetch() async {
+    final requestKey = _cacheKey;
+    final requestPeriod = _periodo.param;
+    final requestScope = _escopo.param;
+    final requestType = _tipo.param;
+    final sequence = ++_fetchSequence;
     try {
       final prefs = await SharedPreferences.getInstance();
       _currentUserId = prefs.getInt('user_id');
       _currentUserName = prefs.getString('user_name') ?? _currentUserName;
-      _currentUserAvatarUrl = prefs.getString('user_avatar_url') ?? _currentUserAvatarUrl;
+      _currentUserAvatarUrl =
+          prefs.getString('user_avatar_url') ?? _currentUserAvatarUrl;
       final items = await _service.getRanking(
-        period: _periodo.param,
-        scope: _escopo.param,
-        rankBy: _tipo.param,
+        period: requestPeriod,
+        scope: requestScope,
+        rankBy: requestType,
       );
       var foundCurrentUser = false;
       for (final item in items) {
@@ -159,7 +157,10 @@ class _RankingPageState extends State<RankingPage> {
       if (!foundCurrentUser) {
         _currentUserAvatarUrl = prefs.getString('user_avatar_url') ?? '';
       }
-      if (!mounted) return;
+      _rankingCache[requestKey] = items;
+      if (!mounted || requestKey != _cacheKey || sequence != _fetchSequence) {
+        return;
+      }
       setState(() {
         _ranking = items;
         _isLoading = false;
@@ -170,10 +171,12 @@ class _RankingPageState extends State<RankingPage> {
         Navigator.pushReplacementNamed(context, '/login');
         return;
       }
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao carregar ranking: $msg')),
-      );
+      if (!mounted || requestKey != _cacheKey || sequence != _fetchSequence) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erro ao carregar ranking: $msg')));
       setState(() {
         _error = msg;
         _isLoading = false;
@@ -190,7 +193,10 @@ class _RankingPageState extends State<RankingPage> {
         bottom: false,
         child: RefreshIndicator(
           color: _kBlue,
-          onRefresh: _loadRanking,
+          onRefresh: () async {
+            _rankingCache.remove(_cacheKey);
+            await _loadRanking();
+          },
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: EdgeInsets.fromLTRB(20, 8, 20, 112 + bottomInset),
@@ -245,14 +251,25 @@ class _RankingPageState extends State<RankingPage> {
             children: [
               Text(
                 'RANKING',
-                style: _pjs(size: 11, weight: FontWeight.w600, color: _kSoft, letterSpacing: 0.6),
+                style: _pjs(
+                  size: 11,
+                  weight: FontWeight.w600,
+                  color: _kSoft,
+                  letterSpacing: 0.6,
+                ),
               ),
               const SizedBox(height: 2),
               Text(
                 title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: _pjs(size: 19, weight: FontWeight.w700, color: _kInk, height: 1.05, letterSpacing: -0.4),
+                style: _pjs(
+                  size: 19,
+                  weight: FontWeight.w700,
+                  color: _kInk,
+                  height: 1.05,
+                  letterSpacing: -0.4,
+                ),
               ),
             ],
           ),
@@ -309,7 +326,9 @@ class _RankingPageState extends State<RankingPage> {
             _ScopeTogglePill(
               label: _escopo == RankingEscopo.gym ? 'Academia' : 'Rede',
               onTap: () => _changeScope(
-                _escopo == RankingEscopo.gym ? RankingEscopo.chain : RankingEscopo.gym,
+                _escopo == RankingEscopo.gym
+                    ? RankingEscopo.chain
+                    : RankingEscopo.gym,
               ),
             ),
           ],
@@ -337,17 +356,27 @@ class _RankingContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final current = _currentItem();
-    final sorted = [...ranking]..sort((a, b) => a.position.compareTo(b.position));
+    final sorted = [...ranking]
+      ..sort((a, b) => a.position.compareTo(b.position));
     final top3 = sorted.take(3).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _PositionHero(item: current, currentUserName: currentUserName, type: type),
+        _PositionHero(
+          item: current,
+          currentUserName: currentUserName,
+          type: type,
+        ),
         const SizedBox(height: 24),
         Text(
           'Top alunos',
-          style: _pjs(size: 17, weight: FontWeight.w700, color: _kInk, letterSpacing: -0.3),
+          style: _pjs(
+            size: 17,
+            weight: FontWeight.w700,
+            color: _kInk,
+            letterSpacing: -0.3,
+          ),
         ),
         const SizedBox(height: 14),
         if (top3.isNotEmpty)
@@ -362,7 +391,12 @@ class _RankingContent extends StatelessWidget {
           children: [
             Text(
               'Ranking da academia',
-              style: _pjs(size: 17, weight: FontWeight.w700, color: _kInk, letterSpacing: -0.3),
+              style: _pjs(
+                size: 17,
+                weight: FontWeight.w700,
+                color: _kInk,
+                letterSpacing: -0.3,
+              ),
             ),
             const SizedBox(width: 10),
             _countPill(ranking.length),
@@ -372,18 +406,21 @@ class _RankingContent extends StatelessWidget {
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                              builder: (_) => _RankingFullListPage(
-                                ranking: sorted,
-                                currentUserId: currentUserId,
-                                currentUserAvatarUrl: currentUserAvatarUrl,
-                                type: type,
-                              ),
+                    builder: (_) => _RankingFullListPage(
+                      ranking: sorted,
+                      currentUserId: currentUserId,
+                      currentUserAvatarUrl: currentUserAvatarUrl,
+                      type: type,
+                    ),
                   ),
                 );
               },
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Text('Ver tudo', style: _pjs(size: 13, weight: FontWeight.w600, color: _kBlue)),
+                child: Text(
+                  'Ver tudo',
+                  style: _pjs(size: 13, weight: FontWeight.w600, color: _kBlue),
+                ),
               ),
             ),
           ],
@@ -425,7 +462,11 @@ class _PositionHero extends StatelessWidget {
   final String currentUserName;
   final RankingTipo type;
 
-  const _PositionHero({required this.item, required this.currentUserName, required this.type});
+  const _PositionHero({
+    required this.item,
+    required this.currentUserName,
+    required this.type,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -461,7 +502,11 @@ class _PositionHero extends StatelessWidget {
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
               ),
-              child: const Icon(Icons.emoji_events_rounded, color: Colors.white, size: 28),
+              child: const Icon(
+                Icons.emoji_events_rounded,
+                color: Colors.white,
+                size: 28,
+              ),
             ),
           ),
           Column(
@@ -473,12 +518,21 @@ class _PositionHero extends StatelessWidget {
                 children: [
                   Transform.translate(
                     offset: const Offset(0, 0.5),
-                    child: const Icon(Icons.trending_up_rounded, color: _kLime, size: 11),
+                    child: const Icon(
+                      Icons.trending_up_rounded,
+                      color: _kLime,
+                      size: 11,
+                    ),
                   ),
                   const SizedBox(width: 6),
                   Text(
                     'SUA POSI\u00C7\u00C3O',
-                    style: _pjs(size: 10.5, weight: FontWeight.w700, color: _kLime, letterSpacing: 0.6),
+                    style: _pjs(
+                      size: 10.5,
+                      weight: FontWeight.w700,
+                      color: _kLime,
+                      letterSpacing: 0.6,
+                    ),
                   ),
                 ],
               ),
@@ -489,11 +543,23 @@ class _PositionHero extends StatelessWidget {
                 children: [
                   Text(
                     '#',
-                    style: _sg(size: 28, weight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.70), height: 0.95, letterSpacing: -1),
+                    style: _sg(
+                      size: 28,
+                      weight: FontWeight.w700,
+                      color: Colors.white.withValues(alpha: 0.70),
+                      height: 0.95,
+                      letterSpacing: -1,
+                    ),
                   ),
                   Text(
                     '${item.position}',
-                    style: _sg(size: 56, weight: FontWeight.w700, color: Colors.white, height: 0.95, letterSpacing: -2.5),
+                    style: _sg(
+                      size: 56,
+                      weight: FontWeight.w700,
+                      color: Colors.white,
+                      height: 0.95,
+                      letterSpacing: -2.5,
+                    ),
                   ),
                 ],
               ),
@@ -502,16 +568,28 @@ class _PositionHero extends StatelessWidget {
                 item.name.isEmpty ? currentUserName : item.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: _pjs(size: 18, weight: FontWeight.w700, color: Colors.white, letterSpacing: -0.4),
+                style: _pjs(
+                  size: 18,
+                  weight: FontWeight.w700,
+                  color: Colors.white,
+                  letterSpacing: -0.4,
+                ),
               ),
               const SizedBox(height: 6),
               Text(
                 _metricText(item, type),
-                style: _sg(size: 13, weight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.90)),
+                style: _sg(
+                  size: 13,
+                  weight: FontWeight.w700,
+                  color: Colors.white.withValues(alpha: 0.90),
+                ),
               ),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.22),
                   borderRadius: BorderRadius.circular(14),
@@ -521,17 +599,47 @@ class _PositionHero extends StatelessWidget {
                     Container(
                       width: 26,
                       height: 26,
-                      decoration: BoxDecoration(color: _kLime, borderRadius: BorderRadius.circular(8)),
-                      child: const Icon(Icons.workspace_premium_rounded, color: _kBlueDark, size: 15),
+                      decoration: BoxDecoration(
+                        color: _kLime,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.workspace_premium_rounded,
+                        color: _kBlueDark,
+                        size: 15,
+                      ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text.rich(
                         TextSpan(
                           children: [
-                            TextSpan(text: 'Voc\u00EA est\u00E1 no ', style: _pjs(size: 12.5, weight: FontWeight.w600, color: Colors.white)),
-                            TextSpan(text: 'Top ${item.position}', style: _pjs(size: 12.5, weight: FontWeight.w700, color: Colors.white)),
-                            TextSpan(text: type == RankingTipo.streak ? ' em streak' : ' da academia', style: _pjs(size: 12.5, weight: FontWeight.w600, color: Colors.white)),
+                            TextSpan(
+                              text: 'Voc\u00EA est\u00E1 no ',
+                              style: _pjs(
+                                size: 12.5,
+                                weight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                            TextSpan(
+                              text: 'Top ${item.position}',
+                              style: _pjs(
+                                size: 12.5,
+                                weight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                            TextSpan(
+                              text: type == RankingTipo.streak
+                                  ? ' em streak'
+                                  : ' da academia',
+                              style: _pjs(
+                                size: 12.5,
+                                weight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -693,12 +801,19 @@ class _PodiumSlot extends StatelessWidget {
                   end: Alignment.bottomCenter,
                   colors: [_rankLight(rank), _rankBase(rank)],
                 ),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(14),
+                ),
               ),
               alignment: Alignment.topCenter,
               child: Text(
                 '$rank\u00BA',
-                style: _sg(size: rank == 1 ? 26 : 22, weight: FontWeight.w700, color: _rankText(rank), letterSpacing: -0.5),
+                style: _sg(
+                  size: rank == 1 ? 26 : 22,
+                  weight: FontWeight.w700,
+                  color: _rankText(rank),
+                  letterSpacing: -0.5,
+                ),
               ),
             ),
           ),
@@ -711,7 +826,12 @@ class _PodiumSlot extends StatelessWidget {
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: _pjs(size: 12.5, weight: FontWeight.w700, color: _kInk, letterSpacing: -0.2),
+              style: _pjs(
+                size: 12.5,
+                weight: FontWeight.w700,
+                color: _kInk,
+                letterSpacing: -0.2,
+              ),
             ),
           ),
           Positioned(
@@ -721,14 +841,15 @@ class _PodiumSlot extends StatelessWidget {
             child: Text(
               _metricText(item, type),
               textAlign: TextAlign.center,
-              style: _sg(size: 11, weight: FontWeight.w700, color: _kMuted, letterSpacing: -0.1),
+              style: _sg(
+                size: 11,
+                weight: FontWeight.w700,
+                color: _kMuted,
+                letterSpacing: -0.1,
+              ),
             ),
           ),
-          if (isMe)
-            Positioned(
-              top: badgeTop,
-              child: _mePill(),
-            ),
+          if (isMe) Positioned(top: badgeTop, child: _mePill()),
           Positioned(
             top: effectiveAvatarTop,
             child: Stack(
@@ -744,17 +865,18 @@ class _PodiumSlot extends StatelessWidget {
                             end: Alignment.bottomCenter,
                           )
                         : isMe
-                            ? const LinearGradient(
-                                colors: [_kBlue, _kLime],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              )
-                            : null,
+                        ? const LinearGradient(
+                            colors: [_kBlue, _kLime],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
                     shape: BoxShape.circle,
                   ),
                   child: _avatar(
                     initials: _initials(item.name),
-                    imageUrl: item.avatarUrl ?? (isMe ? currentUserAvatarUrl : null),
+                    imageUrl:
+                        item.avatarUrl ?? (isMe ? currentUserAvatarUrl : null),
                     size: avatarSize,
                     gradient: _avatarGradient(rank),
                     fontSize: avatarSize * 0.36,
@@ -771,11 +893,7 @@ class _PodiumSlot extends StatelessWidget {
           if (crown)
             Positioned(
               top: 5,
-              child: SvgPicture.string(
-                _kCrownSvg,
-                width: 30,
-                height: 25,
-              ),
+              child: SvgPicture.string(_kCrownSvg, width: 30, height: 25),
             ),
         ],
       ),
@@ -849,19 +967,26 @@ class _RankingRow extends StatelessWidget {
                         item.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: _pjs(size: 14.5, weight: FontWeight.w700, color: _kInk, letterSpacing: -0.2),
+                        style: _pjs(
+                          size: 14.5,
+                          weight: FontWeight.w700,
+                          color: _kInk,
+                          letterSpacing: -0.2,
+                        ),
                       ),
                     ),
-                    if (isMe) ...[
-                      const SizedBox(width: 8),
-                      _mePill(),
-                    ],
+                    if (isMe) ...[const SizedBox(width: 8), _mePill()],
                   ],
                 ),
                 const SizedBox(height: 2),
                 Text(
                   _metricText(item, type),
-                  style: _sg(size: 12, weight: FontWeight.w700, color: _kMuted, letterSpacing: -0.1),
+                  style: _sg(
+                    size: 12,
+                    weight: FontWeight.w700,
+                    color: _kMuted,
+                    letterSpacing: -0.1,
+                  ),
                 ),
               ],
             ),
@@ -911,7 +1036,11 @@ class _RankingFullListPage extends StatelessWidget {
                       shape: BoxShape.circle,
                       boxShadow: _shadow(tight: true),
                     ),
-                    child: const Icon(Icons.arrow_back_rounded, color: _kInk, size: 20),
+                    child: const Icon(
+                      Icons.arrow_back_rounded,
+                      color: _kInk,
+                      size: 20,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -921,14 +1050,24 @@ class _RankingFullListPage extends StatelessWidget {
                     children: [
                       Text(
                         'RANKING',
-                        style: _pjs(size: 11, weight: FontWeight.w600, color: _kSoft, letterSpacing: 0.6),
+                        style: _pjs(
+                          size: 11,
+                          weight: FontWeight.w600,
+                          color: _kSoft,
+                          letterSpacing: 0.6,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'Ranking da academia',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: _pjs(size: 20, weight: FontWeight.w800, color: _kInk, letterSpacing: -0.4),
+                        style: _pjs(
+                          size: 20,
+                          weight: FontWeight.w800,
+                          color: _kInk,
+                          letterSpacing: -0.4,
+                        ),
                       ),
                     ],
                   ),
@@ -959,7 +1098,11 @@ class _SelectorPill extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  const _SelectorPill({required this.label, required this.selected, required this.onTap});
+  const _SelectorPill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -983,7 +1126,12 @@ class _SelectorPill extends StatelessWidget {
         ),
         child: Text(
           label,
-          style: _pjs(size: 13, weight: FontWeight.w700, color: selected ? Colors.white : _kMuted, letterSpacing: -0.2),
+          style: _pjs(
+            size: 13,
+            weight: FontWeight.w700,
+            color: selected ? Colors.white : _kMuted,
+            letterSpacing: -0.2,
+          ),
         ),
       ),
     );
@@ -995,7 +1143,11 @@ class _SmallSelectorPill extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  const _SmallSelectorPill({required this.label, required this.selected, required this.onTap});
+  const _SmallSelectorPill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1007,12 +1159,20 @@ class _SmallSelectorPill extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? _kBlue.withValues(alpha: 0.10) : Colors.white,
           borderRadius: BorderRadius.circular(100),
-          border: Border.all(color: selected ? _kBlue.withValues(alpha: 0.30) : Colors.transparent),
+          border: Border.all(
+            color: selected
+                ? _kBlue.withValues(alpha: 0.30)
+                : Colors.transparent,
+          ),
           boxShadow: _shadow(tight: true),
         ),
         child: Text(
           label,
-          style: _pjs(size: 12, weight: FontWeight.w700, color: selected ? _kBlue : _kMuted),
+          style: _pjs(
+            size: 12,
+            weight: FontWeight.w700,
+            color: selected ? _kBlue : _kMuted,
+          ),
         ),
       ),
     );
@@ -1045,7 +1205,12 @@ class _ScopeTogglePill extends StatelessWidget {
             const SizedBox(width: 5),
             Text(
               label,
-              style: _pjs(size: 11.5, weight: FontWeight.w800, color: _kBlue, letterSpacing: -0.1),
+              style: _pjs(
+                size: 11.5,
+                weight: FontWeight.w800,
+                color: _kBlue,
+                letterSpacing: -0.1,
+              ),
             ),
           ],
         ),
@@ -1112,25 +1277,49 @@ class _StateCard extends StatelessWidget {
           Container(
             width: 58,
             height: 58,
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.10), shape: BoxShape.circle),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.10),
+              shape: BoxShape.circle,
+            ),
             child: Icon(icon, color: color, size: 28),
           ),
           const SizedBox(height: 14),
-          Text(title, style: _pjs(size: 16, weight: FontWeight.w800, color: _kInk)),
+          Text(
+            title,
+            style: _pjs(size: 16, weight: FontWeight.w800, color: _kInk),
+          ),
           const SizedBox(height: 6),
           Text(
             subtitle,
             textAlign: TextAlign.center,
-            style: _pjs(size: 12.5, weight: FontWeight.w500, color: _kMuted, height: 1.4),
+            style: _pjs(
+              size: 12.5,
+              weight: FontWeight.w500,
+              color: _kMuted,
+              height: 1.4,
+            ),
           ),
           if (action != null) ...[
             const SizedBox(height: 16),
             GestureDetector(
               onTap: action,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                decoration: BoxDecoration(color: _kBlue, borderRadius: BorderRadius.circular(14)),
-                child: Text('Tentar novamente', style: _pjs(size: 13, weight: FontWeight.w800, color: Colors.white)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 11,
+                ),
+                decoration: BoxDecoration(
+                  color: _kBlue,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  'Tentar novamente',
+                  style: _pjs(
+                    size: 13,
+                    weight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
               ),
             ),
           ],
@@ -1152,7 +1341,11 @@ Widget _avatar({
     width: size,
     height: size,
     decoration: BoxDecoration(
-      gradient: LinearGradient(colors: gradient, begin: Alignment.topLeft, end: Alignment.bottomRight),
+      gradient: LinearGradient(
+        colors: gradient,
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
       shape: BoxShape.circle,
       border: border,
     ),
@@ -1170,13 +1363,23 @@ Widget _avatar({
             errorBuilder: (_, _, _) => Text(
               initials,
               textAlign: TextAlign.center,
-              style: _pjs(size: fontSize, weight: FontWeight.w700, color: Colors.white, letterSpacing: -0.2),
+              style: _pjs(
+                size: fontSize,
+                weight: FontWeight.w700,
+                color: Colors.white,
+                letterSpacing: -0.2,
+              ),
             ),
           )
         : Text(
             initials,
             textAlign: TextAlign.center,
-            style: _pjs(size: fontSize, weight: FontWeight.w700, color: Colors.white, letterSpacing: -0.2),
+            style: _pjs(
+              size: fontSize,
+              weight: FontWeight.w700,
+              color: Colors.white,
+              letterSpacing: -0.2,
+            ),
           ),
   );
 }
@@ -1194,7 +1397,11 @@ Widget _rankBubble(int rank) {
       shape: BoxShape.circle,
       border: Border.all(color: Colors.white, width: 2),
       boxShadow: [
-        BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 6, offset: const Offset(0, 2)),
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.15),
+          blurRadius: 6,
+          offset: const Offset(0, 2),
+        ),
       ],
     ),
     alignment: Alignment.center,
@@ -1208,16 +1415,33 @@ Widget _rankBubble(int rank) {
 Widget _mePill() {
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-    decoration: BoxDecoration(color: _kBlue, borderRadius: BorderRadius.circular(100)),
-    child: Text('VOCÊ', style: _pjs(size: 9.5, weight: FontWeight.w800, color: Colors.white, letterSpacing: 0.4)),
+    decoration: BoxDecoration(
+      color: _kBlue,
+      borderRadius: BorderRadius.circular(100),
+    ),
+    child: Text(
+      'VOCÊ',
+      style: _pjs(
+        size: 9.5,
+        weight: FontWeight.w800,
+        color: Colors.white,
+        letterSpacing: 0.4,
+      ),
+    ),
   );
 }
 
 Widget _countPill(int count) {
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-    decoration: BoxDecoration(color: _kInk.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(100)),
-    child: Text('$count', style: _sg(size: 11, weight: FontWeight.w700, color: _kMuted)),
+    decoration: BoxDecoration(
+      color: _kInk.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(100),
+    ),
+    child: Text(
+      '$count',
+      style: _sg(size: 11, weight: FontWeight.w700, color: _kMuted),
+    ),
   );
 }
 
@@ -1232,7 +1456,11 @@ Widget _trendIcon(RankingItem item, RankingTipo type) {
         color: color.withValues(alpha: active ? 0.26 : 0.12),
         borderRadius: BorderRadius.circular(9),
       ),
-      child: Icon(Icons.local_fire_department_rounded, color: active ? _kBlueDark : _kSoft, size: 15),
+      child: Icon(
+        Icons.local_fire_department_rounded,
+        color: active ? _kBlueDark : _kSoft,
+        size: 15,
+      ),
     );
   }
 
@@ -1246,7 +1474,11 @@ Widget _trendIcon(RankingItem item, RankingTipo type) {
       color: color.withValues(alpha: 0.12),
       borderRadius: BorderRadius.circular(9),
     ),
-    child: Icon(up ? Icons.trending_up_rounded : Icons.trending_down_rounded, color: color, size: 15),
+    child: Icon(
+      up ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+      color: color,
+      size: 15,
+    ),
   );
 }
 
@@ -1263,8 +1495,19 @@ Widget _growthBadge(RankingItem item) {
   final label = growth == 999 ? 'Novo' : '${growth >= 0 ? '+' : ''}$growth%';
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(color: _kLime, borderRadius: BorderRadius.circular(100)),
-    child: Text(label, style: _sg(size: 10.5, weight: FontWeight.w700, color: _kBlueDark, letterSpacing: 0.3)),
+    decoration: BoxDecoration(
+      color: _kLime,
+      borderRadius: BorderRadius.circular(100),
+    ),
+    child: Text(
+      label,
+      style: _sg(
+        size: 10.5,
+        weight: FontWeight.w700,
+        color: _kBlueDark,
+        letterSpacing: 0.3,
+      ),
+    ),
   );
 }
 
@@ -1275,13 +1518,19 @@ String _shortName(String name) {
 }
 
 String _initials(String name) {
-  final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+  final parts = name
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((p) => p.isNotEmpty)
+      .toList();
   if (parts.isEmpty) return '?';
   if (parts.length == 1) return parts.first.characters.first.toUpperCase();
-  return '${parts.first.characters.first}${parts.last.characters.first}'.toUpperCase();
+  return '${parts.first.characters.first}${parts.last.characters.first}'
+      .toUpperCase();
 }
 
-String _fmtPoints(int points) => NumberFormat.decimalPattern('pt_BR').format(points);
+String _fmtPoints(int points) =>
+    NumberFormat.decimalPattern('pt_BR').format(points);
 
 List<Color> _avatarGradient(int seed) {
   return switch (seed) {
