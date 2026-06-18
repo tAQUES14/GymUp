@@ -45,6 +45,8 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
   bool _didPrepareScanner = false;
   bool _scannerActive = false;
   bool _scannerRunning = false;
+  bool _cameraPermissionDenied = false;
+  bool _cameraPermissionBlocked = false;
   Future<void> _scannerOp = Future<void>.value();
   bool _disposed = false;
   _CheckinState _state = _CheckinState.scanning;
@@ -66,7 +68,7 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (_state != _CheckinState.scanning) return;
     if (state == AppLifecycleState.resumed) {
-      unawaited(_startScanner());
+      unawaited(_resumeScanner());
     } else {
       unawaited(_stopScanner());
     }
@@ -180,10 +182,37 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
     final status = await Permission.camera.request();
     if (!mounted) return;
     if (status.isGranted) {
+      setState(() {
+        _cameraPermissionDenied = false;
+        _cameraPermissionBlocked = false;
+      });
       unawaited(_startScanner());
     } else {
+      setState(() {
+        _cameraPermissionDenied = true;
+        _cameraPermissionBlocked =
+            status.isPermanentlyDenied || status.isRestricted;
+      });
       _forceScannerInactive();
     }
+  }
+
+  Future<void> _resumeScanner() async {
+    final status = await Permission.camera.status;
+    if (!mounted || _disposed || _state != _CheckinState.scanning) return;
+    if (status.isGranted) {
+      setState(() {
+        _cameraPermissionDenied = false;
+        _cameraPermissionBlocked = false;
+      });
+      await _startScanner();
+      return;
+    }
+    setState(() {
+      _cameraPermissionDenied = true;
+      _cameraPermissionBlocked =
+          status.isPermanentlyDenied || status.isRestricted;
+    });
   }
 
   void _onDetect(BarcodeCapture capture) {
@@ -417,21 +446,25 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
             children: [
               _buildScannerHeader(),
               const Spacer(),
-              _buildWaitingBadge(),
-              const SizedBox(height: 18),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Text(
-                  'A leitura acontece automaticamente assim que o\ncodigo for reconhecido.',
-                  textAlign: TextAlign.center,
-                  style: AppText.pjs(
-                    size: 12.5,
-                    weight: FontWeight.w500,
-                    color: Colors.white.withValues(alpha: 0.78),
-                    height: 1.5,
+              if (_cameraPermissionDenied)
+                _buildCameraPermissionCard()
+              else ...[
+                _buildWaitingBadge(),
+                const SizedBox(height: 18),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Text(
+                    'A leitura acontece automaticamente assim que o\ncodigo for reconhecido.',
+                    textAlign: TextAlign.center,
+                    style: AppText.pjs(
+                      size: 12.5,
+                      weight: FontWeight.w500,
+                      color: Colors.white.withValues(alpha: 0.78),
+                      height: 1.5,
+                    ),
                   ),
                 ),
-              ),
+              ],
               const Spacer(),
               _buildManualEntryButton(),
               const SizedBox(height: 30),
@@ -533,6 +566,67 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
               weight: FontWeight.w800,
               color: const Color(0xFF0E1116),
               letterSpacing: 0.3,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCameraPermissionCard() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 30),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.no_photography_outlined,
+            color: AppColors.blue,
+            size: 28,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Câmera necessária para o check-in',
+            textAlign: TextAlign.center,
+            style: AppText.pjs(
+              size: 14,
+              weight: FontWeight.w800,
+              color: const Color(0xFF0E1116),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _cameraPermissionBlocked
+                ? 'Habilite a câmera nos ajustes do aparelho para ler o QR Code.'
+                : 'Autorize o acesso para que o GymUp possa ler o QR Code.',
+            textAlign: TextAlign.center,
+            style: AppText.pjs(
+              size: 12,
+              weight: FontWeight.w500,
+              color: const Color(0xFF5B6472),
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _cameraPermissionBlocked
+                  ? openAppSettings
+                  : _ensureCameraPermission,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.blue,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(0, 46),
+              ),
+              child: Text(
+                _cameraPermissionBlocked ? 'Abrir ajustes' : 'Permitir câmera',
+              ),
             ),
           ),
         ],

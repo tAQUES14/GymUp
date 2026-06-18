@@ -175,4 +175,46 @@ class RankingTest extends TestCase
         $response->assertJsonPath('ranking.1.user_id', $user2->id);
         $response->assertJsonPath('ranking.1.period_points', 0);
     }
+
+    public function test_hidden_user_is_anonymous_in_app_and_admin_rankings()
+    {
+        $gym = Gym::factory()->create();
+
+        $admin = User::factory()->create([
+            'gym_id' => $gym->id,
+            'role' => 'super_admin',
+        ]);
+
+        $hiddenUser = User::factory()->create([
+            'gym_id' => $gym->id,
+            'role' => 'user',
+            'name' => 'Nome Privado',
+            'email' => 'privado@example.com',
+            'avatar_url' => 'avatars/private.jpg',
+            'ranking_visible' => false,
+        ]);
+
+        PointTransaction::factory()->create([
+            'user_id' => $hiddenUser->id,
+            'gym_id' => $gym->id,
+            'type' => 'earn',
+            'category' => 'workout',
+            'points' => 20,
+        ]);
+
+        Sanctum::actingAs($hiddenUser);
+        $this->getJson('/api/ranking')
+            ->assertOk()
+            ->assertJsonPath('0.user_id', $hiddenUser->id)
+            ->assertJsonPath('0.name', 'Anônimo')
+            ->assertJsonPath('0.avatar_url', null);
+
+        Sanctum::actingAs($admin);
+        $this->getJson('/api/admin/ranking')
+            ->assertOk()
+            ->assertJsonPath('ranking.0.user_id', $hiddenUser->id)
+            ->assertJsonPath('ranking.0.name', 'Anônimo')
+            ->assertJsonPath('ranking.0.email', null)
+            ->assertJsonPath('ranking.0.avatar_url', null);
+    }
 }

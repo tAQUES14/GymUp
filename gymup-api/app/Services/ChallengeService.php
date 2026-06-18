@@ -183,7 +183,7 @@ class ChallengeService
                 ->pluck('workouts_count', 'user_id');
 
             $participants = ChallengeParticipant::where('challenge_id', $challenge->id)
-                ->with('user:id,name,avatar_url')
+                ->with('user:id,name,avatar_url,ranking_visible')
                 ->orderByDesc('total_challenge_points')
                 ->get();
 
@@ -192,8 +192,8 @@ class ChallengeService
                 ->map(fn ($p, $i) => [
                     'position'              => $i + 1,
                     'user_id'              => $p->user_id,
-                    'user_name'            => $p->user->name,
-                    'avatar_url'           => $this->avatarUrl($p->user->avatar_url ?? null),
+                    'user_name'            => $p->user->ranking_visible ? $p->user->name : 'Anônimo',
+                    'avatar_url'           => $p->user->ranking_visible ? $this->avatarUrl($p->user->avatar_url ?? null) : null,
                     'total_points'         => $p->total_challenge_points,
                     'workouts_this_week'   => $thisWeekByUser[$p->user_id] ?? 0,
                 ])
@@ -201,13 +201,13 @@ class ChallengeService
         }
 
         return ChallengeParticipant::where('challenge_id', $challenge->id)
-            ->with('user:id,name,avatar_url')
+            ->with('user:id,name,avatar_url,ranking_visible')
             ->orderByDesc('workouts_this_challenge')
             ->get()
             ->map(fn ($p) => [
                 'user_id'        => $p->user_id,
-                'user_name'      => $p->user->name,
-                'avatar_url'     => $this->avatarUrl($p->user->avatar_url ?? null),
+                'user_name'      => $p->user->ranking_visible ? $p->user->name : 'Anônimo',
+                'avatar_url'     => $p->user->ranking_visible ? $this->avatarUrl($p->user->avatar_url ?? null) : null,
                 'workouts'       => $p->workouts_this_challenge,
                 'goal_completed' => $p->goal_completed,
             ])
@@ -222,13 +222,13 @@ class ChallengeService
     {
         return ChallengeWeeklyRanking::where('challenge_id', $challenge->id)
             ->where('week_start', $weekStart)
-            ->with('user:id,name,avatar_url')
+            ->with('user:id,name,avatar_url,ranking_visible')
             ->orderByDesc('workouts_count')
             ->get()
             ->map(fn ($r) => [
                 'user_id'        => $r->user_id,
-                'user_name'      => $r->user->name,
-                'avatar_url'     => $this->avatarUrl($r->user->avatar_url ?? null),
+                'user_name'      => $r->user->ranking_visible ? $r->user->name : 'Anônimo',
+                'avatar_url'     => $r->user->ranking_visible ? $this->avatarUrl($r->user->avatar_url ?? null) : null,
                 'workouts_count' => $r->workouts_count,
                 'position'       => $r->position,
                 'points_awarded' => $r->points_awarded,

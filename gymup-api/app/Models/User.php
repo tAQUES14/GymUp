@@ -23,6 +23,7 @@ class User extends Authenticatable
         'email',
         'phone',
         'avatar_url',
+        'ranking_visible',
         'password',
         'gym_id',
         'active_gym_id',
@@ -47,6 +48,7 @@ class User extends Authenticatable
     protected $casts = [
         'invited_at'             => 'datetime',
         'email_verified_at'      => 'datetime',
+        'ranking_visible'        => 'boolean',
         'week_goal_completed'    => 'boolean',
         'current_week_start'     => 'date',
         'last_workout_date'      => 'date',

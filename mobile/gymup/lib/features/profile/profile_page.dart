@@ -79,7 +79,9 @@ class _ProfilePageState extends State<ProfilePage>
     final results = await Future.wait<dynamic>([
       _api.get('/profile'),
       goalService.getCurrentGoal().catchError((_) => null),
-      goalService.getBodyWeightHistory(limit: 1).catchError((_) => <BodyWeightLog>[]),
+      goalService
+          .getBodyWeightHistory(limit: 1)
+          .catchError((_) => <BodyWeightLog>[]),
     ]);
 
     final response = results[0];
@@ -92,10 +94,16 @@ class _ProfilePageState extends State<ProfilePage>
     final goal = results[1] as GoalData?;
     final weightHistory = results[2] as List<BodyWeightLog>;
 
-    final logWeight = weightHistory.isNotEmpty ? weightHistory.first.weight : null;
-    final profileWeight = data['weight'] != null ? double.tryParse(data['weight'].toString()) : null;
+    final logWeight = weightHistory.isNotEmpty
+        ? weightHistory.first.weight
+        : null;
+    final profileWeight = data['weight'] != null
+        ? double.tryParse(data['weight'].toString())
+        : null;
     final resolvedWeight = logWeight ?? profileWeight ?? goal?.startWeight;
-    final profileHeight = data['height'] != null ? double.tryParse(data['height'].toString()) : null;
+    final profileHeight = data['height'] != null
+        ? double.tryParse(data['height'].toString())
+        : null;
     final resolvedHeight = profileHeight ?? goal?.height;
     final gymName = gym?['name'] as String?;
     final avatarUrl = data['avatar_url'] as String?;
@@ -112,24 +120,38 @@ class _ProfilePageState extends State<ProfilePage>
     await prefs.setString('user_name', data['name'] as String? ?? '');
     await prefs.setString('profile_name', data['name'] as String? ?? '');
     await prefs.setString('profile_email', data['email'] as String? ?? '');
-    await prefs.setInt('profile_points_balance', (data['points_balance'] as num?)?.toInt() ?? 0);
-    await prefs.setInt('profile_total_checkins', (data['total_checkins'] as num?)?.toInt() ?? 0);
-    await prefs.setInt('profile_current_streak', (data['current_streak'] as num?)?.toInt() ?? 0);
+    await prefs.setInt(
+      'profile_points_balance',
+      (data['points_balance'] as num?)?.toInt() ?? 0,
+    );
+    await prefs.setInt(
+      'profile_total_checkins',
+      (data['total_checkins'] as num?)?.toInt() ?? 0,
+    );
+    await prefs.setInt(
+      'profile_current_streak',
+      (data['current_streak'] as num?)?.toInt() ?? 0,
+    );
 
     if (!mounted) return;
     setState(() {
       _userData = data;
       _goalData = goal;
       _nomeController.text = data['name'] as String? ?? '';
-      _pesoController.text = resolvedWeight != null ? resolvedWeight.toStringAsFixed(1) : '';
-      _alturaController.text = resolvedHeight != null ? resolvedHeight.toStringAsFixed(0) : '';
+      _pesoController.text = resolvedWeight != null
+          ? resolvedWeight.toStringAsFixed(1)
+          : '';
+      _alturaController.text = resolvedHeight != null
+          ? resolvedHeight.toStringAsFixed(0)
+          : '';
       _academiaController.text = gymName ?? '';
     });
   }
 
   Future<void> _hydrateCachedProfile() async {
     final prefs = await SharedPreferences.getInstance();
-    final cachedName = prefs.getString('profile_name') ?? prefs.getString('user_name') ?? '';
+    final cachedName =
+        prefs.getString('profile_name') ?? prefs.getString('user_name') ?? '';
     final cachedAvatar = prefs.getString('user_avatar_url') ?? '';
     final cachedGym = prefs.getString('gym_name') ?? '';
 
@@ -149,7 +171,9 @@ class _ProfilePageState extends State<ProfilePage>
         'gym': cachedGym.isEmpty ? null : {'name': cachedGym},
       };
       if (_nomeController.text.isEmpty) _nomeController.text = cachedName;
-      if (_academiaController.text.isEmpty) _academiaController.text = cachedGym;
+      if (_academiaController.text.isEmpty) {
+        _academiaController.text = cachedGym;
+      }
     });
   }
 
@@ -178,7 +202,9 @@ class _ProfilePageState extends State<ProfilePage>
           content: const Text('Perfil atualizado com sucesso!'),
           backgroundColor: _kGreen,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
     } catch (e) {
@@ -189,7 +215,9 @@ class _ProfilePageState extends State<ProfilePage>
           content: Text('Erro ao salvar: $e'),
           backgroundColor: _kRed,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
     } finally {
@@ -205,7 +233,8 @@ class _ProfilePageState extends State<ProfilePage>
       body: FutureBuilder<void>(
         future: _profileFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting && _userData == null) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              _userData == null) {
             return const GymUpLoading();
           }
 
@@ -236,16 +265,14 @@ class _ProfilePageState extends State<ProfilePage>
               physics: const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.fromLTRB(20, 14, 20, 126 + bottomInset),
               children: [
-                _ProfileHeader(
-                  editing: _isEditing,
-                  onEditToggle: () => setState(() => _isEditing = !_isEditing),
-                ),
+                const _ProfileHeader(),
                 const SizedBox(height: 16),
                 _ProfileHero(
                   name: _displayName,
                   email: email,
                   gymName: _academiaController.text,
                   avatarUrl: data['avatar_url'] as String? ?? '',
+                  onAvatarTap: _openSettings,
                 ),
                 const SizedBox(height: 18),
                 Row(
@@ -325,10 +352,8 @@ class _ProfilePageState extends State<ProfilePage>
       await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => CreateGoalPage(
-            initialWeight: peso,
-            initialHeight: altura,
-          ),
+          builder: (_) =>
+              CreateGoalPage(initialWeight: peso, initialHeight: altura),
         ),
       );
     } else {
@@ -351,13 +376,7 @@ class _ProfilePageState extends State<ProfilePage>
 }
 
 class _ProfileHeader extends StatelessWidget {
-  final bool editing;
-  final VoidCallback onEditToggle;
-
-  const _ProfileHeader({
-    required this.editing,
-    required this.onEditToggle,
-  });
+  const _ProfileHeader();
 
   @override
   Widget build(BuildContext context) {
@@ -367,20 +386,13 @@ class _ProfileHeader extends StatelessWidget {
         Expanded(
           child: Text(
             'Perfil',
-            style: _pjs(size: 22, weight: FontWeight.w700, color: _kInk, height: 1, letterSpacing: -0.6),
-          ),
-        ),
-        GestureDetector(
-          onTap: onEditToggle,
-          child: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              boxShadow: _shadow(tight: true),
+            style: _pjs(
+              size: 22,
+              weight: FontWeight.w700,
+              color: _kInk,
+              height: 1,
+              letterSpacing: -0.6,
             ),
-            child: Icon(editing ? Icons.close_rounded : Icons.edit_rounded, color: _kInk, size: 18),
           ),
         ),
       ],
@@ -393,17 +405,21 @@ class _ProfileHero extends StatelessWidget {
   final String email;
   final String gymName;
   final String avatarUrl;
+  final VoidCallback onAvatarTap;
 
   const _ProfileHero({
     required this.name,
     required this.email,
     required this.gymName,
     required this.avatarUrl,
+    required this.onAvatarTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final initial = name.trim().isEmpty ? '?' : name.characters.first.toUpperCase();
+    final initial = name.trim().isEmpty
+        ? '?'
+        : name.characters.first.toUpperCase();
     final hasAvatar = avatarUrl.trim().isNotEmpty;
 
     return Container(
@@ -415,75 +431,97 @@ class _ProfileHero extends StatelessWidget {
         children: [
           Column(
             children: [
-              Align(
-                alignment: Alignment.topLeft,
-                child: _ActiveBadge(),
-              ),
+              Align(alignment: Alignment.topLeft, child: _ActiveBadge()),
               const SizedBox(height: 4),
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    width: 88,
-                    height: 88,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [_kBlue, _kBlue2],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: _kBlue.withValues(alpha: 0.18),
-                          blurRadius: 18,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    alignment: Alignment.center,
-                    child: hasAvatar
-                        ? Image.network(
-                            avatarUrl.trim(),
-                            fit: BoxFit.cover,
-                            width: 88,
-                            height: 88,
-                            cacheWidth: 180,
-                            cacheHeight: 180,
-                            filterQuality: FilterQuality.medium,
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Text(
-                                initial,
-                                style: _pjs(size: 34, weight: FontWeight.w800, color: Colors.white, letterSpacing: -0.8),
-                              );
-                            },
-                            errorBuilder: (context, error, stackTrace) => Text(
-                              initial,
-                              style: _pjs(size: 34, weight: FontWeight.w800, color: Colors.white, letterSpacing: -0.8),
-                            ),
-                          )
-                        : Text(
-                            initial,
-                            style: _pjs(size: 34, weight: FontWeight.w800, color: Colors.white, letterSpacing: -0.8),
-                          ),
-                  ),
-                  Positioned(
-                    right: 2,
-                    bottom: 2,
-                    child: Container(
-                      width: 30,
-                      height: 30,
+              GestureDetector(
+                onTap: onAvatarTap,
+                behavior: HitTestBehavior.opaque,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 88,
+                      height: 88,
                       decoration: BoxDecoration(
-                        color: _kGreen,
+                        gradient: const LinearGradient(
+                          colors: [_kBlue, _kBlue2],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 3),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _kBlue.withValues(alpha: 0.18),
+                            blurRadius: 18,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
                       ),
-                      child: const Icon(Icons.check_rounded, color: Colors.white, size: 14),
+                      clipBehavior: Clip.antiAlias,
+                      alignment: Alignment.center,
+                      child: hasAvatar
+                          ? Image.network(
+                              avatarUrl.trim(),
+                              fit: BoxFit.cover,
+                              width: 88,
+                              height: 88,
+                              cacheWidth: 180,
+                              cacheHeight: 180,
+                              filterQuality: FilterQuality.medium,
+                              loadingBuilder:
+                                  (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return Text(
+                                      initial,
+                                      style: _pjs(
+                                        size: 34,
+                                        weight: FontWeight.w800,
+                                        color: Colors.white,
+                                        letterSpacing: -0.8,
+                                      ),
+                                    );
+                                  },
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Text(
+                                    initial,
+                                    style: _pjs(
+                                      size: 34,
+                                      weight: FontWeight.w800,
+                                      color: Colors.white,
+                                      letterSpacing: -0.8,
+                                    ),
+                                  ),
+                            )
+                          : Text(
+                              initial,
+                              style: _pjs(
+                                size: 34,
+                                weight: FontWeight.w800,
+                                color: Colors.white,
+                                letterSpacing: -0.8,
+                              ),
+                            ),
                     ),
-                  ),
-                ],
+                    Positioned(
+                      right: 2,
+                      bottom: 2,
+                      child: Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: _kGreen,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 3),
+                        ),
+                        child: const Icon(
+                          Icons.check_rounded,
+                          color: Colors.white,
+                          size: 14,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 14),
               Text(
@@ -491,7 +529,13 @@ class _ProfileHero extends StatelessWidget {
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: _pjs(size: 22, weight: FontWeight.w800, color: _kInk, height: 1.1, letterSpacing: -0.5),
+                style: _pjs(
+                  size: 22,
+                  weight: FontWeight.w800,
+                  color: _kInk,
+                  height: 1.1,
+                  letterSpacing: -0.5,
+                ),
               ),
               const SizedBox(height: 7),
               Text(
@@ -504,7 +548,10 @@ class _ProfileHero extends StatelessWidget {
               if (gymName.isNotEmpty) ...[
                 const SizedBox(height: 14),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF7F9FC),
                     borderRadius: BorderRadius.circular(14),
@@ -512,18 +559,30 @@ class _ProfileHero extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.location_on_rounded, color: _kMuted, size: 14),
+                      const Icon(
+                        Icons.location_on_rounded,
+                        color: _kMuted,
+                        size: 14,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         'Academia ',
-                        style: _pjs(size: 12.5, weight: FontWeight.w600, color: _kMuted),
+                        style: _pjs(
+                          size: 12.5,
+                          weight: FontWeight.w600,
+                          color: _kMuted,
+                        ),
                       ),
                       Flexible(
                         child: Text(
                           gymName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: _pjs(size: 12.5, weight: FontWeight.w800, color: _kInk),
+                          style: _pjs(
+                            size: 12.5,
+                            weight: FontWeight.w800,
+                            color: _kInk,
+                          ),
                         ),
                       ),
                     ],
@@ -567,7 +626,12 @@ class _ActiveBadge extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             'MEMBRO ATIVO',
-            style: _pjs(size: 10, weight: FontWeight.w800, color: _kGreen, letterSpacing: 0.6),
+            style: _pjs(
+              size: 10,
+              weight: FontWeight.w800,
+              color: _kGreen,
+              letterSpacing: 0.6,
+            ),
           ),
         ],
       ),
@@ -612,7 +676,13 @@ class _StatCard extends StatelessWidget {
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: _sg(size: 20, weight: FontWeight.w700, color: _kInk, height: 1, letterSpacing: -0.5),
+            style: _sg(
+              size: 20,
+              weight: FontWeight.w700,
+              color: _kInk,
+              height: 1,
+              letterSpacing: -0.5,
+            ),
           ),
           const SizedBox(height: 6),
           Text(
@@ -620,7 +690,12 @@ class _StatCard extends StatelessWidget {
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: _pjs(size: 10.5, weight: FontWeight.w700, color: _kMuted, letterSpacing: 0.4),
+            style: _pjs(
+              size: 10.5,
+              weight: FontWeight.w700,
+              color: _kMuted,
+              letterSpacing: 0.4,
+            ),
           ),
         ],
       ),
@@ -699,7 +774,9 @@ class _MenuRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          border: showDivider ? const Border(bottom: BorderSide(color: Color(0x0C0E1116))) : null,
+          border: showDivider
+              ? const Border(bottom: BorderSide(color: Color(0x0C0E1116)))
+              : null,
         ),
         child: Row(
           children: [
@@ -716,7 +793,12 @@ class _MenuRow extends StatelessWidget {
             Expanded(
               child: Text(
                 title,
-                style: _pjs(size: 14.5, weight: FontWeight.w700, color: _kInk, letterSpacing: -0.2),
+                style: _pjs(
+                  size: 14.5,
+                  weight: FontWeight.w700,
+                  color: _kInk,
+                  letterSpacing: -0.2,
+                ),
               ),
             ),
             const Icon(Icons.chevron_right_rounded, color: _kSoft, size: 18),
@@ -751,7 +833,9 @@ class _EditProfileCard extends StatelessWidget {
             controller: nomeController,
             label: 'Nome completo',
             icon: Icons.badge_outlined,
-            validator: (value) => value == null || value.trim().isEmpty ? 'Campo obrigat\u00F3rio' : null,
+            validator: (value) => value == null || value.trim().isEmpty
+                ? 'Campo obrigat\u00F3rio'
+                : null,
           ),
           const SizedBox(height: 12),
           Row(
@@ -761,7 +845,9 @@ class _EditProfileCard extends StatelessWidget {
                   controller: pesoController,
                   label: 'Peso',
                   icon: Icons.monitor_weight_outlined,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -823,7 +909,10 @@ class _ProfileField extends StatelessWidget {
         filled: true,
         fillColor: readOnly ? const Color(0xFFF7F9FC) : Colors.white,
         labelStyle: _pjs(size: 13, weight: FontWeight.w600, color: _kSoft),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -877,11 +966,19 @@ class _SaveButton extends StatelessWidget {
               ? const SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.4),
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2.4,
+                  ),
                 )
               : Text(
                   'Salvar altera\u00E7\u00F5es',
-                  style: _pjs(size: 14, weight: FontWeight.w800, color: Colors.white, letterSpacing: -0.2),
+                  style: _pjs(
+                    size: 14,
+                    weight: FontWeight.w800,
+                    color: Colors.white,
+                    letterSpacing: -0.2,
+                  ),
                 ),
         ),
       ),
@@ -912,7 +1009,12 @@ class _SignOutButton extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               'Sair da conta',
-              style: _pjs(size: 13.5, weight: FontWeight.w700, color: _kRed, letterSpacing: -0.2),
+              style: _pjs(
+                size: 13.5,
+                weight: FontWeight.w700,
+                color: _kRed,
+                letterSpacing: -0.2,
+              ),
             ),
           ],
         ),
@@ -941,24 +1043,52 @@ class _ProfileError extends StatelessWidget {
               Container(
                 width: 58,
                 height: 58,
-                decoration: BoxDecoration(color: _kRed.withValues(alpha: 0.08), shape: BoxShape.circle),
-                child: const Icon(Icons.wifi_off_rounded, color: _kRed, size: 28),
+                decoration: BoxDecoration(
+                  color: _kRed.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.wifi_off_rounded,
+                  color: _kRed,
+                  size: 28,
+                ),
               ),
               const SizedBox(height: 14),
-              Text('Erro ao carregar perfil', style: _pjs(size: 16, weight: FontWeight.w800, color: _kInk)),
+              Text(
+                'Erro ao carregar perfil',
+                style: _pjs(size: 16, weight: FontWeight.w800, color: _kInk),
+              ),
               const SizedBox(height: 8),
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: _pjs(size: 12.5, weight: FontWeight.w500, color: _kMuted, height: 1.4),
+                style: _pjs(
+                  size: 12.5,
+                  weight: FontWeight.w500,
+                  color: _kMuted,
+                  height: 1.4,
+                ),
               ),
               const SizedBox(height: 16),
               GestureDetector(
                 onTap: onRetry,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                  decoration: BoxDecoration(color: _kBlue, borderRadius: BorderRadius.circular(14)),
-                  child: Text('Tentar novamente', style: _pjs(size: 13, weight: FontWeight.w800, color: Colors.white)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 11,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _kBlue,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Text(
+                    'Tentar novamente',
+                    style: _pjs(
+                      size: 13,
+                      weight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -993,7 +1123,8 @@ List<BoxShadow> _shadow({bool tight = false}) {
   ];
 }
 
-String _formatNumber(int value) => NumberFormat.decimalPattern('pt_BR').format(value);
+String _formatNumber(int value) =>
+    NumberFormat.decimalPattern('pt_BR').format(value);
 
 TextStyle _pjs({
   required double size,

@@ -52,6 +52,7 @@ class AdminRankingController extends Controller
                 'users.name',
                 'users.email',
                 'users.avatar_url',
+                'users.ranking_visible',
                 'users.points_balance',
                 'users.current_streak',
                 DB::raw('COALESCE(SUM(point_transactions.points), 0) as period_points'),
@@ -62,6 +63,7 @@ class AdminRankingController extends Controller
                 'users.name',
                 'users.email',
                 'users.avatar_url',
+                'users.ranking_visible',
                 'users.points_balance',
                 'users.current_streak',
                 'ws.total_workouts'
@@ -78,9 +80,9 @@ class AdminRankingController extends Controller
             ->map(fn($u, $i) => [
                 'position'       => $i + 1,
                 'user_id'        => $u->id,
-                'name'           => $u->name,
-                'email'          => $u->email,
-                'avatar_url'     => $this->avatarUrl($u->avatar_url),
+                'name'           => $u->ranking_visible ? $u->name : 'Anônimo',
+                'email'          => $u->ranking_visible ? $u->email : null,
+                'avatar_url'     => $u->ranking_visible ? $this->avatarUrl($u->avatar_url) : null,
                 'period_points'  => (int) $u->period_points,
                 'points_balance' => (int) $u->points_balance,
                 'weekly_streak'  => (int) $u->current_streak,

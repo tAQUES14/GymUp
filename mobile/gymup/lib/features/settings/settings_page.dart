@@ -126,7 +126,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _avatarUrl = avatarUrl;
         _notifications = prefs.getBool('settings_notifications') ?? true;
         _workoutReminder = prefs.getBool('settings_workout_reminder') ?? true;
-        _rankingVisible = prefs.getBool('settings_ranking_visible') ?? true;
+        _rankingVisible = data['ranking_visible'] as bool? ?? true;
         _loading = false;
       });
     } catch (e) {
@@ -154,6 +154,7 @@ class _SettingsPageState extends State<SettingsPage> {
         'phone': _emptyToNull(_phoneCtrl),
         'weight': weight,
         'height': height,
+        'ranking_visible': _rankingVisible,
       });
 
       if (response.statusCode != 200) {

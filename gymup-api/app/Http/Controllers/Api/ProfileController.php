@@ -29,6 +29,7 @@ class ProfileController extends Controller
             'email'          => $user->email,
             'phone'          => Schema::hasColumn('users', 'phone') ? $user->phone : null,
             'avatar_url'     => Schema::hasColumn('users', 'avatar_url') ? $this->avatarUrl($user->avatar_url) : null,
+            'ranking_visible'=> Schema::hasColumn('users', 'ranking_visible') ? (bool) $user->ranking_visible : true,
             'role'           => $user->role,
             'points_balance' => (int) $user->points_balance,
             'total_checkins' => $totalCheckins,
@@ -54,11 +55,12 @@ class ProfileController extends Controller
             'phone'  => 'nullable|string|max:30',
             'weight' => 'nullable|numeric|min:30|max:300',
             'height' => 'nullable|numeric|min:100|max:250',
+            'ranking_visible' => 'nullable|boolean',
         ]);
 
         $user = $request->user();
 
-        $fields = collect(['name', 'phone', 'weight', 'height'])
+        $fields = collect(['name', 'phone', 'weight', 'height', 'ranking_visible'])
             ->filter(fn ($field) => Schema::hasColumn('users', $field))
             ->values()
             ->all();
@@ -75,6 +77,7 @@ class ProfileController extends Controller
                 'avatar_url' => $this->avatarUrl($user->avatar_url),
                 'weight'     => $user->weight,
                 'height'     => $user->height,
+                'ranking_visible' => (bool) ($user->ranking_visible ?? true),
             ],
         ]);
     }

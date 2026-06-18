@@ -64,10 +64,11 @@ class RankingController extends Controller
             'users.id',
             'users.name',
             'users.avatar_url',
+            'users.ranking_visible',
             'users.current_streak',
             DB::raw('COALESCE(SUM(point_transactions.points), 0) as points'),
         ];
-        $groupBy = ['users.id', 'users.name', 'users.avatar_url', 'users.current_streak'];
+        $groupBy = ['users.id', 'users.name', 'users.avatar_url', 'users.ranking_visible', 'users.current_streak'];
 
         if ($scope === 'chain') {
             $query->join('gyms', 'gyms.id', '=', 'users.gym_id')
@@ -95,8 +96,8 @@ class RankingController extends Controller
             $item = [
                 'position'   => $index + 1,
                 'user_id'    => $u->id,
-                'name'       => $u->name,
-                'avatar_url' => $this->avatarUrl($u->avatar_url ?? null),
+                'name'       => $u->ranking_visible ? $u->name : 'Anônimo',
+                'avatar_url' => $u->ranking_visible ? $this->avatarUrl($u->avatar_url ?? null) : null,
                 'points'     => (int) $u->points,
                 'streak'     => (int) $u->current_streak,
                 'growth_pct' => null,
@@ -139,6 +140,7 @@ class RankingController extends Controller
             'users.id',
             'users.name',
             'users.avatar_url',
+            'users.ranking_visible',
             'users.current_streak',
             DB::raw('COALESCE(curr.pts, 0) as current_pts'),
             DB::raw('COALESCE(prev.pts, 0) as previous_pts'),
@@ -155,7 +157,7 @@ class RankingController extends Controller
                 END as growth_pct
             "),
         ];
-        $groupBy = ['users.id', 'users.name', 'users.avatar_url', 'users.current_streak'];
+        $groupBy = ['users.id', 'users.name', 'users.avatar_url', 'users.ranking_visible', 'users.current_streak'];
 
         if ($scope === 'chain') {
             $query->join('gyms', 'gyms.id', '=', 'users.gym_id')
@@ -180,8 +182,8 @@ class RankingController extends Controller
             $item = [
                 'position'   => $index + 1,
                 'user_id'    => $u->id,
-                'name'       => $u->name,
-                'avatar_url' => $this->avatarUrl($u->avatar_url ?? null),
+                'name'       => $u->ranking_visible ? $u->name : 'Anônimo',
+                'avatar_url' => $u->ranking_visible ? $this->avatarUrl($u->avatar_url ?? null) : null,
                 'points'     => (int) $u->current_pts,
                 'streak'     => (int) $u->current_streak,
                 'growth_pct' => (int) $u->growth_pct,
