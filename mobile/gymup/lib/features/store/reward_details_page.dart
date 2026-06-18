@@ -176,11 +176,13 @@ class _ProductHero extends StatelessWidget {
         children: [
           if (reward.imageUrl != null)
             Positioned.fill(
+              top: 24,
               child: Image.network(
                 reward.imageUrl!,
-                fit: BoxFit.cover,
-                filterQuality: FilterQuality.low,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.medium,
                 gaplessPlayback: true,
+                alignment: Alignment.bottomCenter,
                 errorBuilder: (_, _, _) => _HeroFallback(category: category),
               ),
             )
@@ -1288,8 +1290,4 @@ TextStyle _sg({
     fontFamily: 'Space Grotesk',
     fontSize: size,
     fontWeight: weight,
-    color: color,
-    height: height,
-    letterSpacing: letterSpacing,
-  );
-}
+   

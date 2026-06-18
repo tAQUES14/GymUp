@@ -86,12 +86,16 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
       if (_disposed || _scannerRunning || _state != _CheckinState.scanning) {
         return;
       }
-      if (mounted) {
-        setState(() => _scannerActive = true);
+      // Wait one frame so the MobileScanner widget is fully mounted
+      // before calling start() — required on iOS (AVFoundation).
+      await Future.delayed(Duration.zero);
+      if (_disposed || _scannerRunning || _state != _CheckinState.scanning) {
+        return;
       }
       try {
         await _scannerController.start();
         _scannerRunning = true;
+        if (mounted) setState(() => _scannerActive = true);
       } catch (_) {
         _scannerRunning = false;
         if (mounted) setState(() => _scannerActive = false);
@@ -427,10 +431,11 @@ class _CheckinPageState extends State<CheckinPage> with WidgetsBindingObserver {
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (_scannerActive)
-          MobileScanner(controller: _scannerController, onDetect: _onDetect)
-        else
-          Container(color: const Color(0xFF0E1116)),
+        // Always keep MobileScanner in tree so the native view is ready
+      // before start() is called (required on iOS/AVFoundation)
+      MobileScanner(controller: _scannerController, onDetect: _onDetect),
+      if (!_scannerActive)
+        Container(color: const Color(0xFF0E1116)),
         Container(
           decoration: const BoxDecoration(
             gradient: RadialGradient(
@@ -1631,20 +1636,4 @@ class _CheckinScannerOverlayPainter extends CustomPainter {
     corner(
       rect.topRight,
       rect.topRight - const Offset(len, 0),
-      rect.topRight + const Offset(0, len),
-    );
-    corner(
-      rect.bottomLeft,
-      rect.bottomLeft + const Offset(len, 0),
-      rect.bottomLeft - const Offset(0, len),
-    );
-    corner(
-      rect.bottomRight,
-      rect.bottomRight - const Offset(len, 0),
-      rect.bottomRight - const Offset(0, len),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
+      rect.topRight + co
