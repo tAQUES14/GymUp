@@ -274,10 +274,19 @@ class _WeekDayBars extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Dart weekday: 1=Mon→7=Sun. Converter para índice 0=Mon→6=Sun.
-    final todayIdx = DateTime.now().weekday - 1;
+    final now   = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
 
-    // API dayOfWeek: 0=Dom, 1=Seg, …, 6=Sáb → índice Mon-first: 0=Mon→6=Sun
+    // Segunda desta semana (Dart: 1=Mon)
+    final monday    = today.subtract(Duration(days: now.weekday - 1));
+    // Domingo desta semana no calendário backend (Dom=início da semana Sun-Sat)
+    final thisSunday = monday.subtract(const Duration(days: 1));
+
+    // Data real de cada slot (0=Seg … 5=Sáb, 6=Dom passado)
+    DateTime slotDate(int i) =>
+        i < 6 ? monday.add(Duration(days: i)) : thisSunday;
+
+    // API dayOfWeek: 0=Dom, 1=Seg, …, 6=Sáb → índice Mon-first: 0=Mon→6=Dom
     // API 0=Sun → idx 6, API 1=Mon → idx 0, API 2=Tue → idx 1 …
     final trainedMap = <int, bool>{};
     for (final d in days) {
@@ -288,21 +297,21 @@ class _WeekDayBars extends StatelessWidget {
     return Row(
       children: List.generate(7, (i) {
         final trained  = trainedMap[i] ?? false;
-        final isToday  = i == todayIdx;
-        final isFuture = i > todayIdx;
+        final date     = slotDate(i);
+        final isToday  = date == today;
+        final isFuture = date.isAfter(today);
 
         Color barColor;
         double labelOpacity;
 
-        if (trained) {
+        // Treinado E não é dia futuro → verde
+        // Dias futuros nunca ficam verdes mesmo que o backend retorne trained=true
+        if (trained && !isFuture) {
           barColor     = AppColors.lime;
           labelOpacity = 0.55;
         } else if (isToday) {
           barColor     = Colors.white.withValues(alpha: 0.85);
           labelOpacity = 0.95;
-        } else if (isFuture) {
-          barColor     = Colors.white.withValues(alpha: 0.22);
-          labelOpacity = 0.55;
         } else {
           barColor     = Colors.white.withValues(alpha: 0.22);
           labelOpacity = 0.55;
