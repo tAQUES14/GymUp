@@ -36,6 +36,8 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
   int _currentExerciseIndex = 0;
   int _currentSeriesIndex = 0;
   int _completedExercises = 0;
+  int _completedSets = 0;      // series marcadas como feitas (só avança)
+  int _maxProgressSent = 0;    // garante que progresso nunca regride
 
   // ── Session ───────────────────────────────────────────────────────────────
   final WorkoutApiService _workoutService = WorkoutApiService();
@@ -172,10 +174,14 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
   // ── Progress reporting ────────────────────────────────────────────────────
 
   Future<void> _sendProgress(int totalExercises) async {
-    // Progress only counts exercises actually completed. Skipping ahead should
-    // never make an unfinished workout look valid to the backend.
-    final completed = _completedExercises.clamp(0, totalExercises);
-    final progress = ((completed / totalExercises) * 100).round().clamp(0, 100);
+    // Progress is based on sets checked by the user, never on navigation position.
+    // It can only go forward — _maxProgressSent prevents any regression.
+    final totalSets = _workout?.exercises.fold<int>(0, (s, e) => s + _seriesCount(e)) ?? 1;
+    final rawProgress = totalSets > 0
+        ? ((_completedSets / totalSets) * 100).round().clamp(0, 100)
+        : 0;
+    final progress = rawProgress > _maxProgressSent ? rawProgress : _maxProgressSent;
+    _maxProgressSent = progress;
     try {
       final session = await _workoutService.updateProgress(progress);
       if (!mounted) return;
@@ -273,6 +279,8 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
       'exercise_index': _currentExerciseIndex,
       'series_index': _currentSeriesIndex,
       'completed_exercises': _completedExercises,
+      'completed_sets': _completedSets,
+      'max_progress_sent': _maxProgressSent,
       'series_by_exercise': _seriesIndexByExerciseId.map((k, v) => MapEntry('$k', v)),
       'weights': _draftWeights.map(
         (exerciseId, sets) => MapEntry('$exerciseId', sets.map((k, v) => MapEntry('$k', v))),
@@ -301,6 +309,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
       _currentExerciseIndex = _clampIndex(fromProgress, 0, _workout!.exercises.length - 1);
       _currentSeriesIndex = 0;
       _completedExercises = _currentExerciseIndex;
+      _maxProgressSent = session.progress.clamp(0, 100);
       return;
     }
 
@@ -318,6 +327,9 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
         0,
         _workout!.exercises.length,
       );
+      final totalSets = _workout!.exercises.fold<int>(0, (s, e) => s + _seriesCount(e));
+      _completedSets = ((data['completed_sets'] as num?)?.toInt() ?? 0).clamp(0, totalSets);
+      _maxProgressSent = ((data['max_progress_sent'] as num?)?.toInt() ?? 0).clamp(0, 100);
 
       void readNestedStringMap(dynamic source, Map<int, Map<int, String>> target) {
         if (source is! Map) return;
@@ -537,6 +549,11 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
     }
 
     HapticFeedback.lightImpact();
+
+    // Conta esta série como concluída e sincroniza progresso imediatamente.
+    // Progresso só avança — nunca regride (garantido por _maxProgressSent).
+    _completedSets++;
+    _sendProgress(_workout!.exercises.length);
 
     final exercise = _workout!.exercises[_currentExerciseIndex];
     final totalSeries = _seriesCount(exercise);
@@ -1305,10 +1322,10 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
   /// response returns, causing a stale meetsConditions=false to be evaluated.
   bool get _localMeetsConditions {
     if (_session == null || _workout == null) return false;
-    final total = _workout!.exercises.length;
-    if (total == 0) return false;
-    final completed = _completedExercises.clamp(0, total);
-    final displayProgress = ((completed / total) * 100).round().clamp(0, 100);
+    final totalSets = _workout!.exercises.fold<int>(0, (s, e) => s + _seriesCount(e));
+    if (totalSets == 0) return false;
+    // Usa o mesmo cálculo do _sendProgress (por série, só avança)
+    final displayProgress = _maxProgressSent;
     final minSecs = _session!.minMinutes * 60;
     return _elapsed.inSeconds >= minSecs && displayProgress >= _session!.minProgress;
   }
