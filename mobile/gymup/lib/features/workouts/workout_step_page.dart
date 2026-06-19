@@ -568,8 +568,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
         // Between-exercise rest — _onRestFinished will call _goToNextExercise
         _startRest(RestType.betweenExercises, widget.workout.betweenExerciseRestSeconds);
       } else {
-        // Last exercise: keep existing behavior
-        _startRest(RestType.betweenSets, exercise.rest);
+        // Last set of last exercise: skip rest timer, go straight to completion
         _completeExercise();
       }
     }
