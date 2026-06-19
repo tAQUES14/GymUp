@@ -1290,4 +1290,8 @@ TextStyle _sg({
     fontFamily: 'Space Grotesk',
     fontSize: size,
     fontWeight: weight,
-   
+    color: color,
+    height: height,
+    letterSpacing: letterSpacing,
+  );
+}

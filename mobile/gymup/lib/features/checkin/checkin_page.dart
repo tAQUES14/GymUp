@@ -1636,4 +1636,20 @@ class _CheckinScannerOverlayPainter extends CustomPainter {
     corner(
       rect.topRight,
       rect.topRight - const Offset(len, 0),
-      rect.topRight + co
+      rect.topRight + const Offset(0, len),
+    );
+    corner(
+      rect.bottomLeft,
+      rect.bottomLeft + const Offset(len, 0),
+      rect.bottomLeft - const Offset(0, len),
+    );
+    corner(
+      rect.bottomRight,
+      rect.bottomRight - const Offset(len, 0),
+      rect.bottomRight - const Offset(0, len),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
