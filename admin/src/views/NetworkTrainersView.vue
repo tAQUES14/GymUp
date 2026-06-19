@@ -1,9 +1,18 @@
 <template>
   <div>
 
-    <div class="mb-6">
-      <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Trainers da Rede</h1>
-      <p class="text-slate-500 text-sm mt-1">Visualize e gerencie as filiais vinculadas a cada trainer.</p>
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Trainers da Rede</h1>
+        <p class="text-slate-500 text-sm mt-1">Visualize, crie e gerencie as filiais vinculadas a cada trainer.</p>
+      </div>
+      <button @click="openCreate"
+        class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+        Criar trainer
+      </button>
     </div>
 
     <!-- Loading -->
@@ -69,6 +78,90 @@
         </li>
       </ul>
     </div>
+
+    <!-- ── CREATE TRAINER MODAL ─────────────────────────────────────────── -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div v-if="showCreate"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+
+            <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <h2 class="text-base font-bold text-slate-900">Criar trainer</h2>
+              <button @click="showCreate = false"
+                class="p-1 text-slate-400 hover:text-slate-600 rounded transition-colors">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <form @submit.prevent="submitCreate" class="p-5 space-y-4">
+              <p v-if="createError" class="text-xs text-red-500">{{ createError }}</p>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Nome</label>
+                <input v-model="createForm.name" type="text" required
+                  class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Email</label>
+                <input v-model="createForm.email" type="email" required
+                  class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Filial principal</label>
+                <select v-model="createForm.gym_id" required
+                  class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500">
+                  <option value="" disabled>Selecione a filial</option>
+                  <option v-for="gym in allGyms" :key="gym.id" :value="gym.id">{{ gym.name }}</option>
+                </select>
+              </div>
+
+              <div class="flex justify-end gap-2 pt-2">
+                <button type="button" @click="showCreate = false"
+                  class="px-4 py-2 text-sm font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                  Cancelar
+                </button>
+                <button type="submit" :disabled="createLoading"
+                  class="px-4 py-2 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors disabled:opacity-50">
+                  {{ createLoading ? 'Criando...' : 'Criar' }}
+                </button>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Exibe senha temporária após criação -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div v-if="createdPassword"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+            <div class="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-3">
+              <svg class="w-6 h-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+            </div>
+            <h3 class="text-base font-bold text-slate-900 mb-1">Trainer criado!</h3>
+            <p class="text-xs text-slate-500 mb-4">Compartilhe a senha temporária com o trainer:</p>
+            <div class="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 mb-4 font-mono text-lg font-bold text-slate-800 tracking-widest">
+              {{ createdPassword }}
+            </div>
+            <p class="text-xs text-slate-400 mb-4">O trainer deverá trocar a senha no primeiro acesso.</p>
+            <button @click="createdPassword = null"
+              class="px-5 py-2 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors">
+              Fechar
+            </button>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <!-- ── MANAGE MODAL ──────────────────────────────────────────────────── -->
     <Teleport to="body">
@@ -137,10 +230,38 @@ const allGyms  = ref([])
 const loading  = ref(true)
 const error    = ref(null)
 
-const manageTarget   = ref(null)
-const checkedGyms    = ref(new Set())
-const modalError     = ref(null)
+const manageTarget    = ref(null)
+const checkedGyms     = ref(new Set())
+const modalError      = ref(null)
 const atLeastOneError = ref(false)
+
+// Create trainer
+const showCreate     = ref(false)
+const createLoading  = ref(false)
+const createError    = ref(null)
+const createForm     = ref({ name: '', email: '', gym_id: '' })
+const createdPassword = ref(null)
+
+function openCreate() {
+  createForm.value  = { name: '', email: '', gym_id: '' }
+  createError.value = null
+  showCreate.value  = true
+}
+
+async function submitCreate() {
+  createLoading.value = true
+  createError.value   = null
+  try {
+    const { data } = await api.post('/network/trainers', createForm.value)
+    trainers.value.push(data.trainer)
+    createdPassword.value = data.temp_password
+    showCreate.value      = false
+  } catch (e) {
+    createError.value = e.response?.data?.message ?? 'Erro ao criar trainer.'
+  } finally {
+    createLoading.value = false
+  }
+}
 
 const AVATAR_COLORS = ['#3B82F6','#8B5CF6','#10B981','#F59E0B','#EF4444','#06B6D4','#6366F1','#14B8A6']
 function avatarColor(name) {

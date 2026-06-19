@@ -225,30 +225,33 @@ const mainNav = computed(() => [
 
 // Gestão da academia — gym_admin e trainer (não super_admin, não network_admin)
 const gymManagementNav = computed(() => {
-  const items = [
-    { to: '/users',         label: 'Alunos',      icon: icons.users        },
-    { to: '/workouts',      label: 'Treinos',      icon: icons.workouts     },
-    { to: '/workout-plans', label: 'Planos',       icon: icons.plans        },
-    { to: '/exercises',     label: 'Exercícios',   icon: icons.exercises    },
-    { to: '/challenges',    label: 'Desafios',     icon: icons.challenges   },
-    { to: '/achievements',  label: 'Conquistas',   icon: icons.achievements },
-    { to: '/ranking',       label: 'Ranking',      icon: icons.ranking      },
-    { to: '/rewards',       label: 'Recompensas',  icon: icons.rewards      },
-    { to: '/redemptions',   label: 'Resgates',     icon: icons.redemptions  },
-  ]
-
-  // gym_admin também acessa Relatórios, Configurações, Check-in e Permissões
-  if (auth.isGymAdmin) {
-    items.push(
-      { to: '/reports',  label: 'Relatórios',      icon: icons.reports  },
-      { to: '/invite',   label: 'Convidar',        icon: icons.invite   },
-      { to: '/checkin',  label: 'Check-in',         icon: icons.checkin  },
-      { to: '/team',     label: 'Equipe e Acessos', icon: icons.team     },
-      { to: '/settings', label: 'Configurações',  icon: icons.settings },
-    )
+  // Trainer: só vê o que tem permissão (alunos, treinos, planos, ranking)
+  if (auth.isTrainer) {
+    return [
+      { to: '/users',         label: 'Alunos',  icon: icons.users    },
+      { to: '/workouts',      label: 'Treinos', icon: icons.workouts },
+      { to: '/workout-plans', label: 'Planos',  icon: icons.plans    },
+      { to: '/ranking',       label: 'Ranking', icon: icons.ranking  },
+    ]
   }
 
-  return items
+  // gym_admin: acesso completo
+  return [
+    { to: '/users',         label: 'Alunos',           icon: icons.users        },
+    { to: '/workouts',      label: 'Treinos',           icon: icons.workouts     },
+    { to: '/workout-plans', label: 'Planos',            icon: icons.plans        },
+    { to: '/exercises',     label: 'Exercícios',        icon: icons.exercises    },
+    { to: '/challenges',    label: 'Desafios',          icon: icons.challenges   },
+    { to: '/achievements',  label: 'Conquistas',        icon: icons.achievements },
+    { to: '/ranking',       label: 'Ranking',           icon: icons.ranking      },
+    { to: '/rewards',       label: 'Recompensas',       icon: icons.rewards      },
+    { to: '/redemptions',   label: 'Resgates',          icon: icons.redemptions  },
+    { to: '/reports',       label: 'Relatórios',        icon: icons.reports      },
+    { to: '/invite',        label: 'Convidar',          icon: icons.invite       },
+    { to: '/checkin',       label: 'Check-in',           icon: icons.checkin      },
+    { to: '/team',          label: 'Equipe e Acessos',  icon: icons.team         },
+    { to: '/settings',      label: 'Configurações',     icon: icons.settings     },
+  ]
 })
 
 // Rede — network_admin apenas

@@ -470,6 +470,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/gyms/{id}/freeze',                       [NetworkController::class, 'freezeGym']);
         Route::patch('/gyms/{id}/reactivate',                   [NetworkController::class, 'reactivateGym']);
         Route::get('/trainers',                                  [NetworkController::class, 'listTrainers']);
+        Route::post('/trainers',                                 [NetworkController::class, 'storeTrainer']);
         Route::post('/trainers/{trainerId}/gyms',               [NetworkController::class, 'linkTrainerGym']);
         Route::delete('/trainers/{trainerId}/gyms/{gymId}',     [NetworkController::class, 'unlinkTrainerGym']);
         Route::get('/ranking',                                   [NetworkController::class, 'ranking']);

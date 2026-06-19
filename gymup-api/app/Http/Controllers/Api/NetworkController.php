@@ -9,6 +9,8 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 
 class NetworkController extends Controller
 {
@@ -196,6 +198,42 @@ class NetworkController extends Controller
             ]);
 
         return response()->json(['trainers' => $trainers]);
+    }
+
+    public function storeTrainer(Request $request): JsonResponse
+    {
+        $chainId = $this->resolveChainId($request);
+        $gymIds  = $this->chainGymIds($chainId);
+
+        $data = $request->validate([
+            'name'   => 'required|string|max:255',
+            'email'  => 'required|email|unique:users,email',
+            'gym_id' => ['required', 'integer', Rule::in($gymIds->toArray())],
+        ]);
+
+        $tempPassword = 'GymUp@' . random_int(100_000, 999_999);
+
+        $trainer = User::create([
+            'name'       => $data['name'],
+            'email'      => $data['email'],
+            'password'   => Hash::make($tempPassword),
+            'gym_id'     => $data['gym_id'],
+            'role'       => 'trainer',
+            'invited_at' => now(),
+        ]);
+
+        // Vincula à filial escolhida
+        $trainer->gyms()->attach($data['gym_id'], ['is_primary' => true, 'created_at' => now()]);
+
+        return response()->json([
+            'trainer'       => [
+                'id'    => $trainer->id,
+                'name'  => $trainer->name,
+                'email' => $trainer->email,
+                'gyms'  => [['id' => $data['gym_id'], 'name' => Gym::find($data['gym_id'])?->name]],
+            ],
+            'temp_password' => $tempPassword,
+        ], 201);
     }
 
     public function linkTrainerGym(Request $request, int $trainerId): JsonResponse

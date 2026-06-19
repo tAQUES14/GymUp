@@ -84,6 +84,7 @@ class RolesAndPermissionsSeeder extends Seeder
         'view_workouts',
         'manage_workouts',
         'assign_workouts',
+        'manage_workout_plans',
         'view_ranking',
     ];
 
