@@ -1504,14 +1504,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
     final minSecs = (_session?.minMinutes ?? 1) * 60;
     final elapsedSecs = _elapsed.inSeconds;
     final minProgress = _session?.minProgress ?? 75;
-    final localProgress =
-        (((_completedExercises > _currentExerciseIndex
-                        ? _completedExercises
-                        : _currentExerciseIndex) /
-                    totalExercises.clamp(1, 999)) *
-                100)
-            .round()
-            .clamp(0, 100);
+    final localProgress = _maxProgressSent;
     final displayProgress = _session == null
         ? localProgress
         : (localProgress > _session!.progress
@@ -3087,14 +3080,7 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
     final int minSecs = _session!.minMinutes * 60;
     final int elapsedSecs = _elapsed.inSeconds;
     final int total = _workout?.exercises.length ?? 1;
-    final int localProgress =
-        (((_completedExercises > _currentExerciseIndex
-                        ? _completedExercises
-                        : _currentExerciseIndex) /
-                    total) *
-                100)
-            .round()
-            .clamp(0, 100);
+    final int localProgress = _maxProgressSent;
     final int displayProgress = localProgress > _session!.progress
         ? localProgress
         : _session!.progress;
