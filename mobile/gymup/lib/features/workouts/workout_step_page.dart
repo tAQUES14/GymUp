@@ -861,8 +861,8 @@ class _WorkoutStepPageState extends State<WorkoutStepPage> with WidgetsBindingOb
       _setsSaveDebounce?.cancel();
       await _flushExerciseSets(_workout!.exercises[_currentExerciseIndex]);
       await _persistExecutionState();
-      final completedForProgress = _completedExercises.clamp(0, total);
-      final syncProgress = ((completedForProgress / total) * 100).round().clamp(0, 100);
+      // Usa o progresso baseado em séries (nunca regride) para garantir pontos.
+      final syncProgress = _maxProgressSent;
       await _workoutService.updateProgress(syncProgress);
 
       // 2. Finaliza a sessão — backend é a fonte de verdade.

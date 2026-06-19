@@ -4,7 +4,7 @@ return [
 
 
 
-    'min_minutes'           => (int) env('WORKOUT_MIN_MINUTES', 10),
+    'min_minutes'           => (int) env('WORKOUT_MIN_MINUTES', 1),
     'max_minutes'           => (int) env('WORKOUT_MAX_MINUTES', 360),
     'min_progress_valid'    => (int) env('WORKOUT_MIN_PROGRESS_VALID', 75),
     'min_progress_partial'  => (int) env('WORKOUT_MIN_PROGRESS_PARTIAL', 70),

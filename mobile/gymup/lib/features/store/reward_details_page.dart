@@ -176,7 +176,7 @@ class _ProductHero extends StatelessWidget {
         children: [
           if (reward.imageUrl != null)
             Positioned.fill(
-              top: 24,
+              top: 100,
               child: Image.network(
                 reward.imageUrl!,
                 fit: BoxFit.contain,
