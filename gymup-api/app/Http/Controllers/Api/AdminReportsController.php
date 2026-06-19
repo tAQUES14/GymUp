@@ -20,13 +20,16 @@ class AdminReportsController extends Controller
         $period = $request->query('period', '30'); // 7 | 30 | 90
         $days   = in_array((int) $period, [7, 30, 90]) ? (int) $period : 30;
 
-        $gymId   = $admin->activeGymId();
-        $start   = Carbon::today()->subDays($days - 1)->startOfDay();
-        $end     = Carbon::now();
+        $isSuperAdmin = $admin->isSuperAdmin();
+        $gymId        = $isSuperAdmin ? null : $admin->activeGymId();
+        $start        = Carbon::today()->subDays($days - 1)->startOfDay();
+        $end          = Carbon::now();
 
-        $userIds = User::where('gym_id', $gymId)
-            ->where('role', 'user')
-            ->pluck('id');
+        $userQuery = User::where('role', 'user');
+        if (! $isSuperAdmin) {
+            $userQuery->where('gym_id', $gymId);
+        }
+        $userIds = $userQuery->pluck('id');
 
         // ── KPIs ──────────────────────────────────────────────────────────────
 
@@ -45,13 +48,15 @@ class AdminReportsController extends Controller
             ->whereBetween('created_at', [$start, $end])
             ->count();
 
-        $pointsEarned = PointTransaction::where('gym_id', $gymId)
-            ->where('type', 'earn')
+        $ptQuery = fn () => $isSuperAdmin
+            ? PointTransaction::query()
+            : PointTransaction::where('gym_id', $gymId);
+
+        $pointsEarned = $ptQuery()->where('type', 'earn')
             ->whereBetween('created_at', [$start, $end])
             ->sum('points');
 
-        $pointsSpent = PointTransaction::where('gym_id', $gymId)
-            ->where('type', 'spend')
+        $pointsSpent = $ptQuery()->where('type', 'spend')
             ->whereBetween('created_at', [$start, $end])
             ->sum('points');
 
@@ -122,8 +127,7 @@ class AdminReportsController extends Controller
 
         // ── Top alunos por pontos ─────────────────────────────────────────────
 
-        $topByPoints = PointTransaction::where('gym_id', $gymId)
-            ->where('type', 'earn')
+        $topByPoints = $ptQuery()->where('type', 'earn')
             ->whereIn('user_id', $userIds)
             ->whereBetween('created_at', [$start, $end])
             ->selectRaw('user_id, SUM(points) AS total')
