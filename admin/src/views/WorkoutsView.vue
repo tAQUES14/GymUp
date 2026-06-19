@@ -41,7 +41,7 @@
     <template v-else>
 
       <!-- Stats strip -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <div class="card px-4 py-3.5 flex items-center gap-3">
           <div class="w-8 h-8 rounded-lg bg-brand-50 flex items-center justify-center flex-shrink-0">
             <svg class="w-4 h-4 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -54,22 +54,6 @@
             <p class="text-lg font-bold text-slate-900 leading-tight">
               <span v-if="loading" class="inline-block w-8 h-4 bg-slate-100 rounded animate-pulse" />
               <template v-else>{{ allWorkouts.length }}</template>
-            </p>
-          </div>
-        </div>
-
-        <div class="card px-4 py-3.5 flex items-center gap-3">
-          <div class="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center flex-shrink-0">
-            <svg class="w-4 h-4 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round"
-                d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-            </svg>
-          </div>
-          <div>
-            <p class="text-xs text-slate-500">Gerados por IA</p>
-            <p class="text-lg font-bold text-slate-900 leading-tight">
-              <span v-if="loading" class="inline-block w-8 h-4 bg-slate-100 rounded animate-pulse" />
-              <template v-else>{{ aiCount }}</template>
             </p>
           </div>
         </div>
@@ -192,7 +176,6 @@ const filteredWorkouts = computed(() => {
   return allWorkouts.value.filter((w) => w.name.toLowerCase().includes(q))
 })
 
-const aiCount     = computed(() => allWorkouts.value.filter((w) => w.is_generated).length)
 const manualCount = computed(() => allWorkouts.value.filter((w) => !w.is_generated).length)
 
 async function loadWorkouts() {

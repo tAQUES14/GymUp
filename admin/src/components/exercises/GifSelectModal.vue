@@ -3,9 +3,9 @@
     <Transition enter-active-class="transition duration-150" enter-from-class="opacity-0"
       enter-to-class="opacity-100" leave-active-class="transition duration-100"
       leave-from-class="opacity-100" leave-to-class="opacity-0">
-      <div class="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div class="fixed inset-0 z-[70] flex items-center justify-center p-2 sm:p-4">
         <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" @click="emit('close')" />
-        <div class="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh]">
+        <div class="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col min-h-0 overflow-hidden max-h-[calc(100dvh-1rem)] sm:max-h-[90dvh]">
 
           <!-- Header -->
           <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
@@ -41,8 +41,10 @@
             </p>
           </div>
 
+          <!-- Scrollable content: suggestions and the complete GIF catalog -->
+          <div class="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           <!-- Suggestions strip (hidden when searching) -->
-          <div v-if="displaySuggestions.length > 0 && !gifSearch" class="px-4 pt-4 pb-0 flex-shrink-0">
+          <div v-if="displaySuggestions.length > 0 && !gifSearch" class="px-4 pt-4 pb-0">
             <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
               <svg class="w-3 h-3 text-brand-500" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
@@ -93,7 +95,7 @@
           </div>
 
           <!-- GIF grid -->
-          <div class="flex-1 overflow-y-auto p-4" :class="{ 'pt-0': displaySuggestions.length > 0 && !gifSearch }">
+          <div class="p-4" :class="{ 'pt-0': displaySuggestions.length > 0 && !gifSearch }">
             <div v-if="gifCategories.length > 1" class="mb-4 -mx-1 overflow-x-auto pb-1">
               <div class="flex items-center gap-2 px-1">
                 <button
@@ -157,6 +159,7 @@
                 </div>
               </button>
             </div>
+          </div>
           </div>
 
           <!-- Selected GIF info bar -->
