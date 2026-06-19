@@ -120,8 +120,8 @@ class RolesAndPermissionsSeeder extends Seeder
         // 5. Vincular usuários existentes aos roles corretos (idempotente)
         $this->assignExistingUsers($superAdminRole, $gymAdminRole, $trainerRole);
 
-        $this->command->info('✅ Roles e permissões atualizados com sucesso.');
-        $this->command->table(
+        $this->command?->info('✅ Roles e permissões atualizados com sucesso.');
+        $this->command?->table(
             ['Role', 'Permissões'],
             [
                 ['super_admin', count(Permission::pluck('id')) . ' (todas)'],
